@@ -1,16 +1,21 @@
 /**
  * Script de Inicialización de Base de Datos para "Cesta"
- * Autor: Tu Asistente de IA
+ * Apunta a una hoja específica mediante su ID.
  */
 
-// ID de tu Hoja de Cálculo (Extraído de tu enlace)
+// ID de tu Hoja de Cálculo
 const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
 
 function setupDatabase() {
+  // Usamos el método solicitado openById
   const ss = SpreadsheetApp.openById(SS_ID);
   
-  // Definición de la estructura de tablas (Hojas y Columnas)
+  // Definición de la estructura de tablas
   const tablas = [
+    {
+      nombre: "CONFIG_GENERAL", // Vital para la facturación automática
+      columnas: ["clave", "valor"]
+    },
     {
       nombre: "CONFIG_CAMPOS",
       columnas: ["id_campo", "entidad_objetivo", "key_interno", "etiqueta_visible", "tipo_dato", "opciones_lista", "es_obligatorio"]
@@ -24,8 +29,13 @@ function setupDatabase() {
       columnas: ["id_categoria", "nombre"]
     },
     {
+      nombre: "UNIDADES", 
+      columnas: ["id_unidad", "nombre", "abreviatura"] 
+    },
+    {
       nombre: "PRODUCTOS",
-      columnas: ["id_producto", "sku", "nombre", "id_categoria", "unidad_medida", "precio_venta_base", "costo_promedio", "stock_minimo", "impuesto_iva", "maneja_stock", "datos_adicionales"]
+      // INCLUYE columnas vitales para la App: stock_actual y url_imagen
+      columnas: ["id_producto", "sku", "nombre", "id_categoria", "unidad_medida", "precio_venta_base", "costo_promedio", "stock_minimo", "impuesto_iva", "maneja_stock", "datos_adicionales", "stock_actual", "url_imagen"]
     },
     {
       nombre: "CLIENTES",
@@ -54,9 +64,7 @@ function setupDatabase() {
     {
       nombre: "VENTAS_DETALLE",
       columnas: ["id_detalle", "id_venta", "id_producto", "cantidad", "precio_unitario", "iva_aplicado", "subtotal"]
-    },
-    { nombre: "UNIDADES", 
-      columnas: ["id_unidad", "nombre", "abreviatura"] }
+    }
   ];
 
   // Iterar sobre la configuración y crear/actualizar hojas
@@ -66,26 +74,32 @@ function setupDatabase() {
     // Si la hoja no existe, la creamos
     if (!hoja) {
       hoja = ss.insertSheet(tabla.nombre);
-      console.log(`Creada hoja: ${tabla.nombre}`);
+      console.log(`✅ Creada hoja: ${tabla.nombre}`);
     } else {
-      console.log(`La hoja ${tabla.nombre} ya existe. Verificando cabeceras...`);
+      console.log(`ℹ️ La hoja ${tabla.nombre} ya existe.`);
     }
 
-    // Configurar Cabeceras (Siempre en la fila 1)
-    const rangoCabecera = hoja.getRange(1, 1, 1, tabla.columnas.length);
-    rangoCabecera.setValues([tabla.columnas]);
-    
-    // Estilo Visual para las cabeceras
-    rangoCabecera.setFontWeight("bold");
-    rangoCabecera.setBackground("#d9ead3"); // Un verde suave estilo "Cesta"
-    rangoCabecera.setBorder(true, true, true, true, true, true);
-    
-    // Inmovilizar la primera fila para que al bajar siempre se vean los títulos
-    hoja.setFrozenRows(1);
-    
-    // Ajustar ancho de columnas automáticamente (opcional, pero útil)
-    // hoja.autoResizeColumns(1, tabla.columnas.length);
+    // Configurar Cabeceras (Solo si la hoja está vacía para no borrar datos)
+    if (hoja.getLastRow() === 0) {
+        const rangoCabecera = hoja.getRange(1, 1, 1, tabla.columnas.length);
+        rangoCabecera.setValues([tabla.columnas]);
+        
+        // Estilo Visual para las cabeceras (Naranja Corporativo)
+        rangoCabecera.setFontWeight("bold");
+        rangoCabecera.setBackground("#E06920"); 
+        rangoCabecera.setFontColor("white");
+        rangoCabecera.setBorder(true, true, true, true, true, true);
+        
+        // Inmovilizar la primera fila
+        hoja.setFrozenRows(1);
+    }
   });
 
-  SpreadsheetApp.getUi().alert('¡Estructura de "Cesta" creada con éxito!');
+  // Inicializar valor de factura si no existe
+  const hojaConfig = ss.getSheetByName('CONFIG_GENERAL');
+  if (hojaConfig.getLastRow() <= 1) {
+      hojaConfig.appendRow(['ULTIMO_NRO_FACTURA', '001-001-0000000']);
+  }
+
+  SpreadsheetApp.getUi().alert('¡Base de datos vinculada por ID y actualizada con éxito!');
 }

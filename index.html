@@ -20,10 +20,7 @@
           --text-dark: #333333;
       }
 
-      body { 
-          background-color: var(--bg-light-tone); 
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-      }
+      body { background-color: var(--bg-light-tone); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 
       /* UTILIDADES */
       .bg-brand { background-color: var(--color-primary) !important; }
@@ -36,31 +33,28 @@
       .btn-outline-brand { color: var(--color-primary); border-color: var(--color-primary); }
       .btn-outline-brand:hover { background-color: var(--color-primary); color: white; }
 
+      .nav-link-desktop { color: #333; cursor: pointer; padding: 10px 15px; border-radius: 8px; margin-bottom: 2px; text-decoration: none; display: block; transition: all 0.2s; }
+      .nav-link-desktop:hover { background-color: #fff4e6; color: var(--color-primary); }
       .nav-link-desktop.active { background-color: var(--color-primary) !important; color: white !important; box-shadow: 0 4px 6px rgba(224, 105, 32, 0.2); }
-      .nav-link-desktop:hover { color: var(--color-primary); background-color: #fff4e6; }
-      .nav-item-mobile.active { color: var(--color-primary); }
 
       .logo-img { height: 40px; width: auto; object-fit: contain; border-radius: 4px; background: white; padding: 2px; }
 
       /* LAYOUT */
       .sidebar { min-height: 100vh; background-color: #ffffff; border-right: 1px solid #dee2e6; }
-      .nav-link-desktop { color: #333; cursor: pointer; padding: 12px 15px; border-radius: 8px; margin-bottom: 5px; transition: all 0.2s; display: block; text-decoration: none; }
-      
       .bottom-nav { background-color: white; border-top: 1px solid #dee2e6; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
       .nav-item-mobile { flex: 1; text-align: center; padding: 8px 0; color: #adb5bd; cursor: pointer; text-decoration: none; font-size: 0.7rem; font-weight: 500; transition: color 0.2s; }
-      .nav-item-mobile i { display: block; font-size: 1.4rem; margin-bottom: 2px; line-height: 1; }
-      .nav-item-mobile.active i { transform: scale(1.1); transition: transform 0.2s; }
+      .nav-item-mobile.active { color: var(--color-primary); }
+      .nav-item-mobile.active i { transform: scale(1.1); }
 
       @media (max-width: 767.98px) { .main-content { padding-bottom: 90px !important; } }
 
       .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction: column; }
       
+      /* ESTILOS ESPECIFICOS PRODUCTO (RECUPERADOS) */
       .img-producto-card { height: 180px; width: 100%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #f0f0f0; position: relative; }
       .img-producto-card img { width: 100%; height: 100%; object-fit: contain; padding: 15px; }
       .card { transition: transform 0.2s; border: none; }
       .no-hover:hover { transform: none; }
-      
-      .img-preview-modal { max-height: 200px; object-fit: contain; border: 2px dashed #dee2e6; padding: 10px; width: 100%; border-radius: 8px; background: #fff; }
     </style>
 </head>
 <body>
@@ -74,8 +68,8 @@
       <nav class="navbar navbar-dark bg-brand shadow sticky-top z-3">
         <div class="container-fluid d-flex justify-content-between align-items-center">
           <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="#">
-            <img src="https://drive.google.com/thumbnail?id=1e2B3Q0qwRWF0_Gc8YG0C79u4jOoPFejz&sz=w500" alt="CESTA Logo" class="logo-img">
-            <span>CESTA ERP</span>
+            <img src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w500" alt="CESTA Logo" class="logo-img">
+              <span>CESTA Control de Stock</span>
           </a>
           <div class="d-flex align-items-center text-white">
             <div class="d-none d-sm-block text-end me-2 line-height-1">
@@ -90,27 +84,17 @@
         <div class="row">
             
             <div class="col-md-2 sidebar p-3 d-none d-md-block shadow-sm z-2">
-                <small class="text-muted text-uppercase fw-bold ps-3 mb-2 d-block" style="font-size: 0.75rem; letter-spacing: 1px;">Facturación</small>
-                <ul class="nav flex-column gap-1">
-                    <li class="nav-item">
-                        <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
-                            <i class="bi bi-receipt me-2"></i> Ventas / Caja
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
-                            <i class="bi bi-cart-plus me-2"></i> Compras / Stock
-                        </a>
-                    </li>
-                </ul>
+                <small class="text-muted text-uppercase fw-bold ps-2 mb-2 d-block" style="font-size: 0.7rem;">Facturación</small>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt me-2"></i> Ventas / Caja</a>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus me-2"></i> Compras / Stock</a>
 
-                <small class="text-muted text-uppercase fw-bold ps-3 mb-2 mt-3 d-block" style="font-size: 0.75rem; letter-spacing: 1px;">Base de Datos</small>
-                <ul class="nav flex-column gap-1">
-                    <li class="nav-item"><a class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam me-2"></i> Inventario</a></li>
-                    <li class="nav-item"><a class="nav-link-desktop" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes')"><i class="bi bi-people me-2"></i> Clientes</a></li>
-                    <li class="nav-item"><a class="nav-link-desktop" :class="{active: vistaActual === 'proveedores'}" @click="cambiarVista('proveedores')"><i class="bi bi-truck me-2"></i> Proveedores</a></li>
-                    <li class="nav-item mt-3 border-top pt-2"><a class="nav-link-desktop text-danger" href="#"><i class="bi bi-box-arrow-left me-2"></i> Salir</a></li>
-                </ul>
+                <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Gestión</small>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam me-2"></i> Inventario</a>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes')"><i class="bi bi-people me-2"></i> Clientes</a>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'proveedores'}" @click="cambiarVista('proveedores')"><i class="bi bi-truck me-2"></i> Proveedores</a>
+                
+                <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Sistema</small>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'config'}" @click="cambiarVista('config')"><i class="bi bi-gear me-2"></i> Configuración</a>
             </div>
 
             <div class="col-md-10 p-4 bg-light min-vh-100 main-content">
@@ -118,155 +102,27 @@
                 <div v-if="vistaActual === 'ventas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Punto de Venta</h3>
-                        
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
-                                    @click="subVistaVentas = 'nueva'">
-                                <i class="bi bi-plus-lg"></i> Nueva Venta
-                            </button>
-                            <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
-                                    @click="cargarHistorialVentas">
-                                <i class="bi bi-clock-history"></i> Historial
-                            </button>
+                            <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
+                            <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
                         </div>
                     </div>
 
                     <div v-if="subVistaVentas === 'nueva'">
-                        <div class="card border-0 shadow-sm mb-3 no-hover">
-                            <div class="card-body">
-                                <div class="row g-3 align-items-end">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-bold">Cliente</label>
-                                        <div class="input-group">
-                                            <select class="form-select" v-model="formVenta.id_cliente">
-                                                <option value="" disabled>Seleccionar cliente...</option>
-                                                <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }} ({{ c.doc_identidad }})</option>
-                                            </select>
-                                            <button class="btn btn-outline-secondary" type="button" @click="abrirModalCliente(null)"><i class="bi bi-person-plus"></i></button>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label fw-bold">Fecha</label>
-                                        <input type="date" class="form-control" v-model="formVenta.fecha">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label fw-bold">Nº Factura (Opcional)</label>
-                                        <input type="text" class="form-control" v-model="formVenta.nro_factura" placeholder="Auto">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3">
-                            <div class="card-body bg-light">
-                                <form @submit.prevent="agregarAlCarritoVenta">
-                                    <div class="row g-2 align-items-end">
-                                        <div class="col-md-6">
-                                            <label class="form-label small fw-bold">Producto / Stock Disponible</label>
-                                            <select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta">
-                                                <option value="" disabled>🔍 Buscar producto...</option>
-                                                <option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">
-                                                    {{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-2 col-4">
-                                            <label class="form-label small">Cantidad</label>
-                                            <input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required>
-                                        </div>
-                                        <div class="col-md-2 col-8">
-                                            <label class="form-label small">Precio Unit. (Gs)</label>
-                                            <input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.precio" min="0" required>
-                                        </div>
-                                        <div class="col-md-2 d-grid">
-                                            <button type="submit" class="btn btn-brand btn-lg fw-bold"><i class="bi bi-cart-plus"></i></button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="card border-0 shadow-sm no-hover">
-                            <div class="table-responsive">
-                                <table class="table align-middle mb-0 table-striped">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Producto</th>
-                                            <th class="text-center">Cant.</th>
-                                            <th class="text-end">Precio</th>
-                                            <th class="text-end">Subtotal</th>
-                                            <th style="width: 50px;"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="(item, index) in carritoVenta" :key="index">
-                                            <td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td>
-                                            <td class="text-center">{{ item.cantidad }}</td>
-                                            <td class="text-end">{{ formatoMoneda(item.precio) }}</td>
-                                            <td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td>
-                                            <td>
-                                                <button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="carritoVenta.length === 0">
-                                            <td colspan="5" class="text-center py-5 text-muted">
-                                                <i class="bi bi-basket fs-1 d-block mb-2 opacity-25"></i>
-                                                Carrito vacío
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot v-if="carritoVenta.length > 0">
-                                        <tr class="bg-brand text-white">
-                                            <td colspan="3" class="text-end fw-bold fs-5 pt-3 border-0">TOTAL A PAGAR:</td>
-                                            <td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td>
-                                            <td class="border-0"></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                            <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
-                                <button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button>
-                                <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal">
-                                    <i class="bi bi-cash-coin me-2"></i> COBRAR
-                                </button>
-                            </div>
-                        </div>
+                        <div class="card border-0 shadow-sm mb-3 no-hover"><div class="card-body"><div class="row g-3 align-items-end"><div class="col-md-6"><label class="form-label fw-bold">Cliente</label><div class="input-group"><select class="form-select" v-model="formVenta.id_cliente"><option value="" disabled>Seleccionar cliente...</option><option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }} ({{ c.doc_identidad }})</option></select><button class="btn btn-outline-secondary" type="button" @click="abrirModalCliente(null)"><i class="bi bi-person-plus"></i></button></div></div><div class="col-md-3"><label class="form-label fw-bold">Fecha</label><input type="date" class="form-control" v-model="formVenta.fecha"></div><div class="col-md-3"><label class="form-label fw-bold">Nº Factura</label><input type="text" class="form-control" v-model="formVenta.nro_factura" placeholder="Auto" title="Se generará automático si está vacío"></div></div></div></div>
+                        <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3"><div class="card-body bg-light"><form @submit.prevent="agregarAlCarritoVenta"><div class="row g-2 align-items-end"><div class="col-md-6"><label class="form-label small fw-bold">Producto</label><select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta"><option value="" disabled>🔍 Buscar producto...</option><option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">{{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}</option></select></div><div class="col-md-2 col-4"><label class="form-label small">Cantidad</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required></div><div class="col-md-2 col-8"><label class="form-label small">Precio Unit.</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.precio" min="0" required></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand btn-lg fw-bold"><i class="bi bi-cart-plus"></i></button></div></div></form></div></div>
+                        <div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0 table-striped"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoVenta" :key="index"><td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.precio) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button></td></tr><tr v-if="carritoVenta.length === 0"><td colspan="5" class="text-center py-5 text-muted">Carrito vacío</td></tr></tbody><tfoot v-if="carritoVenta.length > 0"><tr class="bg-brand text-white"><td colspan="3" class="text-end fw-bold fs-5 pt-3 border-0">TOTAL A PAGAR:</td><td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td><td class="border-0"></td></tr></tfoot></table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button><button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i> COBRAR</button></div></div>
                     </div>
 
                     <div v-if="subVistaVentas === 'historial'">
-                        <div class="card border-0 shadow-sm">
-                            <div class="table-responsive">
-                                <table class="table table-hover align-middle mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th class="ps-3">Fecha</th>
-                                            <th>Cliente</th>
-                                            <th>Factura</th>
-                                            <th class="text-end">Total</th>
-                                            <th class="text-center">Estado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="h in historialVentas" :key="h.id_venta">
-                                            <td class="ps-3 text-muted small">
-                                                {{ new Date(h.fecha).toLocaleDateString() }} <br> 
-                                                {{ new Date(h.fecha).toLocaleTimeString().slice(0,5) }}
-                                            </td>
-                                            <td class="fw-bold">{{ h.nombre_cliente }}</td>
-                                            <td><span class="badge bg-light text-dark border">{{ h.factura }}</span></td>
-                                            <td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td>
-                                            <td class="text-center">
-                                                <span class="badge bg-success">{{ h.estado }}</span>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="historialVentas.length === 0">
-                                            <td colspan="5" class="text-center p-4 text-muted">No hay ventas registradas.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Cliente</th><th>Factura</th><th class="text-end">Total</th><th class="text-center">Estado</th><th class="text-end pe-3">Acciones</th></tr></thead><tbody><tr v-for="h in historialVentas" :key="h.id_venta"><td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td><td class="fw-bold">{{ h.nombre_cliente }}</td><td><span class="badge bg-light text-dark border">{{ h.factura }}</span></td><td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td><td class="text-center"><span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span><span v-else class="badge bg-success">PAGADO</span></td><td class="text-end pe-3"><button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleVenta(h)"><i class="bi bi-eye"></i></button><button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularVenta(h)"><i class="bi bi-slash-circle"></i></button></td></tr></tbody></table></div></div>
                     </div>
+                </div>
+
+                <div v-if="vistaActual === 'compras'">
+                    <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras</h3><div class="btn-group shadow-sm"><button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaCompras = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button><button class="btn" :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorial"><i class="bi bi-clock-history"></i> Historial</button></div></div>
+                    <div v-if="subVistaCompras === 'nueva'"><div class="card border-0 shadow-sm mb-4 no-hover"><div class="card-body"><h6 class="text-muted text-uppercase fw-bold small mb-3">Datos del Comprobante</h6><div class="row g-3"><div class="col-md-4"><label class="form-label fw-bold">Proveedor</label><select class="form-select" v-model="formCompra.id_proveedor"><option value="" disabled>Seleccione proveedor...</option><option v-for="p in proveedores" :value="p.id_proveedor">{{ p.razon_social }}</option></select></div><div class="col-md-4"><label class="form-label fw-bold">Fecha Emisión</label><input type="date" class="form-control" v-model="formCompra.fecha"></div><div class="col-md-4"><label class="form-label fw-bold">Nº Factura / Remisión</label><input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456"></div></div></div></div><div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3"><div class="card-body bg-light"><h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6><form @submit.prevent="agregarAlCarrito"><div class="row g-2 align-items-end"><div class="col-md-5"><label class="form-label small">Producto</label><select class="form-select" v-model="lineaTemp.id_producto" required><option value="" disabled>Buscar producto...</option><option v-for="prod in productos" :value="prod.id_producto">{{ prod.sku }} - {{ prod.nombre }}</option></select></div><div class="col-md-2 col-6"><label class="form-label small">Cantidad</label><input type="number" class="form-control" v-model.number="lineaTemp.cantidad" min="1" required placeholder="0"></div><div class="col-md-3 col-6"><label class="form-label small">Costo (Gs)</label><input type="number" class="form-control" v-model.number="lineaTemp.costo" min="0" required placeholder="0"></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i> Agregar</button></div></div></form></div></div><div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Costo</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoCompra" :key="index"><td><div class="fw-bold">{{ obtenerNombreProducto(item.id_producto) }}</div></td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.costo) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.costo) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)"><i class="bi bi-x-lg"></i></button></td></tr><tr v-if="carritoCompra.length === 0"><td colspan="5" class="text-center py-4 text-muted">Carrito vacío</td></tr></tbody><tfoot v-if="carritoCompra.length > 0"><tr class="bg-light"><td colspan="3" class="text-end fw-bold fs-5 pt-3">TOTAL:</td><td class="text-end fw-bold fs-4 text-brand pt-3">{{ formatoMoneda(totalCompra) }}</td><td></td></tr></tfoot></table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoCompra.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarrito">Cancelar</button><button class="btn btn-brand fw-bold px-4" @click="guardarCompraFinal"><i class="bi bi-check-lg me-1"></i> FINALIZAR</button></div></div></div>
+                    <div v-if="subVistaCompras === 'historial'"><div class="card border-0 shadow-sm"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Proveedor</th><th class="text-end">Total</th><th class="text-center">Estado</th><th class="text-end pe-3">Acciones</th></tr></thead><tbody><tr v-for="h in historialCompras" :key="h.id_compra"><td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td><td class="fw-bold text-dark">{{ h.nombre_proveedor }}</td><td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td><td class="text-center"><span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span><span v-else class="badge bg-success bg-opacity-10 text-success border border-success">{{ h.estado }}</span></td><td class="text-end pe-3"><button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)"><i class="bi bi-eye"></i></button><button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)"><i class="bi bi-slash-circle"></i></button></td></tr></tbody></table></div></div></div></div>
                 </div>
 
                 <div v-if="vistaActual === 'productos'">
@@ -283,10 +139,8 @@
                                     <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
                                 </div>
                                 <div class="card-body d-flex flex-column">
-                                    <div class="mb-2">
-                                        <h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6>
-                                        <small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small>
-                                    </div>
+                                    <div class="mb-2"><h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6><small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small></div>
+                                    
                                     <div class="row g-0 mb-3 small bg-light rounded border p-1">
                                         <div class="col-6 border-end pe-2 text-center">
                                             <span class="d-block text-muted" style="font-size: 0.7rem;">Stock</span>
@@ -299,19 +153,10 @@
                                             <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
                                         </div>
                                     </div>
-                                    <div class="d-flex justify-content-between align-items-end mt-auto">
-                                        <div><div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div><small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small></div>
-                                    </div>
-                                    <div v-if="tieneDatosValidos(item)" class="mt-3">
-                                        <a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1" data-bs-toggle="collapse" :href="'#collapse' + item.id_producto"><i class="bi bi-info-circle"></i> Ver detalles</a>
-                                        <div class="collapse mt-2" :id="'collapse' + item.id_producto">
-                                            <div class="bg-light p-2 rounded small border"><div v-for="(val, key) in item.datos_adicionales"><div v-if="val && val.toString().trim() !== ''" class="mb-1"><span class="fw-bold text-dark">{{ obtenerEtiquetaCampo(key) }}:</span> <span class="text-secondary">{{ val }}</span></div></div></div>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex gap-2 mt-3 pt-3 border-top">
-                                        <button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button>
-                                        <button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button>
-                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-end mt-auto"><div><div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div><small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small></div></div>
+                                    <div v-if="tieneDatosValidos(item)" class="mt-3"><a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1" data-bs-toggle="collapse" :href="'#collapse' + item.id_producto"><i class="bi bi-info-circle"></i> Ver detalles</a><div class="collapse mt-2" :id="'collapse' + item.id_producto"><div class="bg-light p-2 rounded small border"><div v-for="(val, key) in item.datos_adicionales"><div v-if="val && val.toString().trim() !== ''" class="mb-1"><span class="fw-bold text-dark">{{ obtenerEtiquetaCampo(key) }}:</span> <span class="text-secondary">{{ val }}</span></div></div></div></div></div>
+                                    <div class="d-flex gap-2 mt-3 pt-3 border-top"><button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button><button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button></div>
                                 </div>
                             </div>
                         </div>
@@ -321,43 +166,21 @@
                 <div v-if="vistaActual === 'clientes'">
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                         <h3 class="fw-bold">Clientes</h3>
-                        <button class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalCliente(null)">
-                            <i class="bi bi-person-plus-fill me-1"></i> Nuevo Cliente
-                        </button>
+                        <button class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalCliente(null)"><i class="bi bi-person-plus-fill me-1"></i> Nuevo Cliente</button>
                     </div>
                      <div class="card shadow-sm border-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" style="min-width: 600px;">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-3">Razón Social</th>
-                                        <th>Doc. Identidad</th>
-                                        <th>Contacto</th>
-                                        <th>Info Extra</th>
-                                        <th class="text-end pe-3">Acciones</th>
-                                    </tr>
-                                </thead>
+                                <thead class="table-light"><tr><th class="ps-3">Razón Social</th><th>Doc. Identidad</th><th>Contacto</th><th>Info Extra</th><th class="text-end pe-3">Acciones</th></tr></thead>
                                 <tbody>
                                     <tr v-for="cli in clientes" :key="cli.id_cliente">
                                         <td class="ps-3 fw-bold text-brand">{{ cli.razon_social }}</td>
                                         <td><span class="badge bg-light text-dark border">{{ cli.doc_identidad }}</span></td>
-                                        <td>
-                                            <div v-if="cli.telefono"><i class="bi bi-telephone me-1"></i>{{ cli.telefono }}</div>
-                                            <div v-if="cli.email" class="small text-muted"><i class="bi bi-envelope me-1"></i>{{ cli.email }}</div>
-                                        </td>
-                                        <td class="small text-muted">
-                                            <div v-for="(val, key) in cli.datos_adicionales">
-                                                <span v-if="val" class="d-block">• <strong>{{ key }}:</strong> {{ val }}</span>
-                                            </div>
-                                        </td>
-                                        <td class="text-end pe-3">
-                                            <button class="btn btn-sm btn-light text-brand border me-1" @click="abrirModalCliente(cli)"><i class="bi bi-pencil"></i></button>
-                                            <button class="btn btn-sm btn-light text-danger border" @click="eliminarCliente(cli)"><i class="bi bi-trash"></i></button>
-                                        </td>
+                                        <td><div v-if="cli.telefono"><i class="bi bi-telephone me-1"></i>{{ cli.telefono }}</div><div v-if="cli.email" class="small text-muted"><i class="bi bi-envelope me-1"></i>{{ cli.email }}</div></td>
+                                        <td class="small text-muted"><div v-for="(val, key) in cli.datos_adicionales"><span v-if="val" class="d-block">• <strong>{{ key }}:</strong> {{ val }}</span></div></td>
+                                        <td class="text-end pe-3"><button class="btn btn-sm btn-light text-brand border me-1" @click="abrirModalCliente(cli)"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-light text-danger border" @click="eliminarCliente(cli)"><i class="bi bi-trash"></i></button></td>
                                     </tr>
-                                    <tr v-if="clientes.length === 0">
-                                        <td colspan="5" class="text-center p-5 text-muted">No hay clientes registrados.</td>
-                                    </tr>
+                                    <tr v-if="clientes.length === 0"><td colspan="5" class="text-center p-5 text-muted">No hay clientes registrados.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -381,348 +204,269 @@
                                         <td class="small text-muted"><div v-for="(val, key) in prov.datos_adicionales"><span v-if="val" class="d-block">• <strong>{{ key }}:</strong> {{ val }}</span></div></td>
                                         <td class="text-end pe-3"><button class="btn btn-sm btn-light text-brand border me-1" @click="abrirModalProveedor(prov)"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-light text-danger border" @click="eliminarProveedor(prov)"><i class="bi bi-trash"></i></button></td>
                                     </tr>
+                                    <tr v-if="proveedores.length === 0"><td colspan="5" class="text-center p-5 text-muted">No hay proveedores registrados.</td></tr>
                                 </tbody>
                             </table>
-                            <div v-if="proveedores.length === 0" class="p-5 text-center text-muted">No hay proveedores registrados.</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div v-if="vistaActual === 'compras'">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Gestión de Compras</h3>
-                        
-                        <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
-                                    @click="subVistaCompras = 'nueva'">
-                                <i class="bi bi-plus-lg"></i> Nueva
-                            </button>
-                            <button class="btn" :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
-                                    @click="cargarHistorial">
-                                <i class="bi bi-clock-history"></i> Historial
-                            </button>
-                        </div>
-                    </div>
-
-                    <div v-if="subVistaCompras === 'nueva'">
-                        <div class="card border-0 shadow-sm mb-4 no-hover">
-                            <div class="card-body">
-                                <h6 class="text-muted text-uppercase fw-bold small mb-3">Datos del Comprobante</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold">Proveedor</label>
-                                        <select class="form-select" v-model="formCompra.id_proveedor">
-                                            <option value="" disabled>Seleccione proveedor...</option>
-                                            <option v-for="p in proveedores" :value="p.id_proveedor">{{ p.razon_social }}</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold">Fecha Emisión</label>
-                                        <input type="date" class="form-control" v-model="formCompra.fecha">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold">Nº Factura / Remisión</label>
-                                        <input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3">
-                            <div class="card-body bg-light">
-                                <h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6>
-                                <form @submit.prevent="agregarAlCarrito">
-                                    <div class="row g-2 align-items-end">
-                                        <div class="col-md-5">
-                                            <label class="form-label small">Producto</label>
-                                            <select class="form-select" v-model="lineaTemp.id_producto" required>
-                                                <option value="" disabled>Buscar producto...</option>
-                                                <option v-for="prod in productos" :value="prod.id_producto">{{ prod.sku }} - {{ prod.nombre }}</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-2 col-6">
-                                            <label class="form-label small">Cantidad</label>
-                                            <input type="number" class="form-control" v-model.number="lineaTemp.cantidad" min="1" required placeholder="0">
-                                        </div>
-                                        <div class="col-md-3 col-6">
-                                            <label class="form-label small">Costo (Gs)</label>
-                                            <input type="number" class="form-control" v-model.number="lineaTemp.costo" min="0" required placeholder="0">
-                                        </div>
-                                        <div class="col-md-2 d-grid">
-                                            <button type="submit" class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i> Agregar</button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="card border-0 shadow-sm no-hover">
-                            <div class="table-responsive">
-                                <table class="table align-middle mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Producto</th>
-                                            <th class="text-center">Cant.</th>
-                                            <th class="text-end">Costo</th>
-                                            <th class="text-end">Subtotal</th>
-                                            <th style="width: 50px;"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="(item, index) in carritoCompra" :key="index">
-                                            <td>
-                                                <div class="fw-bold">{{ obtenerNombreProducto(item.id_producto) }}</div>
-                                            </td>
-                                            <td class="text-center">{{ item.cantidad }}</td>
-                                            <td class="text-end">{{ formatoMoneda(item.costo) }}</td>
-                                            <td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.costo) }}</td>
-                                            <td>
-                                                <button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)"><i class="bi bi-x-lg"></i></button>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="carritoCompra.length === 0">
-                                            <td colspan="5" class="text-center py-4 text-muted">Carrito vacío</td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot v-if="carritoCompra.length > 0" class="table-group-divider">
-                                        <tr class="bg-light">
-                                            <td colspan="3" class="text-end fw-bold fs-5 pt-3">TOTAL:</td>
-                                            <td class="text-end fw-bold fs-4 text-brand pt-3">{{ formatoMoneda(totalCompra) }}</td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                            <div class="card-footer bg-white p-3 text-end" v-if="carritoCompra.length > 0">
-                                <button class="btn btn-outline-secondary me-2" @click="limpiarCarrito">Cancelar</button>
-                                <button class="btn btn-brand fw-bold px-4" @click="guardarCompraFinal">
-                                    <i class="bi bi-check-lg me-1"></i> FINALIZAR
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-if="subVistaCompras === 'historial'">
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th class="ps-3">Fecha</th>
-                                                <th>Proveedor</th>
-                                                <th class="text-end">Total</th>
-                                                <th class="text-center">Estado</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="h in historialCompras" :key="h.id_compra">
-                                                <td class="ps-3 text-muted small">
-                                                    {{ new Date(h.fecha).toLocaleDateString() }}
-                                                </td>
-                                                <td class="fw-bold text-dark">
-                                                    {{ h.nombre_proveedor }}
-                                                </td>
-                                                <td class="text-end fw-bold text-success">
-                                                    {{ formatoMoneda(h.total) }}
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success">
-                                                        {{ h.estado }}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            <tr v-if="historialCompras.length === 0">
-                                                <td colspan="4" class="text-center p-4 text-muted">
-                                                    No se encontraron registros.
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div v-if="vistaActual === 'perfil'">
-                     <div class="alert alert-info">Configuración de usuario.</div>
+                <div v-if="vistaActual === 'config'">
+                    <h3 class="fw-bold mb-4 text-dark"><i class="bi bi-gear text-brand"></i> Configuración</h3>
+                    
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white fw-bold py-3 text-secondary">Secuencia de Facturación</div>
+                        <div class="card-body">
+                            <p class="text-muted small">Último número de factura emitido. El sistema sumará +1 automáticamente.</p>
+                            <div class="input-group" style="max-width: 400px;">
+                                <input type="text" class="form-control" v-model="configFacturaActual" placeholder="001-001-0000000">
+                                <button class="btn btn-success" @click="guardarConfigFactura"><i class="bi bi-save"></i> Guardar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center text-secondary">
+                            <span>Depósitos</span>
+                            <button class="btn btn-sm btn-outline-brand" @click="abrirModalDeposito(null)">+ Nuevo</button>
+                        </div>
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th>Nombre</th><th>Dirección</th><th>Responsable</th><th>Activo</th><th class="text-end">Acción</th></tr></thead>
+                            <tbody>
+                                <tr v-for="d in listaDepositos" :key="d.id_deposito">
+                                    <td>{{ d.nombre }}</td>
+                                    <td class="small text-muted">{{ d.direccion }}</td>
+                                    <td class="small">{{ d.responsable }}</td>
+                                    <td><span class="badge" :class="d.activo=='Si'?'bg-success':'bg-secondary'">{{ d.activo }}</span></td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm text-primary" @click="abrirModalDeposito(d)"><i class="bi bi-pencil"></i></button>
+                                        <button class="btn btn-sm text-danger" @click="eliminarDeposito(d)"><i class="bi bi-trash"></i></button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center text-secondary">
+                            <span>Campos Personalizados</span>
+                            <button class="btn btn-sm btn-outline-brand" @click="abrirModalCampo(null)">+ Nuevo</button>
+                        </div>
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th>Entidad</th><th>Etiqueta</th><th>Tipo</th><th>Obligatorio</th><th class="text-end">Acción</th></tr></thead>
+                            <tbody>
+                                <tr v-for="c in listaConfigCampos" :key="c.id_campo">
+                                    <td><span class="badge bg-secondary">{{ c.entidad_objetivo }}</span></td>
+                                    <td>{{ c.etiqueta_visible }}</td>
+                                    <td class="small">{{ c.tipo_dato }}</td>
+                                    <td><i v-if="esObligatorio(c.es_obligatorio)" class="bi bi-check-circle-fill text-success"></i></td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm text-primary" @click="abrirModalCampo(c)"><i class="bi bi-pencil"></i></button>
+                                        <button class="btn btn-sm text-danger" @click="eliminarCampo(c)"><i class="bi bi-trash"></i></button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
             </div>
         </div>
       </div>
       
-      <nav class="fixed-bottom bottom-nav d-md-none z-3">
-          <div class="d-flex justify-content-around">
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
-                  <i class="bi bi-receipt"></i><span>Ventas</span>
-              </a>
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
-                  <i class="bi bi-cart-plus"></i><span>Compras</span>
-              </a>
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')">
-                  <i class="bi bi-box-seam"></i><span>Stock</span>
-              </a>
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes')">
-                  <i class="bi bi-people"></i><span>Clientes</span>
-              </a>
-          </div>
-      </nav>
+      <nav class="fixed-bottom bottom-nav d-md-none z-3"><div class="d-flex justify-content-around"><a class="nav-item-mobile" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt"></i><span>Ventas</span></a><a class="nav-item-mobile" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus"></i><span>Compras</span></a><a class="nav-item-mobile" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam"></i><span>Stock</span></a><a class="nav-item-mobile" :class="{active: vistaActual === 'config'}" @click="cambiarVista('config')"><i class="bi bi-gear"></i><span>Config</span></a></div></nav>
 
-      <div class="modal fade" id="modalCliente" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-brand text-white">
+      <div class="modal fade" id="modalDeposito" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-brand text-white"><h5 class="modal-title">Depósito</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><form @submit.prevent="guardarDeposito"><div class="mb-3"><label>Nombre</label><input type="text" class="form-control" v-model="formDeposito.nombre" required></div><div class="mb-3"><label>Dirección</label><input type="text" class="form-control" v-model="formDeposito.direccion"></div><div class="row"><div class="col-6"><label>Responsable</label><input type="text" class="form-control" v-model="formDeposito.responsable"></div><div class="col-6"><label>Activo</label><select class="form-select" v-model="formDeposito.activo"><option>Si</option><option>No</option></select></div></div><div class="d-grid mt-3"><button type="submit" class="btn btn-brand">Guardar</button></div></form></div></div></div></div>
+
+      <div class="modal fade" id="modalCampo" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-brand text-white"><h5 class="modal-title">Campo Personalizado</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><form @submit.prevent="guardarCampo"><div class="mb-3"><label>Entidad</label><select class="form-select" v-model="formCampo.entidad_objetivo" required><option value="producto">Producto</option><option value="cliente">Cliente</option><option value="proveedor">Proveedor</option></select></div><div class="row g-2 mb-3"><div class="col-6"><label>Key (interno)</label><input type="text" class="form-control" v-model="formCampo.key_interno" required></div><div class="col-6"><label>Etiqueta Visible</label><input type="text" class="form-control" v-model="formCampo.etiqueta_visible" required></div></div><div class="mb-3"><label>Tipo</label><select class="form-select" v-model="formCampo.tipo_dato"><option value="text">Texto</option><option value="number">Número</option><option value="date">Fecha</option><option value="select">Lista</option></select></div><div class="mb-3" v-if="formCampo.tipo_dato === 'select'"><label>Opciones (x,y,z)</label><input type="text" class="form-control" v-model="formCampo.opciones_lista"></div><div class="form-check mb-3"><input class="form-check-input" type="checkbox" v-model="formCampo.es_obligatorio"><label>Obligatorio</label></div><div class="d-grid"><button type="submit" class="btn btn-brand">Guardar</button></div></form></div></div></div></div>
+
+      <div class="modal fade" id="modalCliente" tabindex="-1" data-bs-backdrop="static">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header bg-brand text-white">
                     <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Cliente</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body bg-light">
+                      <form @submit.prevent="guardarCliente">
+                          <div class="card border-0 shadow-sm mb-3">
+                              <div class="card-body">
+                                  <div class="mb-3">
+                                      <label class="form-label text-secondary small fw-bold">Razón Social</label>
+                                      <input type="text" class="form-control" v-model="formCliente.razon_social" required>
+                                  </div>
+                                  
+                                  <div class="mb-3">
+                                      <label class="form-label text-secondary small fw-bold">RUC</label>
+                                      <input type="text" class="form-control" v-model="formCliente.doc_identidad" required>
+                                  </div>
+
+                                  <div class="mb-3">
+                                      <label class="form-label text-secondary small fw-bold">Email</label>
+                                      <input type="email" class="form-control" v-model="formCliente.email">
+                                  </div>
+                                  
+                                  <div class="mb-3">
+                                      <label class="form-label text-secondary small fw-bold">Teléfono</label>
+                                      <input type="text" class="form-control" v-model="formCliente.telefono">
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div v-if="camposExtraCliente.length > 0" class="card border-0 shadow-sm mb-3">
+                              <div class="card-body">
+                                  <div v-for="campo in camposExtraCliente" :key="campo.id_campo" class="mb-3">
+                                      <label class="form-label text-secondary small fw-bold">{{ campo.etiqueta_visible }}</label>
+                                      
+                                      <select v-if="campo.tipo_dato === 'select'" class="form-select" v-model="formCliente.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                          <option value="">Seleccionar...</option>
+                                          <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
+                                      </select>
+                                      
+                                      <input v-else :type="campo.tipo_dato" class="form-control" v-model="formCliente.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                  </div>
+                              </div>
+                          </div>
+
+                          <button type="submit" class="btn btn-brand w-100 py-2 fw-bold">Guardar</button>
+                      </form>
+                  </div>
                 </div>
-                <div class="modal-body bg-light">
-                    <form @submit.prevent="guardarCliente">
-                        <div class="card border-0 shadow-sm mb-3">
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" v-model="formCliente.razon_social" required placeholder="Nombre o Empresa">
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">RUC / CI <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" v-model="formCliente.doc_identidad" required>
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Teléfono</label>
-                                        <input type="text" class="form-control" v-model="formCliente.telefono">
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Email</label>
-                                    <input type="email" class="form-control" v-model="formCliente.email" placeholder="cliente@email.com">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Dirección</label>
-                                    <input type="text" class="form-control" v-model="formCliente.direccion">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div v-if="camposExtraCliente.length > 0" class="card border-0 shadow-sm mb-3">
-                            <div class="card-body">
-                                <h6 class="small fw-bold text-uppercase mb-2 text-muted">Datos Adicionales</h6>
-                                <div class="row g-2">
-                                    <div class="col-12" v-for="campo in camposExtraCliente" :key="campo.id_campo">
-                                        <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
-                                        <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" 
-                                                v-model="formCliente.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                            <option value="">...</option>
-                                            <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
-                                        </select>
-                                        <input v-else :type="campo.tipo_dato" class="form-control form-control-sm"
-                                               v-model="formCliente.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+              </div>
+            </div>
+        <div class="modal fade" id="modalProducto" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                  <div class="modal-content">
+                    <div class="modal-header bg-brand text-white">
+                      <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Producto</h5>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body bg-light">
+                        <form @submit.prevent="procesarGuardadoProducto">
+                            
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-5 d-flex flex-column align-items-center justify-content-center border-end">
+                                            <div class="mb-3 d-flex align-items-center justify-content-center bg-white border rounded" style="width: 100%; height: 180px; overflow: hidden;">
+                                                <img v-if="imagenPreview" :src="imagenPreview" class="img-fluid" style="object-fit: contain; max-height: 100%;">
+                                                <div v-else class="text-muted text-center">
+                                                    <i class="bi bi-image fs-1 opacity-25"></i><br>
+                                                    <small>Sin imagen</small>
+                                                </div>
+                                            </div>
+                                            <input type="file" class="form-control form-control-sm" accept="image/*" @change="manejarArchivo">
+                                        </div>
 
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-brand fw-bold">Guardar Cliente</button>
-                        </div>
-                    </form>
+                                        <div class="col-md-7">
+                                            <div class="mb-3">
+                                                <label class="form-label text-secondary small fw-bold">Nombre del Producto</label>
+                                                <input type="text" class="form-control" v-model="formProducto.nombre" required>
+                                            </div>
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <label class="form-label text-secondary small fw-bold">SKU / Código</label>
+                                                    <input type="text" class="form-control" v-model="formProducto.sku" required>
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label text-secondary small fw-bold">Precio Venta</label>
+                                                    <input type="number" class="form-control" v-model="formProducto.precio_venta_base" required>
+                                                </div>
+                                            </div>
+                                            <div class="row g-2 mt-2">
+                                                <div class="col-6">
+                                                    <label class="form-label text-secondary small fw-bold">Categoría</label>
+                                                    <select class="form-select" v-model="formProducto.id_categoria" required>
+                                                        <option v-for="c in listaCategorias" :value="c.id_categoria">{{c.nombre}}</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label text-secondary small fw-bold">Stock Mínimo</label>
+                                                    <input type="number" class="form-control" v-model="formProducto.stock_minimo">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="camposExtraProducto.length > 0" class="card border-0 shadow-sm mb-3">
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-6" v-for="campo in camposExtraProducto" :key="campo.id_campo">
+                                            <label class="form-label text-secondary small fw-bold mb-1">{{ campo.etiqueta_visible }}</label>
+                                            
+                                            <select v-if="campo.tipo_dato === 'select'" class="form-select" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                                <option value="">Seleccionar...</option>
+                                                <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
+                                            </select>
+                                            
+                                            <input v-else :type="campo.tipo_dato" class="form-control" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-brand w-100 py-2 fw-bold">Guardar</button>
+                        </form>
+                    </div>
+                  </div>
                 </div>
-            </div>
-        </div>
-      </div>
-
-      <div class="modal fade" id="modalProducto" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-          <div class="modal-content">
-            <div class="modal-header bg-brand text-white">
-              <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Producto</h5>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body bg-light">
-                <form @submit.prevent="procesarGuardadoProducto">
-                    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
-                        <h6 class="card-title fw-bold text-muted small text-uppercase mb-3">Imagen</h6>
-                        <div class="row align-items-center">
-                            <div class="col-md-4 text-center mb-3 mb-md-0">
-                                <div class="border rounded bg-white p-2 d-flex align-items-center justify-content-center" style="height: 150px;">
-                                    <img v-if="imagenPreview" :src="imagenPreview" class="img-fluid" style="max-height: 100%; object-fit: contain;">
-                                    <div v-else class="text-center text-muted"><i class="bi bi-image fs-1"></i><br><small>Sin imagen</small></div>
-                                </div>
-                            </div>
-                            <div class="col-md-8">
-                                <label class="form-label fw-bold">Subir archivo</label>
-                                <input type="file" class="form-control" accept="image/*" @change="manejarArchivo">
-                                <div class="form-text small mt-2">Se guardará en Drive "Cesta_Imagenes"</div>
-                            </div>
-                        </div>
-                    </div></div>
-                    
-                    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
-                        <h6 class="card-title fw-bold text-muted small text-uppercase mb-3">Básicos</h6>
-                        <div class="row g-3">
-                            <div class="col-12"><label class="form-label">Nombre <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formProducto.nombre" required></div>
-                            <div class="col-6 col-md-4"><label class="form-label">SKU <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formProducto.sku" required></div>
-                            <div class="col-6 col-md-4"><label class="form-label">Precio <span class="text-danger">*</span></label><div class="input-group"><span class="input-group-text bg-white">$</span><input type="number" class="form-control fw-bold text-brand" v-model="formProducto.precio_venta_base" required></div></div>
-                            <div class="col-12 col-md-4"><label class="form-label">Stock Mín.</label><input type="number" class="form-control" v-model="formProducto.stock_minimo"></div>
-                        </div>
-                    </div></div>
-
-                    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
-                        <h6 class="card-title fw-bold text-muted small text-uppercase mb-3">Clasificación</h6>
-                        <div class="row g-3">
-                            <div class="col-md-6"><label class="form-label">Categoría</label><select class="form-select" v-model="formProducto.id_categoria" required><option v-for="c in listaCategorias" :value="c.id_categoria">{{c.nombre}}</option></select></div>
-                            <div class="col-md-6"><label class="form-label">Unidad</label><select class="form-select" v-model="formProducto.unidad_medida" required><option v-for="u in listaUnidades" :value="u.nombre">{{u.nombre}}</option></select></div>
-                        </div>
-                    </div></div>
-
-                    <div v-if="camposExtraProducto.length > 0" class="card border-0 shadow-sm mb-3"><div class="card-body">
-                        <h6 class="card-title fw-bold text-muted small text-uppercase mb-3">Campos Extra</h6>
-                        <div class="row g-3">
-                            <div class="col-md-6" v-for="campo in camposExtraProducto" :key="campo.id_campo">
-                                <label class="form-label small fw-bold mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
-                                <select v-if="campo.tipo_dato === 'select'" class="form-select" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)"><option value="">...</option><option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option></select>
-                                <input v-else :type="campo.tipo_dato" class="form-control" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                            </div>
-                        </div>
-                    </div></div>
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end pt-2"><button type="button" class="btn btn-secondary me-md-2" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-brand fw-bold px-4">Guardar</button></div>
-                </form>
-            </div>
-          </div>
-        </div>
-      </div>
-      
+              </div>
       <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header bg-brand text-white">
-              <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Proveedor</h5>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header bg-brand text-white">
+                    <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Proveedor</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body bg-light">
+                      <form @submit.prevent="guardarProveedor">
+                          <div class="card border-0 shadow-sm mb-3">
+                              <div class="card-body">
+                                  <div class="mb-3">
+                                      <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
+                                      <input type="text" class="form-control" v-model="formProveedor.razon_social" required placeholder="Nombre de la empresa">
+                                  </div>
+                                  <div class="row mb-3">
+                                      <div class="col-6">
+                                          <label class="form-label fw-bold">Documento</label>
+                                          <input type="text" class="form-control" v-model="formProveedor.doc_identidad" required placeholder="RUC / CI">
+                                      </div>
+                                      <div class="col-6">
+                                          <label class="form-label fw-bold">Contacto</label>
+                                          <input type="text" class="form-control" v-model="formProveedor.contacto" placeholder="Teléfono / Email">
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div v-if="camposExtraProveedor.length > 0" class="card border-0 shadow-sm mb-3">
+                              <div class="card-body">
+                                  <div class="row g-2">
+                                      <div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
+                                          <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
+                                          
+                                          <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                              <option value="">Seleccionar...</option>
+                                              <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
+                                          </select>
+                                          
+                                          <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div class="d-grid gap-2">
+                              <button type="submit" class="btn btn-brand fw-bold">Guardar</button>
+                          </div>
+                      </form>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="modal-body bg-light">
-                <form @submit.prevent="guardarProveedor">
-                    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
-                        <div class="mb-3"><label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label><input type="text" class="form-control" v-model="formProveedor.razon_social" required></div>
-                        <div class="row mb-3">
-                            <div class="col-6"><label class="form-label fw-bold">Documento</label><input type="text" class="form-control" v-model="formProveedor.doc_identidad" required></div>
-                            <div class="col-6"><label class="form-label fw-bold">Contacto</label><input type="text" class="form-control" v-model="formProveedor.contacto"></div>
-                        </div>
-                    </div></div>
-                    <div v-if="camposExtraProveedor.length > 0" class="card border-0 shadow-sm mb-3"><div class="card-body">
-                        <div class="row g-2"><div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
-                            <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
-                            <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)"><option value="">...</option><option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option></select>
-                            <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                        </div></div>
-                    </div></div>
-                    <div class="d-grid gap-2"><button type="submit" class="btn btn-brand fw-bold">Guardar</button></div>
-                </form>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="modal fade" id="modalDetalle" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-dark text-white"><h5>Detalle</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><table class="table mb-0"><thead><tr><th>Prod</th><th>Cant</th><th>Subtotal</th></tr></thead><tbody><tr v-for="it in itemsDetalle"><td>{{it.producto}}</td><td>{{it.cantidad}}</td><td>{{formatoMoneda(it.subtotal)}}</td></tr></tbody></table></div></div></div></div>
 
     </div>
 
@@ -734,185 +478,133 @@
       createApp({
         data() {
           return {
-            cargando: false, 
-            vistaActual: 'ventas', 
-            subVistaVentas: 'nueva', 
-            subVistaCompras: 'nueva', 
-            modoEdicion: false,
-            productos: [], proveedores: [], clientes: [], listaCategorias: [], listaUnidades: [], listaConfigCampos: [],
-            modalProd: null, modalProv: null, modalCli: null, archivoParaSubir: null, imagenPreview: null,
-            formProducto: { nombre: '', sku: '', precio_venta_base: 0, id_categoria: '', unidad_medida: '', stock_minimo: 5, impuesto_iva: 10, maneja_stock: true, datos_adicionales: {}, url_imagen: '' },
-            formProveedor: { razon_social: '', doc_identidad: '', contacto: '', datos_adicionales: {} },
-            formCliente: { razon_social: '', doc_identidad: '', email: '', telefono: '', direccion: '', datos_adicionales: {} },
+            cargando: false, vistaActual: 'ventas', subVistaVentas:'nueva', subVistaCompras:'nueva',
+            productos: [], proveedores: [], clientes: [], listaDepositos: [], listaConfigCampos: [], listaCategorias: [], listaUnidades: [],
             
-            // COMPRAS
-            formCompra: { id_proveedor: '', fecha: new Date().toISOString().slice(0,10), comprobante: '' },
-            lineaTemp: { id_producto: '', cantidad: '', costo: '' },
+            formDeposito: { nombre:'', direccion:'', responsable:'', activo:'Si' },
+            formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false },
+            configFacturaActual: '',
+
+            formVenta: { id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: '' },
+            lineaVenta: { id_producto:'', cantidad:1, precio:0 },
+            carritoVenta: [], historialVentas: [], itemsDetalle: [],
+            
+            formCompra: { id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: '' },
+            lineaTemp: { id_producto:'', cantidad:'', costo:'' },
             carritoCompra: [], historialCompras: [],
 
-            // VENTAS
-            formVenta: { id_cliente: '', fecha: new Date().toISOString().slice(0,10), nro_factura: '' },
-            lineaVenta: { id_producto: '', cantidad: 1, precio: 0 },
-            carritoVenta: [], historialVentas: []
+            formProducto: { datos_adicionales:{} }, formCliente: { datos_adicionales:{} }, formProveedor: { datos_adicionales:{} },
+            modoEdicion: false, archivoParaSubir: null, imagenPreview: null,
+            modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
           }
         },
         computed: {
-            camposExtraProducto() { return this.listaConfigCampos.filter(c => c.entidad_objetivo && c.entidad_objetivo.toLowerCase() === 'producto'); },
-            camposExtraProveedor() { return this.listaConfigCampos.filter(c => c.entidad_objetivo && c.entidad_objetivo.toLowerCase() === 'proveedor'); },
-            // NUEVO: COMPUTED PARA CAMPOS EXTRA DE CLIENTES
-            camposExtraCliente() { 
-                // Filtramos campos donde la entidad sea "cliente" (o "clientes" por seguridad)
-                return this.listaConfigCampos.filter(c => c.entidad_objetivo && c.entidad_objetivo.toLowerCase().includes('cliente')); 
-            },
-            totalCompra() { return this.carritoCompra.reduce((acc, item) => acc + (item.cantidad * item.costo), 0); },
-            totalVenta() { return this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0); }
+            camposExtraProducto() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'producto'); },
+            camposExtraCliente() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'cliente'); },
+            camposExtraProveedor() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'proveedor'); },
+            totalVenta() { return this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio), 0); },
+            totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); }
         },
         mounted() {
+            this.modalDep = new bootstrap.Modal(document.getElementById('modalDeposito'));
+            this.modalCmp = new bootstrap.Modal(document.getElementById('modalCampo'));
             this.modalProd = new bootstrap.Modal(document.getElementById('modalProducto'));
-            this.modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
             this.modalCli = new bootstrap.Modal(document.getElementById('modalCliente'));
+            this.modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
+            this.modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
             this.cargarDatosIniciales();
         },
         methods: {
-            formatoMoneda(valor) { if (!valor && valor !== 0) return 'Gs. 0'; return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(valor); },
-            cambiarVista(vista) { this.vistaActual = vista; window.scrollTo(0,0); },
+            formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
+            cambiarVista(v) { this.vistaActual = v; window.scrollTo(0,0); },
+            esObligatorio(v) { return v === true || v === 'TRUE'; },
             
             cargarDatosIniciales() {
                 this.cargando = true;
                 Promise.all([
-                    this.pedirDatos('PRODUCTOS'), 
-                    this.pedirDatos('PROVEEDORES'), 
-                    // Llamada específica para clientes
-                    new Promise((resolve, reject) => {
-                        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).obtenerClientes();
-                    }),
-                    this.pedirDatos('CATEGORIAS'), 
-                    this.pedirDatos('UNIDADES'), 
-                    this.pedirDatos('CONFIG_CAMPOS')
-                ])
-                .then(res => { 
-                    this.productos = res[0]; 
-                    this.proveedores = res[1]; 
-                    this.clientes = res[2] || []; 
-                    this.listaCategorias = res[3]; 
-                    this.listaUnidades = res[4]; 
-                    this.listaConfigCampos = res[5]; 
-                    this.cargando = false; 
+                    this.pedirDatos('PRODUCTOS'), this.pedirDatos('PROVEEDORES'), 
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerClientes()),
+                    this.pedirDatos('CATEGORIAS'), this.pedirDatos('UNIDADES'),
+                    // FIX: Usar funciones específicas para Config
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigCampos()),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerDepositos()),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigFactura())
+                ]).then(res => {
+                    this.productos = res[0]; this.proveedores = res[1]; this.clientes = res[2];
+                    this.listaCategorias = res[3]; this.listaUnidades = res[4];
+                    this.listaConfigCampos = res[5] || [];
+                    this.listaDepositos = res[6] || [];
+                    this.configFacturaActual = res[7];
+                    this.cargando = false;
                 });
             },
-            pedirDatos(hoja) { return new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getData(hoja); }); },
-            esObligatorio(val) { return val === true || val === 'TRUE'; },
+            pedirDatos(hoja) { return new Promise(r => google.script.run.withSuccessHandler(r).getData(hoja)); },
             
             // Helpers
             obtenerNombreCategoria(id) { const c = this.listaCategorias.find(x => x.id_categoria == id); return c ? c.nombre : '...'; },
             obtenerEtiquetaCampo(key) { const c = this.listaConfigCampos.find(x => x.key_interno === key); return c ? c.etiqueta_visible : key; },
             tieneDatosValidos(item) { if (!item.datos_adicionales) return false; return Object.values(item.datos_adicionales).some(val => val && val.toString().trim() !== ''); },
             obtenerNombreProducto(id) { const p = this.productos.find(x => x.id_producto == id); return p ? p.nombre : '...'; },
-            obtenerSkuProducto(id) { const p = this.productos.find(x => x.id_producto == id); return p ? p.sku : '...'; },
+
+            // CONFIG
+            abrirModalDeposito(item) { this.formDeposito = item ? {...item} : { nombre:'', direccion:'', responsable:'', activo:'Si' }; this.modalDep.show(); },
+            guardarDeposito() { this.cargando = true; google.script.run.withSuccessHandler(() => { this.cargando=false; this.modalDep.hide(); this.cargarDatosIniciales(); }).guardarDeposito(this.formDeposito); },
+            eliminarDeposito(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(res => { this.cargando=false; if(res.error) alert(res.error); else this.cargarDatosIniciales(); }).eliminarDeposito(item.id_deposito); },
             
-            // PRODUCTO
-            manejarArchivo(event) { const archivo = event.target.files[0]; if (!archivo) return; this.archivoParaSubir = archivo; const reader = new FileReader(); reader.onload = (e) => { this.imagenPreview = e.target.result; }; reader.readAsDataURL(archivo); },
-            abrirModalProducto(item) { this.modoEdicion = !!item; this.archivoParaSubir = null; this.imagenPreview = null; if (item) { this.formProducto = JSON.parse(JSON.stringify(item)); if (!this.formProducto.datos_adicionales) this.formProducto.datos_adicionales = {}; if (this.formProducto.url_imagen) this.imagenPreview = this.formProducto.url_imagen; } else { this.formProducto = { nombre: '', sku: '', precio_venta_base: 0, id_categoria: '', unidad_medida: '', stock_minimo: 5, impuesto_iva: 10, maneja_stock: true, datos_adicionales: {}, url_imagen: '' }; } this.modalProd.show(); },
-            async procesarGuardadoProducto() { this.cargando = true; try { if (this.archivoParaSubir) { const urlDrive = await this.subirArchivoPromise(this.archivoParaSubir); this.formProducto.url_imagen = urlDrive; } const datos = JSON.parse(JSON.stringify(this.formProducto)); const funcion = this.modoEdicion ? 'actualizarProducto' : 'guardarNuevoProducto'; google.script.run.withSuccessHandler(() => { this.cargando = false; this.modalProd.hide(); this.cargarDatosIniciales(); }).withFailureHandler(err => { this.cargando = false; alert("Error: " + err); })[funcion](datos); } catch (error) { this.cargando = false; alert("Error: " + error); } },
-            subirArchivoPromise(archivo) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = function(e) { const rawBase64 = e.target.result.split(',')[1]; google.script.run.withSuccessHandler(url => resolve(url)).withFailureHandler(err => reject(err)).subirImagenDrive(rawBase64, archivo.name, archivo.type); }; reader.readAsDataURL(archivo); }); },
-            eliminarProducto(item) { if(!confirm('¿Eliminar?')) return; this.cargando = true; google.script.run.withSuccessHandler(res => { this.cargando = false; res.success ? this.cargarDatosIniciales() : alert(res.error); }).eliminarProducto(item.id_producto); },
-            
-            // PROVEEDOR
-            abrirModalProveedor(item) { this.modoEdicion = !!item; if (item) { this.formProveedor = JSON.parse(JSON.stringify(item)); if (!this.formProveedor.datos_adicionales) this.formProveedor.datos_adicionales = {}; } else { this.formProveedor = { razon_social: '', doc_identidad: '', contacto: '', datos_adicionales: {} }; } this.modalProv.show(); },
-            guardarProveedor() { this.cargando = true; const datos = JSON.parse(JSON.stringify(this.formProveedor)); const funcion = this.modoEdicion ? 'actualizarProveedor' : 'guardarNuevoProveedor'; google.script.run.withSuccessHandler(() => { this.cargando = false; this.modalProv.hide(); this.cargarDatosIniciales(); }).withFailureHandler(alert).withUserObject(this)[funcion](datos); },
-            eliminarProveedor(item) { 
-                if(!confirm(`¿Eliminar proveedor "${item.razon_social}"?`)) return; 
-                this.cargando = true; 
-                google.script.run
-                    .withSuccessHandler(res => { 
-                        this.cargando = false; 
-                        if (res.success) {
-                            this.cargarDatosIniciales();
-                        } else {
-                            alert(res.error); 
-                        }
-                    })
-                    .withFailureHandler(err => {
-                        this.cargando = false;
-                        alert(err);
-                    })
-                    .eliminarProveedor(item.id_proveedor); 
-            },
-            
-            // CLIENTES
-            abrirModalCliente(item) { 
-                this.modoEdicion = !!item;
-                if (item) {
-                    this.formCliente = JSON.parse(JSON.stringify(item));
-                    if (!this.formCliente.datos_adicionales) this.formCliente.datos_adicionales = {};
-                } else {
-                    this.formCliente = { razon_social: '', doc_identidad: '', email: '', telefono: '', direccion: '', datos_adicionales: {} }; 
+            abrirModalCampo(item) { 
+                this.formCampo = item ? {...item} : { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false }; 
+                  if(this.formCampo.entidad_objetivo) {
+                    this.formCampo.entidad_objetivo = this.formCampo.entidad_objetivo.toLowerCase();
                 }
-                this.modalCli.show(); 
+                this.modalCmp.show(); 
             },
-            guardarCliente() { 
+            guardarCampo() { 
                 this.cargando = true; 
-                const funcion = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente';
-                
-                google.script.run
-                    .withSuccessHandler(() => { 
-                        this.cargando = false; 
-                        this.modalCli.hide(); 
-                        this.cargarDatosIniciales(); 
-                    })
-                    .withFailureHandler(err => {
-                        this.cargando = false;
-                        alert("Error: " + err);
-                    })
-                    [funcion](this.formCliente); 
-            },
-            eliminarCliente(item) {
-                if(!confirm(`¿Estás seguro de eliminar a "${item.razon_social}"?`)) return;
-                
-                this.cargando = true;
-                google.script.run
-                    .withSuccessHandler(res => {
-                        this.cargando = false;
-                        if (res.success) {
-                            this.cargarDatosIniciales();
-                        } else {
-                            alert(res.error);
-                        }
-                    })
-                    .withFailureHandler(err => {
-                        this.cargando = false;
-                        alert("Error de conexión: " + err);
-                    })
-                    .eliminarCliente(item.id_cliente);
-            },
+                if(this.formCampo.entidad_objetivo) {
+                    this.formCampo.entidad_objetivo = this.formCampo.entidad_objetivo.toLowerCase();
+                }
 
-            // LOGICA DE COMPRAS
-            cargarHistorial() { this.subVistaCompras = 'historial'; this.cargando = true; google.script.run.withSuccessHandler(res => { this.historialCompras = res || []; this.cargando = false; }).withFailureHandler(err => { alert("Error: " + err); this.cargando = false; this.historialCompras = []; }).obtenerHistorialCompras(); },
-            agregarAlCarrito() { if(this.lineaTemp.cantidad <= 0) return alert("Cantidad inválida"); this.carritoCompra.push({ ...this.lineaTemp }); this.lineaTemp.id_producto = ''; this.lineaTemp.cantidad = ''; this.lineaTemp.costo = ''; },
-            quitarDelCarrito(index) { this.carritoCompra.splice(index, 1); },
-            limpiarCarrito() { if(confirm("¿Vaciar?")) { this.carritoCompra = []; this.formCompra = { id_proveedor: '', fecha: new Date().toISOString().slice(0,10), comprobante: '' }; } },
-            guardarCompraFinal() { if (!this.formCompra.id_proveedor || this.carritoCompra.length === 0) return alert("Faltan datos"); this.cargando = true; const totalNumerico = this.carritoCompra.reduce((acc, item) => acc + (item.cantidad * item.costo), 0); const paqueteDatos = { id_proveedor: this.formCompra.id_proveedor, fecha: this.formCompra.fecha, comprobante: this.formCompra.comprobante, total: totalNumerico, items: this.carritoCompra }; google.script.run.withSuccessHandler(() => { this.cargando = false; alert("✅ Compra guardada."); this.carritoCompra = []; this.cargarDatosIniciales(); }).withFailureHandler(err => { this.cargando = false; alert("Error: " + err); }).guardarCompraCompleta(paqueteDatos); },
-
-            // LOGICA DE VENTAS (POS)
-            cargarHistorialVentas() { this.subVistaVentas = 'historial'; this.cargando = true; google.script.run.withSuccessHandler(res => { this.historialVentas = res || []; this.cargando = false; }).withFailureHandler(err => { alert("Error: " + err); this.cargando = false; this.historialVentas = []; }).obtenerHistorialVentas(); },
-            alSeleccionarProductoVenta() { const prod = this.productos.find(p => p.id_producto == this.lineaVenta.id_producto); if(prod) this.lineaVenta.precio = prod.precio_venta_base; },
-            agregarAlCarritoVenta() { 
-                const prod = this.productos.find(p => p.id_producto == this.lineaVenta.id_producto);
-                if(!prod) return;
-                if(this.lineaVenta.cantidad > (prod.stock_actual || 0)) return alert("🚫 Stock insuficiente.\nSolo tienes: " + (prod.stock_actual || 0));
-                this.carritoVenta.push({ ...this.lineaVenta }); 
-                this.lineaVenta.id_producto = ''; this.lineaVenta.cantidad = 1; this.lineaVenta.precio = 0; 
+                google.script.run.withSuccessHandler(() => { 
+                    this.cargando=false; 
+                    this.modalCmp.hide(); 
+                    this.cargarDatosIniciales(); 
+                }).guardarCampoConfig(this.formCampo); 
             },
-            quitarDelCarritoVenta(index) { this.carritoVenta.splice(index, 1); },
-            limpiarCarritoVenta() { if(confirm("¿Cancelar venta?")) { this.carritoVenta = []; this.formVenta = { id_cliente: '', fecha: new Date().toISOString().slice(0,10), nro_factura: '' }; } },
-            guardarVentaFinal() {
-                if(!this.formVenta.id_cliente) return alert("Selecciona Cliente");
-                if(this.carritoVenta.length === 0) return alert("Carrito vacío");
-                this.cargando = true;
-                const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
-                const paquete = { id_cliente: this.formVenta.id_cliente, fecha: this.formVenta.fecha, nro_factura: this.formVenta.nro_factura, total: total, items: this.carritoVenta };
-                google.script.run.withSuccessHandler(() => { this.cargando = false; alert("💰 Venta registrada con éxito."); this.carritoVenta = []; this.cargarDatosIniciales(); }).withFailureHandler(err => { this.cargando = false; alert("Error: " + err); }).guardarVenta(paquete);
-            }
+            eliminarCampo(item) { if(!confirm("¿Borrar campo?")) return; this.cargando=true; google.script.run.withSuccessHandler(() => { this.cargando=false; this.cargarDatosIniciales(); }).eliminarCampoConfig(item.id_campo); },
+            
+            guardarConfigFactura() { this.cargando = true; google.script.run.withSuccessHandler(() => { this.cargando=false; alert("Numeración actualizada"); }).guardarConfigFactura(this.configFacturaActual); },
+
+            // MODALES MAESTROS
+            abrirModalCliente(item) { this.modoEdicion=!!item; this.formCliente = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }; if(!this.formCliente.datos_adicionales) this.formCliente.datos_adicionales={}; this.modalCli.show(); },
+            guardarCliente() { this.cargando=true; const f = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalCli.hide(); this.cargarDatosIniciales();})[f](this.formCliente); },
+            eliminarCliente(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.error) alert(r.error); else this.cargarDatosIniciales(); }).eliminarCliente(item.id_cliente); },
+
+            abrirModalProveedor(item) { this.modoEdicion=!!item; this.formProveedor = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', datos_adicionales:{} }; if(!this.formProveedor.datos_adicionales) this.formProveedor.datos_adicionales={}; this.modalProv.show(); },
+            guardarProveedor() { this.cargando=true; const f = this.modoEdicion ? 'actualizarProveedor' : 'guardarNuevoProveedor'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalProv.hide(); this.cargarDatosIniciales();}).withUserObject(this)[f](this.formProveedor); },
+            eliminarProveedor(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else alert(r.error); }).eliminarProveedor(item.id_proveedor); },
+
+            manejarArchivo(e) { const f = e.target.files[0]; if(!f) return; this.archivoParaSubir = f; const r = new FileReader(); r.onload = (e) => { this.imagenPreview = e.target.result; }; r.readAsDataURL(f); },
+            abrirModalProducto(item) { this.modoEdicion=!!item; this.archivoParaSubir=null; this.imagenPreview=null; this.formProducto = item ? JSON.parse(JSON.stringify(item)) : { nombre:'', sku:'', precio_venta_base:0, datos_adicionales:{} }; if(item && item.url_imagen) this.imagenPreview=item.url_imagen; if(!this.formProducto.datos_adicionales) this.formProducto.datos_adicionales={}; this.modalProd.show(); },
+            async procesarGuardadoProducto() { this.cargando=true; if(this.archivoParaSubir) { this.formProducto.url_imagen = await new Promise(r => { const reader = new FileReader(); reader.onload = e => google.script.run.withSuccessHandler(r).subirImagenDrive(e.target.result.split(',')[1], this.archivoParaSubir.name, this.archivoParaSubir.type); reader.readAsDataURL(this.archivoParaSubir); }); } const f = this.modoEdicion ? 'actualizarProducto' : 'guardarNuevoProducto'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalProd.hide(); this.cargarDatosIniciales();})[f](this.formProducto); },
+            eliminarProducto(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else alert(r.error); }).eliminarProducto(item.id_producto); },
+
+            // TRANSACCIONES
+            alSeleccionarProductoVenta() { const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); if(p) this.lineaVenta.precio = p.precio_venta_base; },
+            agregarAlCarritoVenta() { const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); if(!p || this.lineaVenta.cantidad > p.stock_actual) return alert("Stock insuficiente"); this.carritoVenta.push({...this.lineaVenta}); this.lineaVenta={id_producto:'', cantidad:1, precio:0}; },
+            quitarDelCarritoVenta(i) { this.carritoVenta.splice(i,1); },
+            limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
+            guardarVentaFinal() { if(!this.formVenta.id_cliente || this.carritoVenta.length===0) return alert("Datos incompletos"); this.cargando=true; const total = this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio), 0); const pkg = { ...this.formVenta, total, items: this.carritoVenta }; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Venta registrada"); this.limpiarCarritoVenta(); this.cargarDatosIniciales();}).withFailureHandler(e=>{this.cargando=false; alert(e);}).guardarVenta(pkg); },
+            cargarHistorialVentas() { this.subVistaVentas='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialVentas=r||[]; this.cargando=false;}).obtenerHistorialVentas(); },
+            anularVenta(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorialVentas(); this.cargarDatosIniciales();}).anularVenta(h.id_venta); },
+            verDetalleVenta(h) { this.itemsDetalle=[]; this.modalDetalle.show(); google.script.run.withSuccessHandler(r=>this.itemsDetalle=r).obtenerDetalleVenta(h.id_venta); },
+
+            agregarAlCarrito() { this.carritoCompra.push({...this.lineaTemp}); this.lineaTemp={id_producto:'', cantidad:'', costo:''}; },
+            quitarDelCarrito(i) { this.carritoCompra.splice(i,1); },
+            limpiarCarrito() { this.carritoCompra=[]; this.formCompra={id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: ''}; },
+            guardarCompraFinal() { if(!this.formCompra.id_proveedor || this.carritoCompra.length===0) return alert("Datos incompletos"); this.cargando=true; const total = this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); const pkg = { ...this.formCompra, total, items: this.carritoCompra }; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Compra registrada"); this.limpiarCarrito(); this.cargarDatosIniciales();}).withFailureHandler(e=>{this.cargando=false; alert(e);}).guardarCompraCompleta(pkg); },
+            cargarHistorial() { this.subVistaCompras='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialCompras=r||[]; this.cargando=false;}).obtenerHistorialCompras(); },
+            anularCompra(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorial(); this.cargarDatosIniciales();}).anularCompra(h.id_compra); },
+            verDetalleCompra(h) { this.itemsDetalle=[]; this.modalDetalle.show(); google.script.run.withSuccessHandler(r=>this.itemsDetalle=r).obtenerDetalleCompra(h.id_compra); }
         }
       }).mount('#app');
     </script>

@@ -502,87 +502,116 @@ function guardarNuevoCliente(form) {
 }
 
 /**
- * Registra una Venta (CORREGIDO PARA COINCIDIR CON COLUMNAS DE LA HOJA)
+ * Registra una Venta completa con validación de stock y facturación automática
  */
 function guardarVenta(venta) {
+  // 1. BLOQUEO DE SEGURIDAD (Evita conflictos simultáneos)
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000); 
+    lock.waitLock(10000); // Espera hasta 10 segundos si otro usuario está guardando
   } catch (e) {
-    throw new Error("Sistema ocupado. Intenta de nuevo.");
+    throw new Error("El sistema está ocupado procesando otra venta. Intenta de nuevo en unos segundos.");
   }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
-  const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
-  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  try {
+    const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+    const sheetProd = ss.getSheetByName('PRODUCTOS');
+    const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
+    const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
+    const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
 
-  // 1. VALIDACIÓN DE STOCK
-  const datosProd = sheetProd.getDataRange().getValues();
-  const mapaProd = {}; 
-  for (let i = 1; i < datosProd.length; i++) {
-    mapaProd[datosProd[i][0]] = {
-      fila: i + 1,
-      nombre: datosProd[i][2],
-      stock: Number(datosProd[i][12] || 0) 
-    };
-  }
-
-  for (let item of venta.items) {
-    const prod = mapaProd[item.id_producto];
-    if (!prod) throw new Error(`Producto no encontrado: ${item.id_producto}`);
-    if (prod.stock < item.cantidad) {
-      lock.releaseLock();
-      throw new Error(`Stock insuficiente para "${prod.nombre}". Tienes: ${prod.stock}, Intentas vender: ${item.cantidad}`);
+    // 2. LEER PRODUCTOS PARA VALIDAR STOCK
+    const datosProd = sheetProd.getDataRange().getValues();
+    const mapaProd = {}; 
+    // Mapeamos: ID -> {fila: indice, stock: cantidad, nombre: texto}
+    // Asumimos: Col 0=ID, Col 2=Nombre, Col 12 (índice 12 / Letra M)=Stock Actual
+    for (let i = 1; i < datosProd.length; i++) {
+      mapaProd[datosProd[i][0]] = {
+        fila: i + 1, // +1 porque sheet es base 1
+        nombre: datosProd[i][2],
+        stock: Number(datosProd[i][12] || 0) 
+      };
     }
+
+    // Validamos cada item antes de escribir nada en las hojas
+    for (let item of venta.items) {
+      const prod = mapaProd[item.id_producto];
+      if (!prod) throw new Error(`Producto no encontrado: ${item.id_producto}`);
+      
+      if (prod.stock < item.cantidad) {
+        throw new Error(`Stock insuficiente para "${prod.nombre}". Tienes: ${prod.stock}, Intentas vender: ${item.cantidad}`);
+      }
+    }
+
+    // 3. PREPARAR DATOS DE CABECERA
+    const idVenta = Utilities.getUuid();
+    const fecha = new Date();
+
+    // --- LÓGICA DE FACTURACIÓN AUTOMÁTICA ---
+    let nroFacturaFinal = venta.nro_factura;
+    
+    // Si viene vacío, null, o dice "Auto", generamos el siguiente número
+    if (!nroFacturaFinal || nroFacturaFinal === 'Auto' || nroFacturaFinal.trim() === '') {
+      // Usamos las funciones auxiliares de configuración
+      const ultimoNro = obtenerConfigFactura(); 
+      nroFacturaFinal = incrementarFactura(ultimoNro);
+      // Guardamos el nuevo número para que la próxima venta siga la secuencia
+      guardarConfigFactura(nroFacturaFinal); 
+    }
+    // -----------------------------------------
+
+    // 4. GUARDAR CABECERA (Orden estricto de columnas)
+    // A: id, B: factura, C: fecha, D: cliente, E: deposito, F: total, G: estado
+    sheetCab.appendRow([
+      idVenta,                          // A: id_venta
+      nroFacturaFinal,                  // B: numero_factura (Automático o Manual)
+      fecha,                            // C: fecha
+      venta.id_cliente,                 // D: id_cliente
+      "1",                              // E: id_deposito_origen (Default: 1 o DEP-CENTRAL)
+      venta.total,                      // F: total_venta
+      "PAGADO",                         // G: estado
+      ""                                // H: Extra
+    ]);
+
+    // 5. GUARDAR DETALLES, MOVIMIENTOS Y ACTUALIZAR STOCK
+    venta.items.forEach(item => {
+      // A. Guardar Detalle
+      sheetDet.appendRow([
+        Utilities.getUuid(),
+        idVenta,
+        item.id_producto,
+        item.cantidad,
+        item.precio,
+        item.cantidad * item.precio
+      ]);
+
+      // B. Guardar Movimiento (Kardex)
+      sheetMov.appendRow([
+        Utilities.getUuid(),
+        fecha,
+        "SALIDA_VENTA",
+        item.id_producto,
+        "1", // ID Depósito
+        item.cantidad * -1, // Salida es negativo
+        idVenta
+      ]);
+
+      // C. Restar Stock en la hoja PRODUCTOS
+      const prodInfo = mapaProd[item.id_producto];
+      const nuevoStock = prodInfo.stock - Number(item.cantidad);
+      // Columna 13 es la M (Stock Actual)
+      sheetProd.getRange(prodInfo.fila, 13).setValue(nuevoStock);
+    });
+
+    return { success: true, id_venta: idVenta, nro_factura: nroFacturaFinal };
+
+  } catch (error) {
+    // Si algo falla, relanzamos el error para que el usuario lo vea
+    throw error;
+  } finally {
+    // Siempre liberamos el bloqueo, pase lo que pase
+    lock.releaseLock();
   }
-
-  // 2. GUARDAR DATOS
-  const idVenta = Utilities.getUuid();
-  const fecha = new Date();
-
-  // --- CORRECCIÓN AQUÍ: ORDEN EXACTO DE COLUMNAS ---
-  // A: id, B: factura, C: fecha, D: cliente, E: deposito, F: total, G: estado
-  sheetCab.appendRow([
-    idVenta,                          // A: id_venta
-    venta.nro_factura || "S/N",       // B: numero_factura
-    fecha,                            // C: fecha
-    venta.id_cliente,                 // D: id_cliente
-    "DEP-CENTRAL",                    // E: id_deposito_origen (Valor por defecto)
-    venta.total,                      // F: total_venta
-    "PAGADO",                         // G: estado
-    ""                                // H: url_pdf (vacío)
-  ]);
-
-  // 3. DETALLES Y MOVIMIENTOS
-  venta.items.forEach(item => {
-    sheetDet.appendRow([
-      Utilities.getUuid(),
-      idVenta,
-      item.id_producto,
-      item.cantidad,
-      item.precio,
-      item.cantidad * item.precio
-    ]);
-
-    sheetMov.appendRow([
-      Utilities.getUuid(),
-      fecha,
-      "SALIDA_VENTA",
-      item.id_producto,
-      "DEP-CENTRAL",
-      item.cantidad * -1, 
-      idVenta
-    ]);
-
-    const prodInfo = mapaProd[item.id_producto];
-    const nuevoStock = prodInfo.stock - Number(item.cantidad);
-    sheetProd.getRange(prodInfo.fila, 13).setValue(nuevoStock);
-  });
-
-  lock.releaseLock();
-  return { success: true, id_venta: idVenta };
 }
 
 function obtenerHistorialVentas() {
@@ -725,5 +754,418 @@ function actualizarProveedor(form) {
     }
   }
   throw new Error("Proveedor no encontrado");
+}
+
+// ==========================================
+// CONSULTA DE DETALLES (HISTORIAL)
+// ==========================================
+
+function obtenerDetalleCompra(idCompra) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const hojaDet = ss.getSheetByName('COMPRAS_DETALLE');
+  const hojaProd = ss.getSheetByName('PRODUCTOS');
+  
+  const datosDet = hojaDet.getDataRange().getValues();
+  const datosProd = hojaProd.getDataRange().getValues();
+  
+  // Mapa de productos: ID -> Nombre
+  const mapaProd = {};
+  for(let i=1; i<datosProd.length; i++) {
+    mapaProd[datosProd[i][0]] = datosProd[i][2]; // Col 0=ID, Col 2=Nombre
+  }
+
+  const items = [];
+  // Estructura COMPRAS_DETALLE: [id_det, id_compra, id_prod, cant, costo, subtotal]
+  // Indices: 0, 1, 2, 3, 4, 5
+  for(let i=1; i<datosDet.length; i++) {
+    if(datosDet[i][1] == idCompra) {
+      items.push({
+        producto: mapaProd[datosDet[i][2]] || 'Producto eliminado',
+        cantidad: datosDet[i][3],
+        precio: datosDet[i][4],
+        subtotal: datosDet[i][5]
+      });
+    }
+  }
+  return items;
+}
+
+function obtenerDetalleVenta(idVenta) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const hojaDet = ss.getSheetByName('VENTAS_DETALLE');
+  const hojaProd = ss.getSheetByName('PRODUCTOS');
+  
+  const datosDet = hojaDet.getDataRange().getValues();
+  const datosProd = hojaProd.getDataRange().getValues();
+  
+  const mapaProd = {};
+  for(let i=1; i<datosProd.length; i++) {
+    mapaProd[datosProd[i][0]] = datosProd[i][2];
+  }
+
+  const items = [];
+  // Estructura VENTAS_DETALLE: [id_det, id_venta, id_prod, cant, precio, subtotal]
+  for(let i=1; i<datosDet.length; i++) {
+    if(datosDet[i][1] == idVenta) {
+      items.push({
+        producto: mapaProd[datosDet[i][2]] || 'Producto eliminado',
+        cantidad: datosDet[i][3],
+        precio: datosDet[i][4],
+        subtotal: datosDet[i][5]
+      });
+    }
+  }
+  return items;
+}
+
+// ==========================================
+// ANULACIONES Y REVERSIONES
+// ==========================================
+
+function anularVenta(idVenta) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado"; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
+  const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+
+  // 1. Buscar y Validar Venta
+  const datosCab = sheetCab.getDataRange().getValues();
+  let filaCab = -1;
+  for (let i = 1; i < datosCab.length; i++) {
+    if (datosCab[i][0] == idVenta) {
+      if (datosCab[i][6] === 'ANULADO') { lock.releaseLock(); throw "Esta venta ya está anulada."; }
+      filaCab = i + 1;
+      break;
+    }
+  }
+  if (filaCab === -1) { lock.releaseLock(); throw "Venta no encontrada."; }
+
+  // 2. Obtener Detalles para devolver stock
+  const datosDet = sheetDet.getDataRange().getValues();
+  const itemsDevolver = [];
+  for (let i = 1; i < datosDet.length; i++) {
+    if (datosDet[i][1] == idVenta) {
+      itemsDevolver.push({ id_prod: datosDet[i][2], cant: datosDet[i][3] });
+    }
+  }
+
+  // 3. Procesar Devolución de Stock
+  const datosProd = sheetProd.getDataRange().getValues();
+  // Mapear ID producto a indice de fila
+  const mapaProd = {};
+  for(let i=1; i<datosProd.length; i++) mapaProd[datosProd[i][0]] = i + 1;
+
+  itemsDevolver.forEach(item => {
+    const filaProd = mapaProd[item.id_prod];
+    if (filaProd) {
+      // Leer Stock Actual
+      const stockActual = Number(sheetProd.getRange(filaProd, 13).getValue() || 0);
+      // REVERSIÓN: Sumamos lo que se vendió
+      sheetProd.getRange(filaProd, 13).setValue(stockActual + Number(item.cant));
+      
+      // Registrar Movimiento de Ajuste
+      sheetMov.appendRow([Utilities.getUuid(), new Date(), "ANULACION_VENTA", item.id_prod, "DEP-CENTRAL", item.cant, idVenta]);
+    }
+  });
+
+  // 4. Marcar como ANULADO (Columna G, índice 7)
+  sheetCab.getRange(filaCab, 7).setValue('ANULADO');
+
+  lock.releaseLock();
+  return { success: true };
+}
+
+function anularCompra(idCompra) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado"; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
+  const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+
+  // 1. Buscar Compra
+  const datosCab = sheetCab.getDataRange().getValues();
+  let filaCab = -1;
+  for (let i = 1; i < datosCab.length; i++) {
+    if (datosCab[i][0] == idCompra) {
+      if (datosCab[i][5] === 'ANULADO') { lock.releaseLock(); throw "Compra ya anulada."; }
+      filaCab = i + 1;
+      break;
+    }
+  }
+  if (filaCab === -1) { lock.releaseLock(); throw "Compra no encontrada."; }
+
+  // 2. Obtener items
+  const datosDet = sheetDet.getDataRange().getValues();
+  const itemsRevertir = [];
+  for (let i = 1; i < datosDet.length; i++) {
+    if (datosDet[i][1] == idCompra) {
+      itemsRevertir.push({ id_prod: datosDet[i][2], cant: Number(datosDet[i][3]), costo: Number(datosDet[i][4]) });
+    }
+  }
+
+  // 3. Revertir Stock y Costo Promedio (Matemática Inversa)
+  const datosProd = sheetProd.getDataRange().getValues();
+  const mapaProd = {};
+  for(let i=1; i<datosProd.length; i++) mapaProd[datosProd[i][0]] = i + 1;
+
+  itemsRevertir.forEach(item => {
+    const filaProd = mapaProd[item.id_prod];
+    if (filaProd) {
+      // Datos Actuales
+      const stockActual = Number(sheetProd.getRange(filaProd, 13).getValue() || 0);
+      const costoPromActual = Number(sheetProd.getRange(filaProd, 7).getValue() || 0);
+      
+      // Nuevo Stock (Restamos lo comprado)
+      const nuevoStock = stockActual - item.cant;
+      
+      // Recálculo de Costo (Solo si queda stock, si queda 0 el costo es irrelevante/mantenemos último)
+      let nuevoCosto = costoPromActual;
+      if (nuevoStock > 0) {
+        // Fórmula Inversa PMP: 
+        // (ValorTotalActual - ValorCompraAnulada) / NuevoStock
+        const valorTotalActual = stockActual * costoPromActual;
+        const valorCompraAnulada = item.cant * item.costo;
+        nuevoCosto = (valorTotalActual - valorCompraAnulada) / nuevoStock;
+        if(nuevoCosto < 0) nuevoCosto = 0; // Seguridad por si hay inconsistencias previas
+      }
+
+      // Guardar
+      sheetProd.getRange(filaProd, 13).setValue(nuevoStock);
+      sheetProd.getRange(filaProd, 7).setValue(nuevoCosto);
+
+      // Movimiento
+      sheetMov.appendRow([Utilities.getUuid(), new Date(), "ANULACION_COMPRA", item.id_prod, "DEP-CENTRAL", item.cant * -1, idCompra]);
+    }
+  });
+
+  // 4. Marcar ANULADO (Columna F, índice 6)
+  sheetCab.getRange(filaCab, 6).setValue('ANULADO');
+
+  lock.releaseLock();
+  return { success: true };
+}
+
+// ==========================================
+// SECCIÓN CONFIGURACIÓN Y MAESTROS
+// ==========================================
+
+// --- 1. GESTIÓN DE DEPÓSITOS (CRUD) ---
+
+function obtenerDepositos() {
+  // Leemos la hoja tal cual la mostraste
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ws = ss.getSheetByName('DEPOSITOS');
+  if(!ws || ws.getLastRow() <= 1) return [];
+  
+  const datos = ws.getDataRange().getValues();
+  const lista = [];
+  
+  for(let i=1; i<datos.length; i++) {
+    if(datos[i][0]) {
+      lista.push({
+        id_deposito: datos[i][0],
+        nombre: datos[i][1],
+        direccion: datos[i][2],
+        responsable: datos[i][3],
+        activo: datos[i][4]
+      });
+    }
+  }
+  return lista;
+}
+
+function guardarDeposito(form) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ws = ss.getSheetByName('DEPOSITOS');
+  
+  if(form.id_deposito) {
+    // EDITAR: Buscamos por ID
+    const datos = ws.getDataRange().getValues();
+    for(let i=1; i<datos.length; i++) {
+      if(datos[i][0] == form.id_deposito) {
+        // Actualizamos Cols B, C, D, E (Indices 1,2,3,4)
+        ws.getRange(i+1, 2, 1, 4).setValues([[
+          form.nombre, 
+          form.direccion, 
+          form.responsable, 
+          form.activo
+        ]]);
+        return { success: true };
+      }
+    }
+  } else {
+    // NUEVO: Generamos ID si no existe, o usamos uno simple
+    const id = Math.floor(Math.random() * 1000000); // ID Numérico simple
+    ws.appendRow([id, form.nombre, form.direccion, form.responsable, form.activo || 'Si']);
+  }
+  return { success: true };
+}
+
+function eliminarDeposito(id) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  
+  // A. VALIDAR USO EN VENTAS (Columna E de VENTAS_CABECERA es index 4)
+  const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
+  if(sheetVentas) {
+    const datos = sheetVentas.getDataRange().getValues();
+    // Revisamos la columna 4 (id_deposito_origen)
+    const usado = datos.some((r, i) => i > 0 && r[4] == id); 
+    if(usado) return { error: "⛔ No se puede eliminar: Existen ventas registradas desde este depósito." };
+  }
+
+  // B. VALIDAR USO EN COMPRAS (Asumimos Columna D o E, ajusta si tu hoja compras es distinta)
+  // Por defecto en el codigo anterior usabamos "DEP-CENTRAL" fijo, pero si ya tienes datos reales:
+  const sheetCompras = ss.getSheetByName('COMPRAS_CABECERA');
+  if(sheetCompras) {
+    const datos = sheetCompras.getDataRange().getValues();
+    // Revisamos la columna 3 (id_deposito_destino, si existe)
+    const usado = datos.some((r, i) => i > 0 && r[3] == id);
+    if(usado) return { error: "⛔ No se puede eliminar: Existen compras destinadas a este depósito." };
+  }
+
+  // C. ELIMINAR
+  const ws = ss.getSheetByName('DEPOSITOS');
+  const datos = ws.getDataRange().getValues();
+  for(let i=1; i<datos.length; i++) {
+    if(datos[i][0] == id) {
+      ws.deleteRow(i+1);
+      return { success: true };
+    }
+  }
+  return { error: "Depósito no encontrado." };
+}
+
+// --- 2. GESTIÓN DE CAMPOS ADICIONALES ---
+
+// --- GESTIÓN DE CAMPOS ADICIONALES (CORREGIDO) ---
+
+function obtenerConfigCampos() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let ws = ss.getSheetByName('CONFIG_CAMPOS');
+  
+  // Si no existe la hoja, la creamos con las cabeceras correctas
+  if (!ws) {
+    ws = ss.insertSheet('CONFIG_CAMPOS');
+    ws.appendRow(['id_campo', 'entidad_objetivo', 'key_interno', 'etiqueta_visible', 'tipo_dato', 'opciones_lista', 'es_obligatorio']);
+    return [];
+  }
+  
+  // Usamos la función getData genérica o leemos manualmente
+  const datos = ws.getDataRange().getValues();
+  const lista = [];
+  
+  for (let i = 1; i < datos.length; i++) {
+    if (datos[i][0]) {
+      lista.push({
+        id_campo: datos[i][0],
+        entidad_objetivo: datos[i][1],
+        key_interno: datos[i][2],
+        etiqueta_visible: datos[i][3],
+        tipo_dato: datos[i][4],
+        opciones_lista: datos[i][5],
+        es_obligatorio: datos[i][6]
+      });
+    }
+  }
+  return lista;
+}
+
+function guardarCampoConfig(form) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let ws = ss.getSheetByName('CONFIG_CAMPOS');
+  
+  // Seguridad: Crear hoja si fue borrada
+  if (!ws) {
+    ws = ss.insertSheet('CONFIG_CAMPOS');
+    ws.appendRow(['id_campo', 'entidad_objetivo', 'key_interno', 'etiqueta_visible', 'tipo_dato', 'opciones_lista', 'es_obligatorio']);
+  }
+  
+  // Sanitizar datos (evitar undefined)
+  const entidad = form.entidad_objetivo || 'producto';
+  const key = (form.key_interno || '').toLowerCase().replace(/\s+/g, '_'); // Forzar formato snake_case
+  const label = form.etiqueta_visible || 'Nuevo Campo';
+  const tipo = form.tipo_dato || 'text';
+  const opciones = form.opciones_lista || '';
+  const obligatorio = form.es_obligatorio ? true : false;
+
+  if(form.id_campo) {
+    // EDITAR
+    const datos = ws.getDataRange().getValues();
+    for(let i=1; i<datos.length; i++) {
+      if(datos[i][0] == form.id_campo) {
+        ws.getRange(i+1, 2, 1, 6).setValues([[entidad, key, label, tipo, opciones, obligatorio]]);
+        return { success: true };
+      }
+    }
+  } else {
+    // NUEVO
+    ws.appendRow([Utilities.getUuid(), entidad, key, label, tipo, opciones, obligatorio]);
+  }
+  return { success: true };
+}
+
+function eliminarCampoConfig(id) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ws = ss.getSheetByName('CONFIG_CAMPOS');
+  const datos = ws.getDataRange().getValues();
+  for(let i=1; i<datos.length; i++) {
+    if(datos[i][0] == id) {
+      ws.deleteRow(i+1);
+      return { success: true };
+    }
+  }
+  return { error: "Campo no encontrado" };
+}
+
+// --- 3. NUMERACIÓN DE FACTURACIÓN AUTOMÁTICA ---
+
+function obtenerConfigFactura() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  if(!sheet) return "001-001-0000000"; // Default si no existe
+  
+  const datos = sheet.getDataRange().getValues();
+  for(let i=0; i<datos.length; i++) {
+    if(datos[i][0] === 'ULTIMO_NRO_FACTURA') return datos[i][1];
+  }
+  return "001-001-0000000";
+}
+
+function guardarConfigFactura(nuevoValor) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  if(!sheet) sheet = ss.insertSheet('CONFIG_GENERAL');
+  
+  const datos = sheet.getDataRange().getValues();
+  for(let i=0; i<datos.length; i++) {
+    if(datos[i][0] === 'ULTIMO_NRO_FACTURA') {
+      sheet.getRange(i+1, 2).setValue(nuevoValor);
+      return { success: true };
+    }
+  }
+  // Si no existe la fila, la creamos
+  sheet.appendRow(['ULTIMO_NRO_FACTURA', nuevoValor]);
+  return { success: true };
+}
+
+// Función auxiliar para sumar +1 al string de factura
+function incrementarFactura(actual) {
+  // Espera formato XXX-XXX-XXXXXXX
+  const partes = actual.split('-');
+  if(partes.length < 3) return actual; // No tocamos si el formato es raro
+  
+  let numero = parseInt(partes[2], 10); // Tomamos la última parte
+  numero++; 
+  
+  // Reconstruimos con ceros a la izquierda (longitud 7 standard)
+  const nuevoNum = numero.toString().padStart(7, '0');
+  return `${partes[0]}-${partes[1]}-${nuevoNum}`;
 }
 
