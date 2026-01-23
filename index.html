@@ -20,7 +20,13 @@
           --text-dark: #333333;
       }
 
-      body { background-color: var(--bg-light-tone); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      body { 
+          background-color: var(--bg-light-tone); 
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+          /* Mejora el scroll en móviles */
+          overflow-x: hidden; 
+          -webkit-overflow-scrolling: touch;
+      }
 
       /* UTILIDADES */
       .bg-brand { background-color: var(--color-primary) !important; }
@@ -42,15 +48,21 @@
       /* LAYOUT */
       .sidebar { min-height: 100vh; background-color: #ffffff; border-right: 1px solid #dee2e6; }
       .bottom-nav { background-color: white; border-top: 1px solid #dee2e6; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+      
+      /* Estilos Barra Móvil */
       .nav-item-mobile { flex: 1; text-align: center; padding: 8px 0; color: #adb5bd; cursor: pointer; text-decoration: none; font-size: 0.7rem; font-weight: 500; transition: color 0.2s; }
       .nav-item-mobile.active { color: var(--color-primary); }
       .nav-item-mobile.active i { transform: scale(1.1); }
+
+      /* Estilos Menú Lateral Móvil (Offcanvas) */
+      .offcanvas-body .btn { font-weight: 500; color: #444; transition: background 0.2s; border-color: #eee; }
+      .offcanvas-body .btn:active, .offcanvas-body .btn:focus { background-color: #fff4e6; border-color: var(--color-primary); color: var(--color-primary); }
 
       @media (max-width: 767.98px) { .main-content { padding-bottom: 90px !important; } }
 
       .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction: column; }
       
-      /* ESTILOS ESPECIFICOS PRODUCTO (RECUPERADOS) */
+      /* ESTILOS ESPECIFICOS PRODUCTO */
       .img-producto-card { height: 180px; width: 100%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #f0f0f0; position: relative; }
       .img-producto-card img { width: 100%; height: 100%; object-fit: contain; padding: 15px; }
       .card { transition: transform 0.2s; border: none; }
@@ -87,6 +99,7 @@
                 <small class="text-muted text-uppercase fw-bold ps-2 mb-2 d-block" style="font-size: 0.7rem;">Facturación</small>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt me-2"></i> Ventas / Caja</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus me-2"></i> Compras / Stock</a>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias')"><i class="bi bi-arrow-left-right me-2"></i> Transferencias</a>
 
                 <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Gestión</small>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam me-2"></i> Inventario</a>
@@ -103,7 +116,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Punto de Venta</h3>
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
+                            <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button>
                             <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
                         </div>
                     </div>
@@ -170,15 +183,119 @@
                                                 <span v-else class="badge bg-success">PAGADO</span>
                                             </td>
                                             <td class="text-end pe-3">
-                                              <button class="btn btn-sm btn-outline-dark me-1" @click="imprimirTicket(h)" title="Imprimir Ticket Térmico"><i class="bi bi-printer-fill"></i></button>
+                                                <button class="btn btn-sm btn-outline-dark me-1" @click="imprimirTicket(h)" title="Imprimir Ticket Térmico"><i class="bi bi-printer-fill"></i></button>
                                                 <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver Factura PDF"><i class="bi bi-file-earmark-pdf"></i></a>
                                                 <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleVenta(h)" title="Ver productos">
                                                     <i class="bi bi-eye"></i>
                                                 </button>
-                                                
                                                 <button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularVenta(h)" title="Anular venta">
                                                     <i class="bi bi-slash-circle"></i>
                                                 </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="vistaActual === 'transferencias'">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-arrow-left-right text-brand"></i> Transferencias</h3>
+                        <div class="btn-group shadow-sm">
+                            <button class="btn" :class="subVistaTransf === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaTransf = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button>
+                            <button class="btn" :class="subVistaTransf === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialTransf">Historial</button>
+                        </div>
+                    </div>
+
+                    <div v-if="subVistaTransf === 'nueva'">
+                        <div class="card border-0 shadow-sm mb-4">
+                            <div class="card-body">
+                                <h6 class="text-brand fw-bold text-uppercase small mb-3">Datos del Traslado</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Fecha</label>
+                                        <input type="date" class="form-control" v-model="formTransf.fecha">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Origen (Sale)</label>
+                                        <select class="form-select" v-model="formTransf.origen">
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-center justify-content-center pt-3">
+                                        <i class="bi bi-arrow-right fs-3 text-muted"></i>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Destino (Entra)</label>
+                                        <select class="form-select" v-model="formTransf.destino">
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito" :disabled="d.id_deposito === formTransf.origen">{{ d.nombre }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-bold">Responsable</label>
+                                        <input type="text" class="form-control" v-model="formTransf.responsable">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <input type="text" class="form-control" placeholder="Observación (Opcional)" v-model="formTransf.observacion">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-4 border-start border-3 border-brand">
+                            <div class="card-body bg-light">
+                                <form @submit.prevent="agregarAlCarritoTransf">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-6">
+                                            <label class="small fw-bold">Producto a mover</label>
+                                            <select class="form-select" v-model="lineaTransf.id_producto" required>
+                                                <option value="" disabled>Seleccionar...</option>
+                                                <option v-for="p in productos" :value="p.id_producto">{{ p.nombre }} (Global: {{ p.stock_actual }})</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small fw-bold">Cantidad</label>
+                                            <input type="number" class="form-control" v-model.number="lineaTransf.cantidad" min="1" required>
+                                        </div>
+                                        <div class="col-md-3 d-grid">
+                                            <button class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i> Agregar</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm" v-if="carritoTransf.length > 0">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant</th><th></th></tr></thead>
+                                <tbody>
+                                    <tr v-for="(item, i) in carritoTransf" :key="i">
+                                        <td>{{ item.nombre }}</td>
+                                        <td class="text-center fw-bold">{{ item.cantidad }}</td>
+                                        <td class="text-end"><button class="btn btn-sm text-danger" @click="quitarCarritoTransf(i)"><i class="bi bi-x-lg"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="card-footer bg-white text-end p-3">
+                                <button class="btn btn-brand fw-bold px-4" @click="guardarTransfFinal">CONFIRMAR TRANSFERENCIA</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="subVistaTransf === 'historial'">
+                        <div class="card border-0 shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Ruta</th><th>Responsable</th><th class="text-end pe-3">PDF</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="h in historialTransf" :key="h.id">
+                                            <td class="ps-3">{{ h.fecha }}</td>
+                                            <td><span class="badge bg-light text-dark border">{{ h.origen }}</span> <i class="bi bi-arrow-right mx-1 text-muted small"></i> <span class="badge bg-success bg-opacity-10 text-success border border-success">{{ h.destino }}</span></td>
+                                            <td class="small">{{ h.responsable }}</td>
+                                            <td class="text-end pe-3">
+                                                <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i></a>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -201,89 +318,89 @@
                     </div>
                     <div class="row g-3">
                         <div class="col-12 col-sm-6 col-lg-3" v-for="item in productos" :key="item.id_producto"> 
-                        <div class="card h-100 shadow-sm">
-                            
-                            <div class="img-producto-card">
-                                <img v-if="item.url_imagen" :src="item.url_imagen" alt="Producto">
-                                <i v-else class="bi bi-camera-fill fs-1 text-muted opacity-25"></i>
-                                <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
-                            </div>
-
-                            <div class="card-body d-flex flex-column">
+                            <div class="card h-100 shadow-sm">
                                 
-                                <div class="mb-2">
-                                    <h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6>
-                                    <small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small>
-                                </div>
-                                
-                                <div class="row g-0 mb-3 small bg-light rounded border p-1">
-                                    <div class="col-6 border-end pe-2 text-center">
-                                        <span class="d-block text-muted" style="font-size: 0.7rem;">Stock Total</span>
-                                        <span class="fw-bold fs-5" :class="(item.stock_actual || 0) <= (item.stock_minimo || 5) ? 'text-danger' : 'text-success'">
-                                            {{ item.stock_actual || 0 }} 
-                                        </span>
-                                        <span class="d-block text-muted" style="font-size: 0.6rem;">{{ item.unidad_medida }}</span>
-                                    </div>
-                                    <div class="col-6 ps-2 text-center d-flex flex-column justify-content-center">
-                                        <span class="d-block text-muted" style="font-size: 0.7rem;">Costo Prom.</span>
-                                        <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
-                                    </div>
+                                <div class="img-producto-card">
+                                    <img v-if="item.url_imagen" :src="item.url_imagen" alt="Producto">
+                                    <i v-else class="bi bi-camera-fill fs-1 text-muted opacity-25"></i>
+                                    <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
                                 </div>
 
-                                <div class="mt-auto">
-                                    <div class="d-flex justify-content-between align-items-end mb-2">
-                                        <div>
-                                            <div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div>
-                                            <small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small>
-                                        </div>
+                                <div class="card-body d-flex flex-column">
+                                    
+                                    <div class="mb-2">
+                                        <h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6>
+                                        <small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small>
                                     </div>
                                     
-                                    <a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1 mb-2" 
-                                      data-bs-toggle="collapse" 
-                                      :href="'#collapse' + item.id_producto" 
-                                      role="button" 
-                                      aria-expanded="false">
-                                      <i class="bi bi-info-circle"></i> Ver detalles
-                                    </a>
-                                </div>
-
-                                <div class="collapse" :id="'collapse' + item.id_producto">
-                                    <div class="bg-light p-2 rounded small border shadow-sm mb-3">
-                                        
-                                        <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2" style="font-size: 0.7rem;">📍 Ubicación del Stock</h6>
-                                        <div v-if="item.stocks && item.stocks.length > 0">
-                                            <table class="table table-sm table-borderless mb-0">
-                                                <tbody>
-                                                    <tr v-for="st in item.stocks" :key="st.nombre_deposito">
-                                                        <td class="text-start ps-0 text-muted py-0">{{ st.nombre_deposito }}</td>
-                                                        <td class="text-end fw-bold pe-0 py-0">{{ st.cantidad }}</td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
+                                    <div class="row g-0 mb-3 small bg-light rounded border p-1">
+                                        <div class="col-6 border-end pe-2 text-center">
+                                            <span class="d-block text-muted" style="font-size: 0.7rem;">Stock Total</span>
+                                            <span class="fw-bold fs-5" :class="(item.stock_actual || 0) <= (item.stock_minimo || 5) ? 'text-danger' : 'text-success'">
+                                                {{ item.stock_actual || 0 }} 
+                                            </span>
+                                            <span class="d-block text-muted" style="font-size: 0.6rem;">{{ item.unidad_medida }}</span>
                                         </div>
-                                        <div v-else class="text-center text-muted fst-italic mb-2">Sin stock registrado</div>
+                                        <div class="col-6 ps-2 text-center d-flex flex-column justify-content-center">
+                                            <span class="d-block text-muted" style="font-size: 0.7rem;">Costo Prom.</span>
+                                            <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
+                                        </div>
+                                    </div>
 
-                                        <div v-if="tieneDatosValidos(item)">
-                                            <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2 mt-3" style="font-size: 0.7rem;">ℹ️ Info Adicional</h6>
-                                            <div v-for="(val, key) in item.datos_adicionales">
-                                                <div v-if="val && val.toString().trim() !== ''" class="mb-1 d-flex justify-content-between">
-                                                    <span class="text-muted">{{ obtenerEtiquetaCampo(key) }}:</span> 
-                                                    <span class="fw-bold text-dark">{{ val }}</span>
-                                                </div>
+                                    <div class="mt-auto">
+                                        <div class="d-flex justify-content-between align-items-end mb-2">
+                                            <div>
+                                                <div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div>
+                                                <small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small>
                                             </div>
                                         </div>
-
+                                        
+                                        <a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1 mb-2" 
+                                           data-bs-toggle="collapse" 
+                                           :href="'#collapse' + item.id_producto" 
+                                           role="button" 
+                                           aria-expanded="false">
+                                           <i class="bi bi-info-circle"></i> Ver detalles
+                                        </a>
                                     </div>
-                                </div>
 
-                                <div class="d-flex gap-2 pt-2 border-top">
-                                    <button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button>
-                                    <button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button>
-                                </div>
+                                    <div class="collapse" :id="'collapse' + item.id_producto">
+                                        <div class="bg-light p-2 rounded small border shadow-sm mb-3">
+                                            
+                                            <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2" style="font-size: 0.7rem;">📍 Ubicación del Stock</h6>
+                                            <div v-if="item.stocks && item.stocks.length > 0">
+                                                <table class="table table-sm table-borderless mb-0">
+                                                    <tbody>
+                                                        <tr v-for="st in item.stocks" :key="st.nombre_deposito">
+                                                            <td class="text-start ps-0 text-muted py-0">{{ st.nombre_deposito }}</td>
+                                                            <td class="text-end fw-bold pe-0 py-0">{{ st.cantidad }}</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div v-else class="text-center text-muted fst-italic mb-2">Sin stock registrado</div>
 
+                                            <div v-if="tieneDatosValidos(item)">
+                                                <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2 mt-3" style="font-size: 0.7rem;">ℹ️ Info Adicional</h6>
+                                                <div v-for="(val, key) in item.datos_adicionales">
+                                                    <div v-if="val && val.toString().trim() !== ''" class="mb-1 d-flex justify-content-between">
+                                                        <span class="text-muted">{{ obtenerEtiquetaCampo(key) }}:</span> 
+                                                        <span class="fw-bold text-dark">{{ val }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-2 pt-2 border-top">
+                                        <button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button>
+                                        <button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button>
+                                    </div>
+
+                                </div>
                             </div>
                         </div>
-                    </div>
                     </div>
                 </div>
 
@@ -292,7 +409,7 @@
                         <h3 class="fw-bold">Clientes</h3>
                         <button class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalCliente(null)"><i class="bi bi-person-plus-fill me-1"></i> Nuevo Cliente</button>
                     </div>
-                     <div class="card shadow-sm border-0">
+                      <div class="card shadow-sm border-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" style="min-width: 600px;">
                                 <thead class="table-light"><tr><th class="ps-3">Razón Social</th><th>Doc. Identidad</th><th>Contacto</th><th>Info Extra</th><th class="text-end pe-3">Acciones</th></tr></thead>
@@ -316,7 +433,7 @@
                         <h3 class="fw-bold">Proveedores</h3>
                         <button class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalProveedor(null)"><i class="bi bi-person-plus-fill me-1"></i> Nuevo Proveedor</button>
                     </div>
-                     <div class="card shadow-sm border-0">
+                      <div class="card shadow-sm border-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" style="min-width: 600px;">
                                 <thead class="table-light"><tr><th class="ps-3">Empresa</th><th>Documento</th><th>Contacto</th><th>Info Extra</th><th class="text-end pe-3">Acciones</th></tr></thead>
@@ -412,7 +529,61 @@
         </div>
       </div>
       
-      <nav class="fixed-bottom bottom-nav d-md-none z-3"><div class="d-flex justify-content-around"><a class="nav-item-mobile" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt"></i><span>Ventas</span></a><a class="nav-item-mobile" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus"></i><span>Compras</span></a><a class="nav-item-mobile" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam"></i><span>Stock</span></a><a class="nav-item-mobile" :class="{active: vistaActual === 'config'}" @click="cambiarVista('config')"><i class="bi bi-gear"></i><span>Config</span></a></div></nav>
+      <nav class="fixed-bottom bottom-nav d-md-none z-3">
+          <div class="d-flex justify-content-around">
+              <a class="nav-item-mobile" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
+                  <i class="bi bi-receipt"></i><span>Ventas</span>
+              </a>
+              <a class="nav-item-mobile" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
+                  <i class="bi bi-cart-plus"></i><span>Compras</span>
+              </a>
+              <a class="nav-item-mobile" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')">
+                  <i class="bi bi-box-seam"></i><span>Stock</span>
+              </a>
+              <a class="nav-item-mobile" data-bs-toggle="offcanvas" href="#menuMovil">
+                  <i class="bi bi-list"></i><span>Menú</span>
+              </a>
+          </div>
+      </nav>
+
+      <div class="offcanvas offcanvas-end" tabindex="-1" id="menuMovil">
+          <div class="offcanvas-header bg-brand text-white">
+              <h5 class="offcanvas-title fw-bold">
+                  <i class="bi bi-grid-fill me-2"></i>Menú Cesta
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+          </div>
+          <div class="offcanvas-body">
+              <div class="d-grid gap-2">
+                  <small class="text-muted text-uppercase fw-bold mt-2">Facturación</small>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('ventas'); cerrarMenuMovil()">
+                      <i class="bi bi-receipt me-3 text-brand"></i> Ventas / Caja
+                  </button>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('compras'); cerrarMenuMovil()">
+                      <i class="bi bi-cart-plus me-3 text-brand"></i> Compras / Stock
+                  </button>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('transferencias'); cerrarMenuMovil()">
+                      <i class="bi bi-arrow-left-right me-3 text-brand"></i> Transferencias
+                  </button>
+
+                  <small class="text-muted text-uppercase fw-bold mt-3">Gestión</small>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('productos'); cerrarMenuMovil()">
+                      <i class="bi bi-box-seam me-3 text-brand"></i> Inventario
+                  </button>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('clientes'); cerrarMenuMovil()">
+                      <i class="bi bi-people me-3 text-brand"></i> Clientes
+                  </button>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('proveedores'); cerrarMenuMovil()">
+                      <i class="bi bi-truck me-3 text-brand"></i> Proveedores
+                  </button>
+
+                  <small class="text-muted text-uppercase fw-bold mt-3">Sistema</small>
+                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('config'); cerrarMenuMovil()">
+                      <i class="bi bi-gear me-3 text-brand"></i> Configuración
+                  </button>
+              </div>
+          </div>
+      </div>
 
       <div class="modal fade" id="modalDeposito" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-brand text-white"><h5 class="modal-title">Depósito</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><form @submit.prevent="guardarDeposito"><div class="mb-3"><label>Nombre</label><input type="text" class="form-control" v-model="formDeposito.nombre" required></div><div class="mb-3"><label>Dirección</label><input type="text" class="form-control" v-model="formDeposito.direccion"></div><div class="row"><div class="col-6"><label>Responsable</label><input type="text" class="form-control" v-model="formDeposito.responsable"></div><div class="col-6"><label>Activo</label><select class="form-select" v-model="formDeposito.activo"><option>Si</option><option>No</option></select></div></div><div class="d-grid mt-3"><button type="submit" class="btn btn-brand">Guardar</button></div></form></div></div></div></div>
 
@@ -472,7 +643,8 @@
                 </div>
               </div>
             </div>
-        <div class="modal fade" id="modalProducto" tabindex="-1" data-bs-backdrop="static">
+      
+      <div class="modal fade" id="modalProducto" tabindex="-1" data-bs-backdrop="static">
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                   <div class="modal-content">
                     <div class="modal-header bg-brand text-white">
@@ -551,6 +723,7 @@
                   </div>
                 </div>
               </div>
+      
       <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
               <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -604,6 +777,7 @@
                 </div>
               </div>
             </div>
+      
       <div class="modal fade" id="modalDetalle" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-dark text-white"><h5>Detalle</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><table class="table mb-0"><thead><tr><th>Prod</th><th>Cant</th><th>Subtotal</th></tr></thead><tbody><tr v-for="it in itemsDetalle"><td>{{it.producto}}</td><td>{{it.cantidad}}</td><td>{{formatoMoneda(it.subtotal)}}</td></tr></tbody></table></div></div></div></div>
 
     </div>
@@ -634,6 +808,8 @@
             configGeneral: {}, // Para guardar toda la config
             depositoDefault: '', // Para el v-model del select de configuración
 
+            subVistaTransf: 'nueva', historialTransf: [], carritoTransf: [], formTransf: { fecha: new Date().toISOString().slice(0,10), origen: '', destino: '', responsable: 'Admin', observacion: '' }, lineaTransf: { id_producto: '', cantidad: 1 },
+
             formProducto: { datos_adicionales:{} }, formCliente: { datos_adicionales:{} }, formProveedor: { datos_adicionales:{} },
             modoEdicion: false, archivoParaSubir: null, imagenPreview: null,
             modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
@@ -658,6 +834,14 @@
         methods: {
             formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
             cambiarVista(v) { this.vistaActual = v; window.scrollTo(0,0); },
+            
+            // Nueva función para cerrar el menú móvil al hacer clic en una opción
+            cerrarMenuMovil() {
+                const menuEl = document.getElementById('menuMovil');
+                const menuBS = bootstrap.Offcanvas.getInstance(menuEl);
+                if (menuBS) menuBS.hide();
+            },
+
             esObligatorio(v) { return v === true || v === 'TRUE'; },
             
             cargarDatosIniciales() {
@@ -697,6 +881,44 @@
                     this.cargando = false;
                 });
             },
+
+              agregarAlCarritoTransf() {
+                  if(this.formTransf.origen === this.formTransf.destino) return alert("Origen y Destino iguales");
+                  const p = this.productos.find(x => x.id_producto == this.lineaTransf.id_producto);
+                  if(!p) return;
+                  
+                  // Validación básica visual (la real está en backend)
+                  // Nota: Para validar stock exacto del depósito origen aquí, necesitaríamos lógica compleja en frontend.
+                  // Por ahora validamos que exista el producto.
+                  
+                  this.carritoTransf.push({ ...this.lineaTransf, nombre: p.nombre, sku: p.sku });
+                  this.lineaTransf = { id_producto: '', cantidad: 1 };
+              },
+              quitarCarritoTransf(i) { this.carritoTransf.splice(i,1); },
+              limpiarTransf() { this.carritoTransf=[]; this.formTransf.observacion=''; },
+              guardarTransfFinal() {
+                  if(!this.formTransf.origen || !this.formTransf.destino || this.carritoTransf.length===0) return alert("Datos incompletos");
+                  this.cargando=true;
+                  const pkg = { ...this.formTransf, items: this.carritoTransf };
+                  google.script.run.withSuccessHandler(res => {
+                      this.cargando=false;
+                      if(res.pdf_url) window.open(res.pdf_url, '_blank');
+                      alert("Transferencia Exitosa");
+                      this.limpiarTransf();
+                      this.cargarDatosIniciales(); // Recargar datos
+                  }).withFailureHandler(e => {
+                      this.cargando=false;
+                      alert("Error: " + e);
+                  }).guardarTransferencia(pkg);
+              },
+              cargarHistorialTransf() {
+                  this.subVistaTransf='historial';
+                  this.cargando=true;
+                  google.script.run.withSuccessHandler(r => {
+                      this.historialTransf = r;
+                      this.cargando=false;
+                  }).obtenerHistorialTransferencias();
+              },
 
             pedirDatos(hoja) { return new Promise(r => google.script.run.withSuccessHandler(r).getData(hoja)); },
 

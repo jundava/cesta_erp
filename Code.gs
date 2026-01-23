@@ -1509,3 +1509,117 @@ function guardarConfigGeneral(clave, valor) {
   return { success: true };
 }
 
+// ==========================================
+// TRANSFERENCIAS DE STOCK
+// ==========================================
+
+function guardarTransferencia(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetCab = ss.getSheetByName('TRANSFERENCIAS_CABECERA');
+  const sheetDet = ss.getSheetByName('TRANSFERENCIAS_DETALLE');
+  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetDep = ss.getSheetByName('DEPOSITOS');
+
+  // 1. Validaciones y Datos Previos
+  if (datos.origen === datos.destino) throw new Error("El origen y destino no pueden ser iguales.");
+  
+  const mapProd = {};
+  const dProd = sheetProd.getDataRange().getValues();
+  for(let i=1; i<dProd.length; i++) mapProd[dProd[i][0]] = { sku: dProd[i][1], nombre: dProd[i][2] };
+
+  const mapDep = {};
+  const dDep = sheetDep.getDataRange().getValues();
+  for(let i=1; i<dDep.length; i++) mapDep[dDep[i][0]] = dDep[i][1];
+
+  // 2. Verificar Stock en Origen
+  datos.items.forEach(item => {
+    const stockDisp = obtenerStockLocal(item.id_producto, datos.origen);
+    if (stockDisp < item.cantidad) {
+      throw new Error(`Stock insuficiente en origen (${mapDep[datos.origen]}) para ${mapProd[item.id_producto].nombre}.\nHay: ${stockDisp}, Pides: ${item.cantidad}`);
+    }
+  });
+
+  // 3. Generar PDF
+  const idTransf = Utilities.getUuid();
+  const fecha = new Date(datos.fecha);
+  const itemsPDF = datos.items.map(i => ({
+    sku: mapProd[i.id_producto].sku,
+    nombre: mapProd[i.id_producto].nombre,
+    cantidad: i.cantidad
+  }));
+  
+  const datosPDF = {
+    fecha: fecha.toLocaleDateString('es-PY'),
+    id_corto: idTransf.slice(0,8).toUpperCase(),
+    origen: mapDep[datos.origen],
+    destino: mapDep[datos.destino],
+    responsable: datos.responsable,
+    observacion: datos.observacion
+  };
+  
+  const urlPdf = crearPDFTransferencia(datosPDF, itemsPDF);
+
+  // 4. Guardar Base de Datos
+  sheetCab.appendRow([idTransf, fecha, datos.origen, datos.destino, datos.responsable, datos.observacion, urlPdf]);
+
+  datos.items.forEach(item => {
+    // A. Guardar Detalle
+    sheetDet.appendRow([Utilities.getUuid(), idTransf, item.id_producto, item.cantidad]);
+
+    // B. Movimientos Kardex (DOBLE MOVIMIENTO)
+    // Salida del Origen
+    sheetMov.appendRow([Utilities.getUuid(), fecha, "SALIDA_TRANSF", item.id_producto, datos.origen, item.cantidad * -1, idTransf]);
+    actualizarStockDeposito(item.id_producto, datos.origen, item.cantidad * -1);
+
+    // Entrada al Destino
+    sheetMov.appendRow([Utilities.getUuid(), fecha, "ENTRADA_TRANSF", item.id_producto, datos.destino, item.cantidad, idTransf]);
+    actualizarStockDeposito(item.id_producto, datos.destino, item.cantidad);
+  });
+
+  lock.releaseLock();
+  return { success: true, pdf_url: urlPdf };
+}
+
+function crearPDFTransferencia(datos, items) {
+  const folder = DriveApp.getFoldersByName("CESTA_TRANSFERENCIAS").hasNext() ? DriveApp.getFoldersByName("CESTA_TRANSFERENCIAS").next() : DriveApp.createFolder("CESTA_TRANSFERENCIAS");
+  const template = HtmlService.createTemplateFromFile('Transferencia');
+  template.datos = datos;
+  template.items = items;
+  
+  const blob = Utilities.newBlob(template.evaluate().getContent(), "text/html", "TRF_" + datos.id_corto + ".html");
+  const pdf = blob.getAs("application/pdf").setName("Transferencia_" + datos.fecha.replace(/\//g,'-') + "_" + datos.id_corto + ".pdf");
+  return folder.createFile(pdf).getUrl();
+}
+
+function obtenerHistorialTransferencias() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheet = ss.getSheetByName('TRANSFERENCIAS_CABECERA');
+  const sheetDep = ss.getSheetByName('DEPOSITOS');
+  if(!sheet || sheet.getLastRow() <= 1) return [];
+
+  const mapDep = {};
+  const dDep = sheetDep.getDataRange().getValues();
+  for(let i=1; i<dDep.length; i++) mapDep[dDep[i][0]] = dDep[i][1];
+
+  const data = sheet.getDataRange().getValues();
+  const res = [];
+  for(let i=1; i<data.length; i++){
+    let fechaFmt = data[i][1];
+    if(data[i][1] instanceof Date) fechaFmt = data[i][1].toLocaleDateString();
+
+    res.push({
+      id: data[i][0],
+      fecha: fechaFmt,
+      origen: mapDep[data[i][2]] || 'Desc.',
+      destino: mapDep[data[i][3]] || 'Desc.',
+      responsable: data[i][4],
+      url_pdf: data[i][6]
+    });
+  }
+  return res.reverse();
+}
+
