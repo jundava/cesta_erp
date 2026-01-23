@@ -129,6 +129,7 @@
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt me-2"></i> Ventas / Caja</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus me-2"></i> Compras / Stock</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias')"><i class="bi bi-arrow-left-right me-2"></i> Transferencias</a>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'cobranzas'}" @click="cargarCobranzas()"><i class="bi bi-wallet2 me-2"></i> Cobranzas</a>
 
                 <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Gestión</small>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam me-2"></i> Inventario</a>
@@ -143,9 +144,9 @@
                 
                 <div v-if="vistaActual === 'ventas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas</h3>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Punto de Venta</h3>
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button>
+                            <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
                             <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
                         </div>
                     </div>
@@ -173,10 +174,18 @@
                                 </div>
 
                                 <div class="col-md-2">
+                                    <label class="form-label fw-bold">Condición</label>
+                                    <select class="form-select" v-model="formVenta.condicion">
+                                        <option value="CONTADO">Contado</option>
+                                        <option value="CREDITO">Crédito</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-2">
                                     <label class="form-label fw-bold">Fecha</label>
                                     <input type="date" class="form-control" v-model="formVenta.fecha">
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-12 col-md-2 offset-md-10">
                                     <label class="form-label fw-bold">Nº Factura</label>
                                     <input type="text" class="form-control" v-model="formVenta.nro_factura" placeholder="Auto">
                                 </div>
@@ -209,6 +218,7 @@
                                             <td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td>
                                             <td class="text-center">
                                                 <span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span>
+                                                <span v-else-if="h.estado === 'PENDIENTE'" class="badge bg-warning text-dark">PENDIENTE</span>
                                                 <span v-else class="badge bg-success">PAGADO</span>
                                             </td>
                                             <td class="text-end pe-3">
@@ -233,7 +243,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-arrow-left-right text-brand"></i> Transferencias</h3>
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaTransf === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaTransf = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button>
+                            <button class="btn" :class="subVistaTransf === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaTransf = 'nueva'">Nueva</button>
                             <button class="btn" :class="subVistaTransf === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialTransf">Historial</button>
                         </div>
                     </div>
@@ -329,6 +339,78 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="vistaActual === 'cobranzas'">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-brand"></i> Cuentas por Cobrar</h3>
+                        <button v-if="subVistaCobranzas === 'nuevo'" class="btn btn-outline-secondary" @click="subVistaCobranzas='listado'">Volver</button>
+                    </div>
+
+                    <div v-if="subVistaCobranzas === 'listado'">
+                        <div class="card border-0 shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light"><tr><th>Cliente</th><th class="text-end">Deuda Total</th><th class="text-end">Acción</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="c in clientesDeudores" :key="c.id_cliente">
+                                            <td>
+                                                <div class="fw-bold">{{ c.nombre }}</div>
+                                                <small class="text-muted">{{ c.facturas_pendientes.length }} facturas pendientes</small>
+                                            </td>
+                                            <td class="text-end fw-bold text-danger">{{ formatoMoneda(c.total_deuda) }}</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-success text-white fw-bold" @click="abrirCobro(c)">
+                                                    <i class="bi bi-cash-coin me-1"></i> Cobrar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="clientesDeudores.length === 0">
+                                            <td colspan="3" class="text-center p-5 text-muted">🎉 ¡Todo al día! No hay deudas pendientes.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="subVistaCobranzas === 'nuevo'">
+                        <div class="card border-0 shadow-sm" style="max-width: 500px; margin: 0 auto;">
+                            <div class="card-header bg-success text-white fw-bold">Registrar Cobro</div>
+                            <div class="card-body">
+                                <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                                    <span>Deuda Actual:</span>
+                                    <span class="fw-bold fs-5">{{ formatoMoneda(formCobro.deuda_total) }}</span>
+                                </div>
+                                
+                                <form @submit.prevent="guardarCobro">
+                                    <div class="mb-3">
+                                        <label class="form-label">Cliente</label>
+                                        <input type="text" class="form-control" :value="formCobro.nombre" disabled>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Monto a Pagar</label>
+                                        <input type="number" class="form-control form-control-lg text-end fw-bold text-success" v-model.number="formCobro.monto" required min="1">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Método de Pago</label>
+                                        <select class="form-select" v-model="formCobro.metodo">
+                                            <option>Efectivo</option>
+                                            <option>Transferencia</option>
+                                            <option>Cheque</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Observación</label>
+                                        <input type="text" class="form-control" v-model="formCobro.observacion" placeholder="Nro de comprobante, banco...">
+                                    </div>
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-success btn-lg fw-bold">CONFIRMAR PAGO</button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -594,7 +676,9 @@
                   <button class="btn btn-light text-start border py-3" @click="cambiarVista('transferencias'); cerrarMenuMovil()">
                       <i class="bi bi-arrow-left-right me-3 text-brand"></i> Transferencias
                   </button>
-
+                  <button class="btn btn-light text-start border py-3" @click="cargarCobranzas(); cerrarMenuMovil()">
+                      <i class="bi bi-wallet2 me-3 text-brand"></i> Cobranzas
+                  </button>
                   <small class="text-muted text-uppercase fw-bold mt-3">Gestión</small>
                   <button class="btn btn-light text-start border py-3" @click="cambiarVista('productos'); cerrarMenuMovil()">
                       <i class="bi bi-box-seam me-3 text-brand"></i> Inventario
@@ -839,6 +923,11 @@
 
             subVistaTransf: 'nueva', historialTransf: [], carritoTransf: [], formTransf: { fecha: new Date().toISOString().slice(0,10), origen: '', destino: '', responsable: 'Admin', observacion: '' }, lineaTransf: { id_producto: '', cantidad: 1 },
 
+            // Nuevos datos para Cobranzas
+            clientesDeudores: [],
+            formCobro: { id_cliente:'', monto:0, metodo:'Efectivo', observacion:'', nombre: '', deuda_total: 0 },
+            subVistaCobranzas: 'listado',
+
             formProducto: { datos_adicionales:{} }, formCliente: { datos_adicionales:{} }, formProveedor: { datos_adicionales:{} },
             modoEdicion: false, archivoParaSubir: null, imagenPreview: null,
             modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
@@ -891,6 +980,13 @@
                 // Esto crea un punto de retorno para el botón "Atrás"
                 window.history.pushState({ vista: v }, null, '');
             },
+            
+            // Nueva función para cerrar el menú móvil al hacer clic en una opción
+            cerrarMenuMovil() {
+                const menuEl = document.getElementById('menuMovil');
+                const menuBS = bootstrap.Offcanvas.getOrCreateInstance(menuEl);
+                if (menuBS) menuBS.hide();
+            },
 
             esObligatorio(v) { return v === true || v === 'TRUE'; },
             
@@ -931,11 +1027,57 @@
                     this.cargando = false;
                 });
             },
-            cerrarMenuMovil() {
-                const menuEl = document.getElementById('menuMovil');
-                // Usamos getOrCreateInstance para asegurar que siempre lo capture
-                const menuBS = bootstrap.Offcanvas.getOrCreateInstance(menuEl);
-                menuBS.hide();
+            cargarCobranzas() {
+                this.vistaActual = 'cobranzas';
+                this.cargando = true;
+                this.clientesDeudores = [];
+
+                //alert("PASO 1: El botón funciona. Llamando al servidor...");
+
+                google.script.run
+                    .withSuccessHandler(respuesta => {
+                        this.cargando = false;
+                        try {
+                            // Parseamos la respuesta
+                            const paquete = JSON.parse(respuesta);
+                            
+                            // 1. IMPRIMIR LOGS DEL SERVIDOR (IMPORTANTE)
+                            console.log("=== LOGS DEL SERVIDOR ===");
+                            console.log(paquete.logs.join("\n"));
+                            
+                            // Si no hay datos, mostrar alerta con los logs para diagnosticar
+                            if (!paquete.datos || paquete.datos.length === 0) {
+                                alert("⚠️ ALERTA DE DEBUG:\n" + paquete.logs.join("\n"));
+                            }
+
+                            // 2. ASIGNAR DATOS
+                            this.clientesDeudores = paquete.datos || [];
+
+                        } catch (e) {
+                            alert("Error crítico leyendo respuesta: " + e.message);
+                        }
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error de conexión: " + e);
+                    })
+                    .obtenerClientesConDeuda();
+            },
+            abrirCobro(cliente) {
+                this.formCobro = { id_cliente: cliente.id_cliente, monto: 0, metodo: 'Efectivo', observacion: '', nombre: cliente.nombre, deuda_total: cliente.total_deuda };
+                this.subVistaCobranzas = 'nuevo';
+            },
+            guardarCobro() {
+                if(this.formCobro.monto <= 0) return alert("Monto inválido");
+                if(this.formCobro.monto > this.formCobro.deuda_total) return alert("El monto excede la deuda");
+                
+                this.cargando = true;
+                google.script.run.withSuccessHandler(() => {
+                    this.cargando = false;
+                    alert("Pago registrado con éxito");
+                    this.subVistaCobranzas = 'listado';
+                    this.cargarCobranzas(); // Recargar lista
+                }).registrarCobro(this.formCobro);
             },
 
               agregarAlCarritoTransf() {
@@ -1070,7 +1212,15 @@
                 
                 this.cargando = true;
                 const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
-                const paquete = { id_cliente: this.formVenta.id_cliente, fecha: this.formVenta.fecha, nro_factura: this.formVenta.nro_factura, total: total, items: this.carritoVenta };
+                const paquete = { 
+                    id_cliente: this.formVenta.id_cliente, 
+                    id_deposito: this.formVenta.id_deposito, 
+                    fecha: this.formVenta.fecha, 
+                    nro_factura: this.formVenta.nro_factura, 
+                    condicion: this.formVenta.condicion,     
+                    total: total, 
+                    items: this.carritoVenta 
+                };
                 
                 google.script.run.withSuccessHandler((res) => { 
                     this.cargando = false; 

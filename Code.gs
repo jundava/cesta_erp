@@ -4,7 +4,7 @@
 
 // Esta función se ejecuta automáticamente cuando alguien entra a la URL de tu Web App
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('index')
+  return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('Cesta - Gestión de Stock') // El título de la pestaña del navegador
     .addMetaTag('viewport', 'width=device-width, initial-scale=1') // Vital para que se vea bien en móviles
@@ -511,71 +511,152 @@ function guardarVenta(venta) {
   try {
     const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
     const sheetProd = ss.getSheetByName('PRODUCTOS');
-    // ... (resto de hojas) ...
     const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
     const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
     const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
     const sheetCli = ss.getSheetByName('CLIENTES');
 
-    // Obtener configuración para el depósito por defecto si no viene en la venta
+    // 1. Validaciones y Configuración
     const config = obtenerConfigGeneral();
-    const depositoDefault = config['DEPOSITO_DEFAULT'] || "1"; // "1" como fallback si no hay config
-
+    const depositoDefault = config['DEPOSITO_DEFAULT'] || "1"; 
     const depositoUsado = venta.id_deposito || depositoDefault;
 
-    // Mapa auxiliar solo para nombres
+    // Lógica de Crédito
+    const esCredito = venta.condicion === 'CREDITO';
+    const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
+    const saldoInicial = esCredito ? venta.total : 0;
+
+    // Obtener nombres para validación de stock
     const datosProd = sheetProd.getDataRange().getValues();
     const mapaNombres = {};
-    for(let i=1; i<datosProd.length; i++) mapaNombres[datosProd[i][0]] = datosProd[i][2];
+    const mapaSKU = {}; // Útil para el PDF
+    for(let i=1; i<datosProd.length; i++) {
+        mapaNombres[datosProd[i][0]] = datosProd[i][2];
+        mapaSKU[datosProd[i][0]] = datosProd[i][1];
+    }
 
+    // Verificar Stock
     for (let item of venta.items) {
       const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
       const nombreProd = mapaNombres[item.id_producto] || "Item";
-      
       if (stockDisponible < item.cantidad) {
-        throw new Error(`Stock insuficiente en este depósito para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
+        throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
       }
     }
 
-    // ... (Lógica de Factura y PDF igual que antes) ...
-    // (Resumido: calcular nroFactura, generar PDF...)
-    
-    // REUTILIZA TU CÓDIGO DE PDF AQUÍ (Omitido para brevedad, no lo borres)
-    // Supongamos que urlPdf ya se generó:
+    // 2. Generación de Datos para PDF y BD
     const idVenta = Utilities.getUuid();
-    const fecha = new Date();
-    // PARA EL EJEMPLO: (Debes mantener tu lógica de PDF existente aquí)
-    const nroFacturaFinal = venta.nro_factura || "AUTO-" + Date.now(); 
-    const urlPdf = "PENDIENTE"; // O tu funcion crearPDF...
+    const fecha = new Date(venta.fecha); // Usar la fecha del formulario
+    
+    // Calcular Número de Factura (Auto-incremental si no viene)
+    let nroFacturaFinal = venta.nro_factura;
+    if (!nroFacturaFinal) {
+       const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
+       const partes = ultimoNro.split('-');
+       const nuevoSec = Number(partes[2]) + 1;
+       nroFacturaFinal = `${partes[0]}-${partes[1]}-${String(nuevoSec).padStart(7, '0')}`;
+       // Actualizar config
+       guardarConfigGeneral('ULTIMO_NRO_FACTURA', nroFacturaFinal);
+    }
 
-    // 2. GUARDAR DATOS
+    // Buscar datos del cliente para el PDF
+    let nombreCli = "Cliente Ocasional";
+    let docCli = "X";
+    const dataCli = sheetCli.getDataRange().getValues();
+    for(let i=1; i<dataCli.length; i++){
+        if(dataCli[i][0] == venta.id_cliente){
+            nombreCli = dataCli[i][1];
+            docCli = dataCli[i][2];
+            break;
+        }
+    }
+
+    // Generar PDF (Reintegrado)
+    const datosPDF = {
+        fecha: fecha.toLocaleDateString('es-PY'),
+        nro_factura: nroFacturaFinal,
+        cliente_nombre: nombreCli,
+        cliente_doc: docCli,
+        cliente_dir: "", // Opcional si tienes dirección
+        total: venta.total,
+        estado: estadoVenta
+    };
+    
+    const itemsPDF = venta.items.map(it => ({
+        producto: mapaNombres[it.id_producto],
+        cantidad: it.cantidad,
+        precio: it.precio,
+        subtotal: it.cantidad * it.precio
+    }));
+
+    // Llamada a función auxiliar de PDF (Asegúrate de tener esta función o la lógica aquí)
+    let urlPdf = "";
+    try {
+        urlPdf = crearPDFFactura(datosPDF, itemsPDF); // <--- Asumo que tienes esta función o similar
+    } catch(e) {
+        urlPdf = "ERROR_PDF"; 
+    }
+
+    // 3. Guardar Cabecera
     sheetCab.appendRow([
       idVenta,
       nroFacturaFinal,
       fecha,
       venta.id_cliente,
-      depositoUsado, // <--- AHORA GUARDAMOS EL ID REAL
+      depositoUsado,
       venta.total,
-      "PAGADO",
-      urlPdf
+      estadoVenta,
+      urlPdf,
+      venta.condicion || 'CONTADO', 
+      saldoInicial                  
     ]);
 
+    // 4. Guardar Detalle y Movimientos
     venta.items.forEach(item => {
-      sheetDet.appendRow([Utilities.getUuid(), idVenta, item.id_producto, item.cantidad, item.precio, item.cantidad * item.precio]);
+      sheetDet.appendRow([
+          Utilities.getUuid(), 
+          idVenta, 
+          item.id_producto, 
+          item.cantidad, 
+          item.precio, 
+          0, // IVA (puedes ajustar si lo manejas)
+          item.cantidad * item.precio
+      ]);
       
-      sheetMov.appendRow([Utilities.getUuid(), fecha, "SALIDA_VENTA", item.id_producto, depositoUsado, item.cantidad * -1, idVenta]);
+      sheetMov.appendRow([
+          Utilities.getUuid(), 
+          new Date(), 
+          "SALIDA_VENTA", 
+          item.id_producto, 
+          depositoUsado, 
+          item.cantidad * -1, 
+          idVenta
+      ]);
 
-      // 3. ACTUALIZAR STOCK REAL (MULTI-DEPÓSITO)
       actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
     });
 
-    return { success: true };
+    // 5. Retorno (CORREGIDO)
+    // Es vital devolver 'pdf_url' para que el frontend lo abra
+    return { success: true, pdf_url: urlPdf };
 
   } catch (error) {
     throw error;
   } finally {
     lock.releaseLock();
   }
+}
+
+// Función auxiliar para PDF (si no la tienes separada, agrégala aquí)
+function crearPDFFactura(datos, items) {
+  const folder = DriveApp.getFoldersByName("CESTA_FACTURAS").hasNext() ? DriveApp.getFoldersByName("CESTA_FACTURAS").next() : DriveApp.createFolder("CESTA_FACTURAS");
+  const template = HtmlService.createTemplateFromFile('Factura');
+  template.datos = datos;
+  template.items = items;
+  
+  const blob = Utilities.newBlob(template.evaluate().getContent(), "text/html", "Factura_" + datos.nro_factura + ".html");
+  const pdf = blob.getAs("application/pdf").setName("Factura_" + datos.nro_factura + ".pdf");
+  return folder.createFile(pdf).getUrl();
 }
 
 function obtenerHistorialVentas() {
@@ -789,56 +870,71 @@ function obtenerDetalleVenta(idVenta) {
 
 function anularVenta(idVenta) {
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado"; }
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
   const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
-  const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
   const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const sheetProd = ss.getSheetByName('PRODUCTOS'); // Necesario para devolver stock
+  
+  const dataCab = sheetCab.getDataRange().getValues();
+  
+  // 1. Marcar como ANULADO y ELIMINAR DEUDA
+  let fechaVenta = new Date();
+  let encontrado = false;
 
-  // 1. Buscar y Validar Venta
-  const datosCab = sheetCab.getDataRange().getValues();
-  let filaCab = -1;
-  for (let i = 1; i < datosCab.length; i++) {
-    if (datosCab[i][0] == idVenta) {
-      if (datosCab[i][6] === 'ANULADO') { lock.releaseLock(); throw "Esta venta ya está anulada."; }
-      filaCab = i + 1;
+  for (let i = 1; i < dataCab.length; i++) {
+    if (dataCab[i][0] === idVenta) {
+      if (dataCab[i][6] === 'ANULADO') throw "La venta ya estaba anulada.";
+      
+      fechaVenta = dataCab[i][2]; // Guardamos fecha original para el kardex (opcional)
+
+      // A. Cambiar estado
+      sheetCab.getRange(i + 1, 7).setValue("ANULADO"); // Columna G
+      
+      // B. Borrar saldo pendiente (IMPORTANTE PARA CUENTAS CORRIENTES)
+      // Si la venta era a crédito, ahora no deben nada.
+      sheetCab.getRange(i + 1, 10).setValue(0);       // Columna J (saldo_pendiente)
+
+      encontrado = true;
       break;
     }
   }
-  if (filaCab === -1) { lock.releaseLock(); throw "Venta no encontrada."; }
 
-  // 2. Obtener Detalles para devolver stock
-  const datosDet = sheetDet.getDataRange().getValues();
-  const itemsDevolver = [];
-  for (let i = 1; i < datosDet.length; i++) {
-    if (datosDet[i][1] == idVenta) {
-      itemsDevolver.push({ id_prod: datosDet[i][2], cant: datosDet[i][3] });
-    }
+  if (!encontrado) throw "Venta no encontrada.";
+
+  // 2. Revertir Movimientos de Stock (Devolver mercadería)
+  // Buscamos los movimientos originales de esta venta
+  const dataMov = sheetMov.getDataRange().getValues();
+  const movimientosRevertir = [];
+
+  for(let i=1; i < dataMov.length; i++){
+     // Si la referencia (Col G/6) coincide con el ID Venta
+     if(dataMov[i][6] == idVenta && dataMov[i][2] == 'SALIDA_VENTA'){
+        const idProd = dataMov[i][3];
+        const idDep = dataMov[i][4];
+        const cantSalida = Number(dataMov[i][5]); // Es negativo (ej: -5)
+
+        // Creamos movimiento contrario (positivo)
+        movimientosRevertir.push([
+           Utilities.getUuid(),
+           new Date(), // Fecha actual de anulación
+           "ANULACION_VENTA",
+           idProd,
+           idDep,
+           Math.abs(cantSalida), // Convertimos a positivo (+5)
+           idVenta
+        ]);
+
+        // Actualizamos Stock Real (usando tu función auxiliar)
+        actualizarStockDeposito(idProd, idDep, Math.abs(cantSalida));
+     }
   }
 
-  // 3. Procesar Devolución de Stock
-  const datosProd = sheetProd.getDataRange().getValues();
-  // Mapear ID producto a indice de fila
-  const mapaProd = {};
-  for(let i=1; i<datosProd.length; i++) mapaProd[datosProd[i][0]] = i + 1;
-
-  itemsDevolver.forEach(item => {
-    const filaProd = mapaProd[item.id_prod];
-    if (filaProd) {
-      // Leer Stock Actual
-      const stockActual = Number(sheetProd.getRange(filaProd, 13).getValue() || 0);
-      // REVERSIÓN: Sumamos lo que se vendió
-      sheetProd.getRange(filaProd, 13).setValue(stockActual + Number(item.cant));
-      
-      // Registrar Movimiento de Ajuste
-      sheetMov.appendRow([Utilities.getUuid(), new Date(), "ANULACION_VENTA", item.id_prod, "DEP-CENTRAL", item.cant, idVenta]);
-    }
-  });
-
-  // 4. Marcar como ANULADO (Columna G, índice 7)
-  sheetCab.getRange(filaCab, 7).setValue('ANULADO');
+  // Guardar devoluciones en lotes
+  if(movimientosRevertir.length > 0){
+    sheetMov.getRange(sheetMov.getLastRow()+1, 1, movimientosRevertir.length, 7).setValues(movimientosRevertir);
+  }
 
   lock.releaseLock();
   return { success: true };
@@ -1621,5 +1717,165 @@ function obtenerHistorialTransferencias() {
     });
   }
   return res.reverse();
+}
+
+// ==========================================
+// CUENTAS CORRIENTES Y COBRANZAS
+// ==========================================
+
+/**
+ * Obtiene lista de clientes que tienen saldo pendiente > 0
+ */
+function obtenerClientesConDeuda() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
+  const sheetClientes = ss.getSheetByName('CLIENTES');
+  
+  // LOGS QUE ENVIAREMOS AL FRONTEND
+  let debugLogs = []; 
+  debugLogs.push("1. Iniciando función...");
+
+  if(!sheetVentas || !sheetClientes) return JSON.stringify({ error: "Faltan hojas", logs: debugLogs });
+
+  // LEEMOS TODO COMO TEXTO PARA EVITAR ERRORES DE FORMATO
+  // Forzamos leer 15 columnas para asegurar que leemos la J
+  const lastRow = Math.max(sheetVentas.getLastRow(), 1);
+  const dataV = sheetVentas.getRange(1, 1, lastRow, 15).getDisplayValues(); 
+  const dataC = sheetClientes.getDataRange().getValues();
+  
+  debugLogs.push(`2. Filas encontradas en Ventas: ${dataV.length}`);
+
+  // Mapa de Clientes (Limpiamos IDs con trim por si hay espacios)
+  const mapCli = {};
+  for(let i=1; i<dataC.length; i++) {
+    const idLimpio = String(dataC[i][0]).trim();
+    mapCli[idLimpio] = { nombre: dataC[i][1], doc: dataC[i][2] };
+  }
+
+  const deudaPorCliente = {};
+  let encontrados = 0;
+
+  for(let i=1; i<dataV.length; i++) {
+    const fila = dataV[i];
+    if(!fila[0]) continue; // Fila vacía
+
+    // DATOS CRUDOS
+    const idVenta = fila[0];
+    const idCliente = String(fila[3] || "").trim(); // Col D
+    const estado = String(fila[6] || "").toUpperCase().trim(); // Col G
+    const saldoTexto = String(fila[9] || "0"); // Col J
+
+    // LIMPIEZA AGRESIVA DE NÚMEROS
+    // Convertimos "420.000" -> 420000. Si falla, es 0.
+    const saldo = Number(saldoTexto.replace(/[^0-9-]/g, ''));
+
+    // DIAGNÓSTICO DE LA FILA 12 (O cualquiera con saldo)
+    if (saldo > 0) {
+        debugLogs.push(`>> Fila ${i+1}: ID=${idVenta}, Estado=${estado}, Saldo=${saldo}. ¿Es válido? ${estado !== 'ANULADO'}`);
+    }
+
+    // LÓGICA MAESTRA
+    if (saldo > 0 && estado !== 'ANULADO') {
+      encontrados++;
+      
+      // Si no encuentra el nombre, usa el ID como nombre (para que aparezca sí o sí)
+      const nombreCli = mapCli[idCliente]?.nombre || `⚠️ ID: ${idCliente}`;
+      const docCli = mapCli[idCliente]?.doc || '---';
+
+      if (!deudaPorCliente[idCliente]) {
+        deudaPorCliente[idCliente] = {
+          id_cliente: idCliente,
+          nombre: nombreCli,
+          doc: docCli,
+          total_deuda: 0,
+          facturas_pendientes: []
+        };
+      }
+      
+      deudaPorCliente[idCliente].total_deuda += saldo;
+      deudaPorCliente[idCliente].facturas_pendientes.push({
+        id_venta: idVenta,
+        fecha: fila[2],
+        factura: fila[1],
+        saldo: saldo,
+        total_orig: fila[5]
+      });
+    }
+  }
+
+  debugLogs.push(`3. Total registros procesados con deuda: ${encontrados}`);
+
+  // DEVOLVEMOS UN OBJETO ESPECIAL
+  return JSON.stringify({
+      logs: debugLogs,
+      datos: Object.values(deudaPorCliente)
+  });
+}
+/**
+ * Registra un pago y descuenta de las facturas (FIFO - Primero entra, primero sale)
+ */
+function registrarCobro(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetCobros = ss.getSheetByName('COBRANZAS');
+  const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
+  
+  let montoRestante = Number(datos.monto);
+  const fecha = new Date();
+  
+  // 1. Guardar el cobro global
+  const idCobro = Utilities.getUuid();
+  sheetCobros.appendRow([idCobro, fecha, datos.id_cliente, datos.monto, datos.metodo, datos.observacion, ""]);
+
+  // 2. Imputar a facturas pendientes (recorremos para descontar saldo)
+  const dataV = sheetVentas.getDataRange().getValues();
+  
+  for(let i=1; i<dataV.length; i++) {
+    if(montoRestante <= 0) break;
+
+    const rowClientId = dataV[i][3];
+    const saldoRow = Number(dataV[i][9] || 0); // Columna J (Saldo)
+    const estado = dataV[i][6];
+
+    if (rowClientId === datos.id_cliente && saldoRow > 0 && estado !== 'ANULADO') {
+      let aPagar = 0;
+      
+      if (montoRestante >= saldoRow) {
+        aPagar = saldoRow;
+        montoRestante -= saldoRow;
+        // Actualizar fila: Saldo 0, Estado PAGADO
+        sheetVentas.getRange(i+1, 10).setValue(0); // Col J Saldo
+        sheetVentas.getRange(i+1, 7).setValue("PAGADO"); // Col G Estado
+      } else {
+        aPagar = montoRestante;
+        const nuevoSaldo = saldoRow - montoRestante;
+        montoRestante = 0;
+        // Actualizar fila: Nuevo saldo, Estado PARCIAL
+        sheetVentas.getRange(i+1, 10).setValue(nuevoSaldo);
+        sheetVentas.getRange(i+1, 7).setValue("PARCIAL");
+      }
+    }
+  }
+  
+  lock.releaseLock();
+  return { success: true };
+}
+
+function obtenerClientesMock() {
+  // Datos inventados para probar si el frontend funciona
+  const datosFalsos = [{
+    id_cliente: "TEST-001",
+    nombre: "CLIENTE DE PRUEBA (SI VES ESTO, EL FRONTEND FUNCIONA)",
+    doc: "1234567-8",
+    total_deuda: 500000,
+    facturas_pendientes: [
+      { id_venta: "v1", fecha: "23/01/2026", factura: "001-001-TEST", saldo: 500000, total_orig: 500000 }
+    ]
+  }];
+  
+  // Enviamos como texto JSON, igual que la función real
+  return JSON.stringify(datosFalsos);
 }
 

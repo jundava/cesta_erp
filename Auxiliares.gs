@@ -54,12 +54,17 @@ function setupDatabase() {
       columnas: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf"]
     },
     {
+      nombre: "COBRANZAS",
+      columnas: ["id_cobro", "fecha", "id_cliente", "monto", "metodo_pago", "observacion", "id_venta_asociada"]
+    },
+    {
       nombre: "COMPRAS_DETALLE",
       columnas: ["id_detalle", "id_compra", "id_producto", "cantidad", "costo_unitario", "subtotal"]
     },
     {
       nombre: "VENTAS_CABECERA",
-      columnas: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado"]
+      // Agregamos condicion y saldo_pendiente al final
+      columnas: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado", "url_pdf", "condicion", "saldo_pendiente"]
     },
     {
       nombre: "STOCK_EXISTENCIAS",
@@ -117,4 +122,42 @@ function setupDatabase() {
   SpreadsheetApp.getUi().alert('¡Base de datos vinculada por ID y actualizada con éxito!');
 }
 
+function TEST_FINAL_DEUDA() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheet = ss.getSheetByName('VENTAS_CABECERA');
+  
+  // Leemos TODO como texto para ver qué hay realmente
+  const data = sheet.getDataRange().getDisplayValues(); 
+  
+  // Vamos directo a la fila 12 (índice 11)
+  const fila12 = data[11]; 
+  
+  if (!fila12) {
+    Logger.log("❌ ERROR: No existe la fila 12 en la hoja.");
+    return;
+  }
 
+  const id = fila12[0];
+  const estado = fila12[6]; // Columna G
+  const saldo = fila12[9];  // Columna J
+
+  Logger.log("=== ANÁLISIS DE FILA 12 ===");
+  Logger.log(`ID Venta: ${id}`);
+  Logger.log(`Estado (Texto tal cual): '${estado}'`);
+  Logger.log(`Saldo (Texto tal cual): '${saldo}'`);
+  
+  // Simulación de la lógica
+  const estadoLimpio = String(estado).trim().toUpperCase();
+  const saldoLimpio = Number(String(saldo).replace(/[^0-9.-]+/g,""));
+  
+  Logger.log(`Estado procesado: '${estadoLimpio}'`);
+  Logger.log(`Saldo procesado (número): ${saldoLimpio}`);
+  
+  if (saldoLimpio > 0 && estadoLimpio !== 'ANULADO') {
+    Logger.log("✅ RESULTADO: Esta fila SÍ debería aparecer como deuda.");
+  } else {
+    Logger.log("❌ RESULTADO: Esta fila se está descartando. Motivo:");
+    if (saldoLimpio <= 0) Logger.log("   -> El saldo es 0 o no es un número válido.");
+    if (estadoLimpio === 'ANULADO') Logger.log("   -> El estado es ANULADO.");
+  }
+}
