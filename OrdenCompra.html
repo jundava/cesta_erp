@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: 'Helvetica', sans-serif; color: #333; padding: 20px; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2055E0; /* Azul para compras */ padding-bottom: 10px; margin-bottom: 20px; }
+    .logo { font-size: 24px; font-weight: bold; color: #2055E0; }
+    .info-empresa { text-align: right; font-size: 12px; color: #666; }
+    
+    .datos-doc { display: flex; justify-content: space-between; margin-bottom: 30px; }
+    .caja { width: 45%; }
+    .titulo-seccion { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 5px; color: #2055E0; }
+    
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+    th { background-color: #f0f4ff; border-bottom: 2px solid #aec1ff; padding: 8px; text-align: left; }
+    td { border-bottom: 1px solid #eee; padding: 8px; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    
+    .totales { float: right; width: 300px; }
+    .fila-total { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
+    .total-final { font-size: 18px; font-weight: bold; color: #2055E0; border-top: 2px solid #2055E0; padding-top: 5px; }
+    
+    .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">ORDEN DE COMPRA</div>
+    <div class="info-empresa">
+      CESTA ERP<br>
+      Depto. de Compras<br>
+      compras@cesta.com
+    </div>
+  </div>
+
+  <div class="datos-doc">
+    <div class="caja">
+      <div class="titulo-seccion">PROVEEDOR</div>
+      <div><strong><?= datos.proveedor_nombre ?></strong></div>
+      <div>RUC/DOC: <?= datos.proveedor_doc ?></div>
+      <div>Contacto: <?= datos.proveedor_contacto ?></div>
+    </div>
+    <div class="caja text-right">
+      <div class="titulo-seccion">DETALLES</div>
+      <div style="font-size: 14px;">Ref: <?= datos.comprobante ?></div>
+      <div>Fecha: <?= datos.fecha ?></div>
+      <div>Estado: <?= datos.estado ?></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th width="50%">Producto</th>
+        <th width="15%" class="text-center">Cant.</th>
+        <th width="15%" class="text-right">Costo Unit.</th>
+        <th width="20%" class="text-right">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (var i = 0; i < items.length; i++) { ?>
+      <tr>
+        <td><?= items[i].producto ?></td>
+        <td class="text-center"><?= items[i].cantidad ?></td>
+        <td class="text-right"><?= parseInt(items[i].costo).toLocaleString('es-PY') ?></td>
+        <td class="text-right"><?= parseInt(items[i].subtotal).toLocaleString('es-PY') ?></td>
+      </tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <div class="totales">
+    <div class="fila-total total-final">
+      <span>TOTAL:</span>
+      <span>Gs. <?= parseInt(datos.total).toLocaleString('es-PY') ?></span>
+    </div>
+  </div>
+
+  <div style="clear: both;"></div>
+
+  <div class="footer">
+    Documento de control interno.<br>
+    Favor enviar factura original con la mercadería.
+  </div>
+
+</body>
+</html>

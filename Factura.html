@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: 'Helvetica', sans-serif; color: #333; padding: 20px; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #E06920; padding-bottom: 10px; margin-bottom: 20px; }
+    .logo { font-size: 24px; font-weight: bold; color: #E06920; }
+    .info-empresa { text-align: right; font-size: 12px; color: #666; }
+    
+    .datos-factura { display: flex; justify-content: space-between; margin-bottom: 30px; }
+    .caja { width: 45%; }
+    .titulo-seccion { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 5px; color: #E06920; }
+    
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+    th { background-color: #f8f9fa; border-bottom: 2px solid #ddd; padding: 8px; text-align: left; }
+    td { border-bottom: 1px solid #eee; padding: 8px; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    
+    .totales { float: right; width: 300px; }
+    .fila-total { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
+    .total-final { font-size: 18px; font-weight: bold; color: #E06920; border-top: 2px solid #E06920; padding-top: 5px; }
+    
+    .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">CESTA ERP</div>
+    <div class="info-empresa">
+      Dirección de la Empresa<br>
+      Tel: (0981) 000-000<br>
+      email@cesta.com
+    </div>
+  </div>
+
+  <div class="datos-factura">
+    <div class="caja">
+      <div class="titulo-seccion">CLIENTE</div>
+      <div><strong><?= datos.cliente_nombre ?></strong></div>
+      <div>RUC/CI: <?= datos.cliente_doc ?></div>
+      <div><?= datos.cliente_dir ?></div>
+    </div>
+    <div class="caja text-right">
+      <div class="titulo-seccion">COMPROBANTE</div>
+      <div style="font-size: 14px;">Nº <?= datos.nro_factura ?></div>
+      <div>Fecha: <?= datos.fecha ?></div>
+      <div>Estado: <?= datos.estado ?></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th width="50%">Producto</th>
+        <th width="15%" class="text-center">Cant.</th>
+        <th width="15%" class="text-right">Precio Unit.</th>
+        <th width="20%" class="text-right">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (var i = 0; i < items.length; i++) { ?>
+      <tr>
+        <td><?= items[i].producto ?></td>
+        <td class="text-center"><?= items[i].cantidad ?></td>
+        <td class="text-right"><?= parseInt(items[i].precio).toLocaleString('es-PY') ?></td>
+        <td class="text-right"><?= parseInt(items[i].subtotal).toLocaleString('es-PY') ?></td>
+      </tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <div class="totales">
+    <div class="fila-total total-final">
+      <span>TOTAL:</span>
+      <span>Gs. <?= parseInt(datos.total).toLocaleString('es-PY') ?></span>
+    </div>
+  </div>
+
+  <div style="clear: both;"></div>
+
+  <div class="footer">
+    Documento generado electrónicamente por Cesta ERP.<br>
+    Gracias por su preferencia.
+  </div>
+
+</body>
+</html>

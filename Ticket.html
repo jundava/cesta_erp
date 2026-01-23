@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Configuración para simular rollo de papel */
+    @page { margin: 0; size: auto; }
+    body { 
+        font-family: 'Courier New', Courier, monospace; /* Fuente tipo ticket */
+        width: 80mm; /* Ancho estándar 80mm */
+        margin: 0 auto; 
+        padding: 5px;
+        color: #000;
+        font-size: 12px;
+        background-color: #fff;
+    }
+    
+    .centrado { text-align: center; }
+    .derecha { text-align: right; }
+    .negrita { font-weight: bold; }
+    
+    .logo { font-size: 18px; margin-bottom: 5px; text-transform: uppercase; }
+    .info { font-size: 10px; margin-bottom: 10px; }
+    
+    .separador { 
+        border-bottom: 1px dashed #000; 
+        margin: 5px 0; 
+        display: block;
+    }
+    
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    td, th { padding: 2px 0; vertical-align: top; }
+    
+    .col-cant { width: 10%; text-align: center; }
+    .col-desc { width: 55%; text-align: left; }
+    .col-precio { width: 35%; text-align: right; }
+    
+    .total-grande { font-size: 16px; margin-top: 5px; }
+    
+    .footer { font-size: 10px; margin-top: 15px; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <div class="centrado">
+    <div class="logo">CESTA ERP</div>
+    <div class="info">
+      RUC: 8000000-1<br>
+      Av. Principal 123<br>
+      Asunción, Paraguay
+    </div>
+  </div>
+
+  <div class="separador"></div>
+
+  <div class="info">
+    <div><strong>FECHA:</strong> <?= datos.fecha ?></div>
+    <div><strong>FACTURA:</strong> <?= datos.nro_factura ?></div>
+    <div><strong>CLIENTE:</strong> <?= datos.cliente_nombre ?></div>
+    <div><strong>RUC/CI:</strong> <?= datos.cliente_doc ?></div>
+  </div>
+
+  <div class="separador"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="col-cant">C.</th>
+        <th class="col-desc">DESC</th>
+        <th class="col-precio">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (var i = 0; i < items.length; i++) { ?>
+      <tr>
+        <td class="col-cant"><?= items[i].cantidad ?></td>
+        <td class="col-desc"><?= items[i].producto ?><br><small><?= parseInt(items[i].precio).toLocaleString('es-PY') ?> unit</small></td>
+        <td class="col-precio"><?= parseInt(items[i].subtotal).toLocaleString('es-PY') ?></td>
+      </tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <div class="separador"></div>
+
+  <div class="derecha">
+    <div class="total-grande negrita">TOTAL: Gs <?= parseInt(datos.total).toLocaleString('es-PY') ?></div>
+  </div>
+
+  <div class="separador"></div>
+
+  <div class="footer">
+    *** GRACIAS POR SU COMPRA ***<br>
+    Sistema Cesta ERP<br>
+    No válido como crédito fiscal
+  </div>
+
+</body>
+</html>

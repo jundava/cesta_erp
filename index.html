@@ -109,20 +109,89 @@
                     </div>
 
                     <div v-if="subVistaVentas === 'nueva'">
-                        <div class="card border-0 shadow-sm mb-3 no-hover"><div class="card-body"><div class="row g-3 align-items-end"><div class="col-md-6"><label class="form-label fw-bold">Cliente</label><div class="input-group"><select class="form-select" v-model="formVenta.id_cliente"><option value="" disabled>Seleccionar cliente...</option><option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }} ({{ c.doc_identidad }})</option></select><button class="btn btn-outline-secondary" type="button" @click="abrirModalCliente(null)"><i class="bi bi-person-plus"></i></button></div></div><div class="col-md-3"><label class="form-label fw-bold">Fecha</label><input type="date" class="form-control" v-model="formVenta.fecha"></div><div class="col-md-3"><label class="form-label fw-bold">Nº Factura</label><input type="text" class="form-control" v-model="formVenta.nro_factura" placeholder="Auto" title="Se generará automático si está vacío"></div></div></div></div>
+                        <div class="card border-0 shadow-sm mb-3 no-hover">
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label fw-bold">Cliente</label>
+                                    <div class="input-group">
+                                        <select class="form-select" v-model="formVenta.id_cliente">
+                                            <option value="" disabled>Seleccionar cliente...</option>
+                                            <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}</option>
+                                        </select>
+                                        <button class="btn btn-outline-secondary" type="button" @click="abrirModalCliente(null)"><i class="bi bi-person-plus"></i></button>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Desde Depósito</label>
+                                    <select class="form-select text-brand fw-bold" v-model="formVenta.id_deposito">
+                                        <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Fecha</label>
+                                    <input type="date" class="form-control" v-model="formVenta.fecha">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold">Nº Factura</label>
+                                    <input type="text" class="form-control" v-model="formVenta.nro_factura" placeholder="Auto">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                         <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3"><div class="card-body bg-light"><form @submit.prevent="agregarAlCarritoVenta"><div class="row g-2 align-items-end"><div class="col-md-6"><label class="form-label small fw-bold">Producto</label><select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta"><option value="" disabled>🔍 Buscar producto...</option><option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">{{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}</option></select></div><div class="col-md-2 col-4"><label class="form-label small">Cantidad</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required></div><div class="col-md-2 col-8"><label class="form-label small">Precio Unit.</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.precio" min="0" required></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand btn-lg fw-bold"><i class="bi bi-cart-plus"></i></button></div></div></form></div></div>
                         <div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0 table-striped"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoVenta" :key="index"><td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.precio) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button></td></tr><tr v-if="carritoVenta.length === 0"><td colspan="5" class="text-center py-5 text-muted">Carrito vacío</td></tr></tbody><tfoot v-if="carritoVenta.length > 0"><tr class="bg-brand text-white"><td colspan="3" class="text-end fw-bold fs-5 pt-3 border-0">TOTAL A PAGAR:</td><td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td><td class="border-0"></td></tr></tfoot></table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button><button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i> COBRAR</button></div></div>
                     </div>
 
                     <div v-if="subVistaVentas === 'historial'">
-                        <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Cliente</th><th>Factura</th><th class="text-end">Total</th><th class="text-center">Estado</th><th class="text-end pe-3">Acciones</th></tr></thead><tbody><tr v-for="h in historialVentas" :key="h.id_venta"><td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td><td class="fw-bold">{{ h.nombre_cliente }}</td><td><span class="badge bg-light text-dark border">{{ h.factura }}</span></td><td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td><td class="text-center"><span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span><span v-else class="badge bg-success">PAGADO</span></td><td class="text-end pe-3"><button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleVenta(h)"><i class="bi bi-eye"></i></button><button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularVenta(h)"><i class="bi bi-slash-circle"></i></button></td></tr></tbody></table></div></div>
+                        <div class="card border-0 shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Fecha</th>
+                                            <th>Cliente</th>
+                                            <th>Factura</th>
+                                            <th class="text-end">Total</th>
+                                            <th class="text-center">Estado</th>
+                                            <th class="text-end pe-3">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="h in historialVentas" :key="h.id_venta">
+                                            <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td>
+                                            <td class="fw-bold">{{ h.nombre_cliente }}</td>
+                                            <td><span class="badge bg-light text-dark border">{{ h.factura }}</span></td>
+                                            <td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td>
+                                            <td class="text-center">
+                                                <span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span>
+                                                <span v-else class="badge bg-success">PAGADO</span>
+                                            </td>
+                                            <td class="text-end pe-3">
+                                              <button class="btn btn-sm btn-outline-dark me-1" @click="imprimirTicket(h)" title="Imprimir Ticket Térmico"><i class="bi bi-printer-fill"></i></button>
+                                                <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver Factura PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+                                                <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleVenta(h)" title="Ver productos">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                
+                                                <button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularVenta(h)" title="Anular venta">
+                                                    <i class="bi bi-slash-circle"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div v-if="vistaActual === 'compras'">
                     <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras</h3><div class="btn-group shadow-sm"><button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaCompras = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button><button class="btn" :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorial"><i class="bi bi-clock-history"></i> Historial</button></div></div>
                     <div v-if="subVistaCompras === 'nueva'"><div class="card border-0 shadow-sm mb-4 no-hover"><div class="card-body"><h6 class="text-muted text-uppercase fw-bold small mb-3">Datos del Comprobante</h6><div class="row g-3"><div class="col-md-4"><label class="form-label fw-bold">Proveedor</label><select class="form-select" v-model="formCompra.id_proveedor"><option value="" disabled>Seleccione proveedor...</option><option v-for="p in proveedores" :value="p.id_proveedor">{{ p.razon_social }}</option></select></div><div class="col-md-4"><label class="form-label fw-bold">Fecha Emisión</label><input type="date" class="form-control" v-model="formCompra.fecha"></div><div class="col-md-4"><label class="form-label fw-bold">Nº Factura / Remisión</label><input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456"></div></div></div></div><div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3"><div class="card-body bg-light"><h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6><form @submit.prevent="agregarAlCarrito"><div class="row g-2 align-items-end"><div class="col-md-5"><label class="form-label small">Producto</label><select class="form-select" v-model="lineaTemp.id_producto" required><option value="" disabled>Buscar producto...</option><option v-for="prod in productos" :value="prod.id_producto">{{ prod.sku }} - {{ prod.nombre }}</option></select></div><div class="col-md-2 col-6"><label class="form-label small">Cantidad</label><input type="number" class="form-control" v-model.number="lineaTemp.cantidad" min="1" required placeholder="0"></div><div class="col-md-3 col-6"><label class="form-label small">Costo (Gs)</label><input type="number" class="form-control" v-model.number="lineaTemp.costo" min="0" required placeholder="0"></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i> Agregar</button></div></div></form></div></div><div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Costo</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoCompra" :key="index"><td><div class="fw-bold">{{ obtenerNombreProducto(item.id_producto) }}</div></td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.costo) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.costo) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)"><i class="bi bi-x-lg"></i></button></td></tr><tr v-if="carritoCompra.length === 0"><td colspan="5" class="text-center py-4 text-muted">Carrito vacío</td></tr></tbody><tfoot v-if="carritoCompra.length > 0"><tr class="bg-light"><td colspan="3" class="text-end fw-bold fs-5 pt-3">TOTAL:</td><td class="text-end fw-bold fs-4 text-brand pt-3">{{ formatoMoneda(totalCompra) }}</td><td></td></tr></tfoot></table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoCompra.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarrito">Cancelar</button><button class="btn btn-brand fw-bold px-4" @click="guardarCompraFinal"><i class="bi bi-check-lg me-1"></i> FINALIZAR</button></div></div></div>
-                    <div v-if="subVistaCompras === 'historial'"><div class="card border-0 shadow-sm"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Proveedor</th><th class="text-end">Total</th><th class="text-center">Estado</th><th class="text-end pe-3">Acciones</th></tr></thead><tbody><tr v-for="h in historialCompras" :key="h.id_compra"><td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td><td class="fw-bold text-dark">{{ h.nombre_proveedor }}</td><td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td><td class="text-center"><span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span><span v-else class="badge bg-success bg-opacity-10 text-success border border-success">{{ h.estado }}</span></td><td class="text-end pe-3"><button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)"><i class="bi bi-eye"></i></button><button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)"><i class="bi bi-slash-circle"></i></button></td></tr></tbody></table></div></div></div></div>
+                    <div v-if="subVistaCompras === 'historial'"><div class="card border-0 shadow-sm"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Proveedor</th><th class="text-end">Total</th><th class="text-center">Estado</th><th class="text-end pe-3">Acciones</th></tr></thead><tbody><tr v-for="h in historialCompras" :key="h.id_compra"><td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td><td class="fw-bold text-dark">{{ h.nombre_proveedor }}</td><td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td><td class="text-center"><span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span><span v-else class="badge bg-success bg-opacity-10 text-success border border-success">{{ h.estado }}</span></td><td class="text-end pe-3"> <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver Orden Compra"><i class="bi bi-file-earmark-pdf"></i></a> <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)"><i class="bi bi-eye"></i></button><button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)"><i class="bi bi-slash-circle"></i></button></td></tr></tbody></table></div></div></div></div>
                 </div>
 
                 <div v-if="vistaActual === 'productos'">
@@ -132,34 +201,89 @@
                     </div>
                     <div class="row g-3">
                         <div class="col-12 col-sm-6 col-lg-3" v-for="item in productos" :key="item.id_producto"> 
-                            <div class="card h-100 shadow-sm overflow-hidden">
-                                <div class="img-producto-card">
-                                    <img v-if="item.url_imagen" :src="item.url_imagen" alt="Producto">
-                                    <i v-else class="bi bi-camera-fill fs-1 text-muted opacity-25"></i>
-                                    <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
+                        <div class="card h-100 shadow-sm">
+                            
+                            <div class="img-producto-card">
+                                <img v-if="item.url_imagen" :src="item.url_imagen" alt="Producto">
+                                <i v-else class="bi bi-camera-fill fs-1 text-muted opacity-25"></i>
+                                <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
+                            </div>
+
+                            <div class="card-body d-flex flex-column">
+                                
+                                <div class="mb-2">
+                                    <h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6>
+                                    <small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small>
                                 </div>
-                                <div class="card-body d-flex flex-column">
-                                    <div class="mb-2"><h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6><small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small></div>
-                                    
-                                    <div class="row g-0 mb-3 small bg-light rounded border p-1">
-                                        <div class="col-6 border-end pe-2 text-center">
-                                            <span class="d-block text-muted" style="font-size: 0.7rem;">Stock</span>
-                                            <span class="fw-bold" :class="(item.stock_actual || 0) <= (item.stock_minimo || 5) ? 'text-danger' : 'text-success'">
-                                                {{ item.stock_actual || 0 }} {{ item.unidad_medida }}
-                                            </span>
-                                        </div>
-                                        <div class="col-6 ps-2 text-center">
-                                            <span class="d-block text-muted" style="font-size: 0.7rem;">Costo Prom.</span>
-                                            <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
+                                
+                                <div class="row g-0 mb-3 small bg-light rounded border p-1">
+                                    <div class="col-6 border-end pe-2 text-center">
+                                        <span class="d-block text-muted" style="font-size: 0.7rem;">Stock Total</span>
+                                        <span class="fw-bold fs-5" :class="(item.stock_actual || 0) <= (item.stock_minimo || 5) ? 'text-danger' : 'text-success'">
+                                            {{ item.stock_actual || 0 }} 
+                                        </span>
+                                        <span class="d-block text-muted" style="font-size: 0.6rem;">{{ item.unidad_medida }}</span>
+                                    </div>
+                                    <div class="col-6 ps-2 text-center d-flex flex-column justify-content-center">
+                                        <span class="d-block text-muted" style="font-size: 0.7rem;">Costo Prom.</span>
+                                        <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <div class="d-flex justify-content-between align-items-end mb-2">
+                                        <div>
+                                            <div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div>
+                                            <small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small>
                                         </div>
                                     </div>
-
-                                    <div class="d-flex justify-content-between align-items-end mt-auto"><div><div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div><small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small></div></div>
-                                    <div v-if="tieneDatosValidos(item)" class="mt-3"><a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1" data-bs-toggle="collapse" :href="'#collapse' + item.id_producto"><i class="bi bi-info-circle"></i> Ver detalles</a><div class="collapse mt-2" :id="'collapse' + item.id_producto"><div class="bg-light p-2 rounded small border"><div v-for="(val, key) in item.datos_adicionales"><div v-if="val && val.toString().trim() !== ''" class="mb-1"><span class="fw-bold text-dark">{{ obtenerEtiquetaCampo(key) }}:</span> <span class="text-secondary">{{ val }}</span></div></div></div></div></div>
-                                    <div class="d-flex gap-2 mt-3 pt-3 border-top"><button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button><button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button></div>
+                                    
+                                    <a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1 mb-2" 
+                                      data-bs-toggle="collapse" 
+                                      :href="'#collapse' + item.id_producto" 
+                                      role="button" 
+                                      aria-expanded="false">
+                                      <i class="bi bi-info-circle"></i> Ver detalles
+                                    </a>
                                 </div>
+
+                                <div class="collapse" :id="'collapse' + item.id_producto">
+                                    <div class="bg-light p-2 rounded small border shadow-sm mb-3">
+                                        
+                                        <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2" style="font-size: 0.7rem;">📍 Ubicación del Stock</h6>
+                                        <div v-if="item.stocks && item.stocks.length > 0">
+                                            <table class="table table-sm table-borderless mb-0">
+                                                <tbody>
+                                                    <tr v-for="st in item.stocks" :key="st.nombre_deposito">
+                                                        <td class="text-start ps-0 text-muted py-0">{{ st.nombre_deposito }}</td>
+                                                        <td class="text-end fw-bold pe-0 py-0">{{ st.cantidad }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div v-else class="text-center text-muted fst-italic mb-2">Sin stock registrado</div>
+
+                                        <div v-if="tieneDatosValidos(item)">
+                                            <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2 mt-3" style="font-size: 0.7rem;">ℹ️ Info Adicional</h6>
+                                            <div v-for="(val, key) in item.datos_adicionales">
+                                                <div v-if="val && val.toString().trim() !== ''" class="mb-1 d-flex justify-content-between">
+                                                    <span class="text-muted">{{ obtenerEtiquetaCampo(key) }}:</span> 
+                                                    <span class="fw-bold text-dark">{{ val }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2 pt-2 border-top">
+                                    <button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button>
+                                    <button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button>
+                                </div>
+
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
 
@@ -221,6 +345,20 @@
                             <div class="input-group" style="max-width: 400px;">
                                 <input type="text" class="form-control" v-model="configFacturaActual" placeholder="001-001-0000000">
                                 <button class="btn btn-success" @click="guardarConfigFactura"><i class="bi bi-save"></i> Guardar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white fw-bold py-3 text-secondary">Depósito Predeterminado</div>
+                        <div class="card-body">
+                            <p class="text-muted small">Este depósito se seleccionará automáticamente en nuevas ventas y compras.</p>
+                            <div class="input-group" style="max-width: 400px;">
+                                <select class="form-select" v-model="depositoDefault">
+                                    <option value="" disabled>Seleccionar depósito...</option>
+                                    <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                </select>
+                                <button class="btn btn-success" @click="guardarConfigDepositoDefault"><i class="bi bi-save"></i> Guardar</button>
                             </div>
                         </div>
                     </div>
@@ -493,6 +631,9 @@
             lineaTemp: { id_producto:'', cantidad:'', costo:'' },
             carritoCompra: [], historialCompras: [],
 
+            configGeneral: {}, // Para guardar toda la config
+            depositoDefault: '', // Para el v-model del select de configuración
+
             formProducto: { datos_adicionales:{} }, formCliente: { datos_adicionales:{} }, formProveedor: { datos_adicionales:{} },
             modoEdicion: false, archivoParaSubir: null, imagenPreview: null,
             modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
@@ -522,23 +663,58 @@
             cargarDatosIniciales() {
                 this.cargando = true;
                 Promise.all([
-                    this.pedirDatos('PRODUCTOS'), this.pedirDatos('PROVEEDORES'), 
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerProductosConStock()), 
+                    this.pedirDatos('PROVEEDORES'), 
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerClientes()),
-                    this.pedirDatos('CATEGORIAS'), this.pedirDatos('UNIDADES'),
-                    // FIX: Usar funciones específicas para Config
+                    this.pedirDatos('CATEGORIAS'), 
+                    this.pedirDatos('UNIDADES'),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigCampos()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerDepositos()),
-                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigFactura())
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigFactura()),
+                    // 👇 1. AGREGAMOS ESTA NUEVA LLAMADA (Índice 8)
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigGeneral()) 
                 ]).then(res => {
-                    this.productos = res[0]; this.proveedores = res[1]; this.clientes = res[2];
-                    this.listaCategorias = res[3]; this.listaUnidades = res[4];
+                    this.productos = res[0]; 
+                    this.proveedores = res[1]; 
+                    this.clientes = res[2];
+                    this.listaCategorias = res[3]; 
+                    this.listaUnidades = res[4];
                     this.listaConfigCampos = res[5] || [];
                     this.listaDepositos = res[6] || [];
                     this.configFacturaActual = res[7];
+
+                    // 👇 2. PROCESAMOS LA CONFIGURACIÓN GENERAL (Respuesta 8)
+                    this.configGeneral = res[8] || {};
+                    
+                    // Extraemos el depósito default o dejamos vacío si no existe
+                    this.depositoDefault = this.configGeneral['DEPOSITO_DEFAULT'] || '';
+
+                    // 👇 3. APLICAMOS EL DEFAULT AL FORMULARIO DE VENTA
+                    // Si existe un default configurado, lo pre-seleccionamos.
+                    // Si no, forzamos "1" (Depósito Central) como respaldo.
+                    this.formVenta.id_deposito = this.depositoDefault || '1';
+
                     this.cargando = false;
                 });
             },
+
             pedirDatos(hoja) { return new Promise(r => google.script.run.withSuccessHandler(r).getData(hoja)); },
+
+            // Generar Ticket
+            imprimirTicket(h) {
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(url => {
+                        this.cargando = false;
+                        // Abrir en ventana pequeña para imprimir fácil
+                        window.open(url, 'Ticket', 'width=400,height=600');
+                    })
+                    .withFailureHandler(err => {
+                        this.cargando = false;
+                        alert("Error al generar ticket: " + err);
+                    })
+                    .generarUrlTicket(h.id_venta);
+            },
             
             // Helpers
             obtenerNombreCategoria(id) { const c = this.listaCategorias.find(x => x.id_categoria == id); return c ? c.nombre : '...'; },
@@ -574,6 +750,22 @@
             
             guardarConfigFactura() { this.cargando = true; google.script.run.withSuccessHandler(() => { this.cargando=false; alert("Numeración actualizada"); }).guardarConfigFactura(this.configFacturaActual); },
 
+            guardarConfigDepositoDefault() {
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        alert("✅ Depósito predeterminado guardado.");
+                        // Recargamos datos para asegurar que se aplique en todos lados
+                        this.cargarDatosIniciales(); 
+                    })
+                    .withFailureHandler(err => {
+                        this.cargando = false;
+                        alert("Error: " + err);
+                    })
+                    .guardarConfigGeneral('DEPOSITO_DEFAULT', this.depositoDefault);
+            },
+
             // MODALES MAESTROS
             abrirModalCliente(item) { this.modoEdicion=!!item; this.formCliente = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }; if(!this.formCliente.datos_adicionales) this.formCliente.datos_adicionales={}; this.modalCli.show(); },
             guardarCliente() { this.cargando=true; const f = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalCli.hide(); this.cargarDatosIniciales();})[f](this.formCliente); },
@@ -593,7 +785,37 @@
             agregarAlCarritoVenta() { const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); if(!p || this.lineaVenta.cantidad > p.stock_actual) return alert("Stock insuficiente"); this.carritoVenta.push({...this.lineaVenta}); this.lineaVenta={id_producto:'', cantidad:1, precio:0}; },
             quitarDelCarritoVenta(i) { this.carritoVenta.splice(i,1); },
             limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
-            guardarVentaFinal() { if(!this.formVenta.id_cliente || this.carritoVenta.length===0) return alert("Datos incompletos"); this.cargando=true; const total = this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio), 0); const pkg = { ...this.formVenta, total, items: this.carritoVenta }; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Venta registrada"); this.limpiarCarritoVenta(); this.cargarDatosIniciales();}).withFailureHandler(e=>{this.cargando=false; alert(e);}).guardarVenta(pkg); },
+
+            guardarVentaFinal() {
+                if(!this.formVenta.id_cliente) return alert("Selecciona Cliente");
+                if(this.carritoVenta.length === 0) return alert("Carrito vacío");
+                
+                this.cargando = true;
+                const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
+                const paquete = { id_cliente: this.formVenta.id_cliente, fecha: this.formVenta.fecha, nro_factura: this.formVenta.nro_factura, total: total, items: this.carritoVenta };
+                
+                google.script.run.withSuccessHandler((res) => { 
+                    this.cargando = false; 
+                    
+                    // Lógica para abrir PDF
+                    if(res.pdf_url) {
+                        if(confirm("💰 Venta registrada.\n¿Deseas abrir la factura PDF ahora?")) {
+                            window.open(res.pdf_url, '_blank');
+                        }
+                    } else {
+                        alert("Venta registrada.");
+                    }
+
+                    this.carritoVenta = []; 
+                    this.cargarDatosIniciales(); 
+                })
+                .withFailureHandler(err => { 
+                    this.cargando = false; 
+                    alert("Error: " + err); 
+                })
+                .guardarVenta(paquete);
+            },
+
             cargarHistorialVentas() { this.subVistaVentas='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialVentas=r||[]; this.cargando=false;}).obtenerHistorialVentas(); },
             anularVenta(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorialVentas(); this.cargarDatosIniciales();}).anularVenta(h.id_venta); },
             verDetalleVenta(h) { this.itemsDetalle=[]; this.modalDetalle.show(); google.script.run.withSuccessHandler(r=>this.itemsDetalle=r).obtenerDetalleVenta(h.id_venta); },
@@ -601,7 +823,35 @@
             agregarAlCarrito() { this.carritoCompra.push({...this.lineaTemp}); this.lineaTemp={id_producto:'', cantidad:'', costo:''}; },
             quitarDelCarrito(i) { this.carritoCompra.splice(i,1); },
             limpiarCarrito() { this.carritoCompra=[]; this.formCompra={id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: ''}; },
-            guardarCompraFinal() { if(!this.formCompra.id_proveedor || this.carritoCompra.length===0) return alert("Datos incompletos"); this.cargando=true; const total = this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); const pkg = { ...this.formCompra, total, items: this.carritoCompra }; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Compra registrada"); this.limpiarCarrito(); this.cargarDatosIniciales();}).withFailureHandler(e=>{this.cargando=false; alert(e);}).guardarCompraCompleta(pkg); },
+
+            guardarCompraFinal() { 
+                if(!this.formCompra.id_proveedor || this.carritoCompra.length===0) return alert("Datos incompletos");
+                this.cargando=true; 
+                const total = this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); 
+                const pkg = { ...this.formCompra, total, items: this.carritoCompra }; 
+                
+                google.script.run.withSuccessHandler((res)=>{
+                    this.cargando=false; 
+                    
+                    // Lógica PDF
+                    if(res.pdf_url) {
+                        if(confirm("✅ Compra registrada.\n¿Ver Orden de Compra PDF?")) {
+                            window.open(res.pdf_url, '_blank');
+                        }
+                    } else {
+                        alert("Compra registrada.");
+                    }
+
+                    this.limpiarCarrito(); 
+                    this.cargarDatosIniciales();
+                })
+                .withFailureHandler(e=>{
+                    this.cargando=false; 
+                    alert(e);
+                })
+                .guardarCompraCompleta(pkg); 
+            },
+
             cargarHistorial() { this.subVistaCompras='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialCompras=r||[]; this.cargando=false;}).obtenerHistorialCompras(); },
             anularCompra(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorial(); this.cargarDatosIniciales();}).anularCompra(h.id_compra); },
             verDetalleCompra(h) { this.itemsDetalle=[]; this.modalDetalle.show(); google.script.run.withSuccessHandler(r=>this.itemsDetalle=r).obtenerDetalleCompra(h.id_compra); }

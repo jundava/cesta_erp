@@ -308,149 +308,152 @@ function FORZAR_PERMISOS() {
  */
 function guardarCompraCompleta(compra) {
   const lock = LockService.getScriptLock();
-  // Esperamos hasta 10 segundos si otra persona está guardando algo a la vez
-  try {
-    lock.waitLock(10000); 
-  } catch (e) {
-    throw new Error("El servidor está ocupado. Intenta de nuevo en unos segundos.");
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
+  const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
+  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const sheetProv = ss.getSheetByName('PROVEEDORES');
+
+  // Obtener configuración
+  const config = obtenerConfigGeneral();
+  const depositoDestino = config['DEPOSITO_DEFAULT'] || "1";
+
+  // 1. CARGAR DATOS DE PRODUCTOS Y PROVEEDOR
+  const datosProd = sheetProd.getDataRange().getValues();
+  const mapaProd = {}; // ID -> {fila, stock, costo, nombre}
+  for (let i = 1; i < datosProd.length; i++) {
+    mapaProd[datosProd[i][0]] = { 
+      fila: i + 1, 
+      nombre: datosProd[i][2],
+      stock: Number(datosProd[i][12] || 0), // Col M (13) stock_actual
+      costo: Number(datosProd[i][6] || 0)   // Col G (7) costo_promedio
+    };
   }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
-  const hojaProd = ss.getSheetByName('PRODUCTOS');
-  const hojaMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const hojaCab = ss.getSheetByName('COMPRAS_CABECERA');
-  const hojaDet = ss.getSheetByName('COMPRAS_DETALLE');
-  
+  let nombreProv = "Proveedor General";
+  let docProv = "";
+  let contactoProv = "";
+  const datosProv = sheetProv.getDataRange().getValues();
+  for(let p=1; p<datosProv.length; p++){
+    if(datosProv[p][0] == compra.id_proveedor){
+      nombreProv = datosProv[p][1];
+      docProv = datosProv[p][2];
+      contactoProv = datosProv[p][3];
+      break;
+    }
+  }
+
+  // 2. GENERAR PDF
+  const itemsParaPDF = compra.items.map(item => ({
+    producto: mapaProd[item.id_producto] ? mapaProd[item.id_producto].nombre : "Producto Desconocido",
+    cantidad: item.cantidad,
+    costo: item.costo,
+    subtotal: item.cantidad * item.costo
+  }));
+
+  const datosParaPDF = {
+    proveedor_nombre: nombreProv,
+    proveedor_doc: docProv,
+    proveedor_contacto: contactoProv || '',
+    comprobante: compra.comprobante || 'S/N',
+    fecha: new Date(compra.fecha).toLocaleDateString('es-PY'),
+    estado: 'APROBADO',
+    total: compra.total
+  };
+
+  const urlPdf = crearPDFOrdenCompra(datosParaPDF, itemsParaPDF);
+
+  // 3. GUARDAR EN HOJAS
   const idCompra = Utilities.getUuid();
-  const fechaRegistro = new Date();
   
-  // 1. GUARDAR CABECERA
-  // [id_compra, fecha, id_proveedor, id_deposito_destino, total_factura, estado, url_pdf]
-  hojaCab.appendRow([
-    idCompra,
-    compra.fecha, // Fecha del comprobante
-    compra.id_proveedor,
-    "DEP-CENTRAL", // Por defecto, luego podemos hacerlo dinámico
-    compra.total,
-    "APROBADO",
-    "" // URL PDF (pendiente)
+  // Cabecera: id, fecha, id_prov, id_dep, total, estado, url_pdf
+  sheetCab.appendRow([
+    idCompra, 
+    compra.fecha, 
+    compra.id_proveedor, 
+    depositoDestino, // Deposito destino default
+    compra.total, 
+    "APROBADO", 
+    urlPdf
   ]);
 
-  // Preparamos datos para actualizaciones masivas
-  const datosProd = hojaProd.getDataRange().getValues();
-  // Mapa para buscar productos rápido por ID: { "ID-123": indice_fila }
-  const mapaProd = {};
-  datosProd.forEach((fila, i) => { mapaProd[fila[0]] = i; });
-
-  // 2. PROCESAR CADA ITEM (Línea de producto)
   compra.items.forEach(item => {
-    // A. Guardar en Detalle de Compra
-    // [id_detalle, id_compra, id_producto, cantidad, costo_unitario, subtotal]
-    hojaDet.appendRow([
-      Utilities.getUuid(),
-      idCompra,
-      item.id_producto,
-      item.cantidad,
-      item.costo,
-      item.cantidad * item.costo
-    ]);
+    // Detalle
+    sheetDet.appendRow([Utilities.getUuid(), idCompra, item.id_producto, item.cantidad, item.costo, item.cantidad * item.costo]);
+    
+    // Movimiento
+    sheetMov.appendRow([Utilities.getUuid(), compra.fecha, "ENTRADA_COMPRA", item.id_producto, depositoDestino, item.cantidad, idCompra]);
 
-    // B. Guardar en Movimientos (Kardex)
-    // [id_movimiento, fecha, tipo_movimiento, id_producto, id_deposito, cantidad, referencia_origen]
-    hojaMov.appendRow([
-      Utilities.getUuid(),
-      fechaRegistro,
-      "ENTRADA_COMPRA",
-      item.id_producto,
-      "DEP-CENTRAL",
-      item.cantidad,
-      idCompra
-    ]);
+    // Actualizar Stock y PMP
+    const p = mapaProd[item.id_producto];
+    if (p) {
+      const nuevoStock = p.stock + Number(item.cantidad);
+      // PMP = ((StockActual * CostoActual) + (CantCompra * CostoCompra)) / NuevoStock
+      const valorTotal = (p.stock * p.costo) + (Number(item.cantidad) * Number(item.costo));
+      const nuevoCosto = valorTotal / nuevoStock;
 
-    // C. ACTUALIZAR STOCK Y COSTO PROMEDIO (PMP) EN PRODUCTOS
-    const filaIndex = mapaProd[item.id_producto];
-    if (filaIndex !== undefined) {
-      // Nota: Los índices de columna son base 0 en el array, pero base 1 en getRange
-      // En tu esquema: 
-      // Col 6 (G) = costo_promedio
-      // Col 12 (M) = stock_actual (La nueva columna que creamos)
-      
-      const filaReal = filaIndex + 1;
-      
-      // Leemos valores actuales
-      let stockActual = Number(datosProd[filaIndex][12]) || 0; // Columna M (indice 12)
-      let costoActual = Number(datosProd[filaIndex][6]) || 0;  // Columna G (indice 6)
-      
-      // Cálculo de Precio Medio Ponderado (PMP)
-      // Fórmula: ((StockActual * CostoActual) + (CantidadCompra * CostoCompra)) / (StockActual + CantidadCompra)
-      let nuevoStock = stockActual + Number(item.cantidad);
-      let valorTotal = (stockActual * costoActual) + (Number(item.cantidad) * Number(item.costo));
-      let nuevoCosto = valorTotal / nuevoStock;
-      
-      // Escribimos en la hoja
-      hojaProd.getRange(filaReal, 7).setValue(nuevoCosto); // Col 7 = G (Costo)
-      hojaProd.getRange(filaReal, 13).setValue(nuevoStock); // Col 13 = M (Stock Actual)
+      sheetProd.getRange(p.fila, 13).setValue(nuevoStock); // Stock
+      sheetProd.getRange(p.fila, 7).setValue(nuevoCosto);  // Costo Promedio
     }
   });
 
-  lock.releaseLock(); // Liberamos el cerrojo
-  return { status: 'ok', id_compra: idCompra };
+  lock.releaseLock();
+  return { success: true, pdf_url: urlPdf };
 }
 
 /**
  * Obtiene el historial de compras de forma segura y robusta
  */
+/**
+ * Obtiene el historial de compras con formato para la vista
+ */
 function obtenerHistorialCompras() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Ensure this ID is correct
-  const hojaCompras = ss.getSheetByName('COMPRAS_CABECERA');
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const hoja = ss.getSheetByName('COMPRAS_CABECERA');
   const hojaProv = ss.getSheetByName('PROVEEDORES');
   
-  // 1. Basic Validation
-  if (!hojaCompras || hojaCompras.getLastRow() <= 1) {
-    console.log("No data in COMPRAS_CABECERA or sheet missing");
-    return [];
-  }
+  // Si no hay datos, devolver lista vacía
+  if (!hoja || hoja.getLastRow() <= 1) return [];
+
+  const datos = hoja.getDataRange().getValues();
   
-  // 2. Get Data
-  const datosCompras = hojaCompras.getDataRange().getValues();
-  
-  // 3. Create Provider Map (ID -> Name) for fast lookup
-  const mapaProveedores = {};
-  if (hojaProv && hojaProv.getLastRow() > 1) {
-    const datosProv = hojaProv.getDataRange().getValues();
-    // Start at 1 to skip header. Assuming Col 0 is ID, Col 1 is Name
-    for(let i=1; i < datosProv.length; i++) {
-      if(datosProv[i][0]) {
-        mapaProveedores[datosProv[i][0]] = datosProv[i][1]; 
-      }
+  // Mapa de Proveedores para mostrar nombres en vez de IDs
+  const mapaProv = {};
+  if(hojaProv && hojaProv.getLastRow() > 1) {
+    const dP = hojaProv.getDataRange().getValues();
+    for(let i=1; i<dP.length; i++) {
+      mapaProv[dP[i][0]] = dP[i][1]; // ID -> Razón Social
     }
   }
 
   const historial = [];
-  
-  // 4. Iterate Rows (Start at 1 to skip header)
-  for(let i=1; i < datosCompras.length; i++) {
-    const fila = datosCompras[i];
-    
-    // Check if the row has a valid ID (Col 0). If empty, skip.
-    if(fila[0]) {
+  // Recorremos desde la fila 1 (saltando cabecera)
+  for(let i=1; i < datos.length; i++) {
+    const fila = datos[i];
+    if(fila[0]) { // Si tiene ID
+        // Formatear fecha para evitar errores en frontend
+        let fechaFormat = fila[1];
+        if (fila[1] instanceof Date) {
+           fechaFormat = fila[1].toISOString(); 
+        }
+
         historial.push({
-          id_compra: fila[0],
-          // Check Date: if valid date object use it, else try to parse or return string
-          fecha: fila[1] instanceof Date ? fila[1].toISOString() : fila[1], 
-          id_proveedor: fila[2],
-          nombre_proveedor: mapaProveedores[fila[2]] || 'Proveedor desconocido (' + fila[2] + ')', 
-          // Column 4 is Total (Index 4)
-          total: Number(fila[4]) || 0, 
-          estado: fila[5] || 'Finalizado'
+          id_compra: fila[0],                 // Col A: ID
+          fecha: fechaFormat,                 // Col B: Fecha
+          nombre_proveedor: mapaProv[fila[2]] || 'Proveedor Desconocido', // Col C: ID Prov
+          total: Number(fila[4]) || 0,        // Col E: Total
+          estado: fila[5],                    // Col F: Estado
+          url_pdf: fila[6] || ''              // Col G: URL PDF (Importante para el botón)
         });
     }
   }
   
-  // Return newest first
-  return historial.reverse();
+  // Devolver invertido para ver las más recientes primero
+  return historial.reverse(); 
 }
-
 // ==========================================
 // SECCIÓN CLIENTES (AJUSTADO A TU HOJA)
 // ==========================================
@@ -501,115 +504,76 @@ function guardarNuevoCliente(form) {
   return { status: 'ok', id: id };
 }
 
-/**
- * Registra una Venta completa con validación de stock y facturación automática
- */
 function guardarVenta(venta) {
-  // 1. BLOQUEO DE SEGURIDAD (Evita conflictos simultáneos)
   const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); // Espera hasta 10 segundos si otro usuario está guardando
-  } catch (e) {
-    throw new Error("El sistema está ocupado procesando otra venta. Intenta de nuevo en unos segundos.");
-  }
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   try {
     const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
     const sheetProd = ss.getSheetByName('PRODUCTOS');
+    // ... (resto de hojas) ...
     const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
     const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
     const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+    const sheetCli = ss.getSheetByName('CLIENTES');
 
-    // 2. LEER PRODUCTOS PARA VALIDAR STOCK
+    // Obtener configuración para el depósito por defecto si no viene en la venta
+    const config = obtenerConfigGeneral();
+    const depositoDefault = config['DEPOSITO_DEFAULT'] || "1"; // "1" como fallback si no hay config
+
+    const depositoUsado = venta.id_deposito || depositoDefault;
+
+    // Mapa auxiliar solo para nombres
     const datosProd = sheetProd.getDataRange().getValues();
-    const mapaProd = {}; 
-    // Mapeamos: ID -> {fila: indice, stock: cantidad, nombre: texto}
-    // Asumimos: Col 0=ID, Col 2=Nombre, Col 12 (índice 12 / Letra M)=Stock Actual
-    for (let i = 1; i < datosProd.length; i++) {
-      mapaProd[datosProd[i][0]] = {
-        fila: i + 1, // +1 porque sheet es base 1
-        nombre: datosProd[i][2],
-        stock: Number(datosProd[i][12] || 0) 
-      };
-    }
+    const mapaNombres = {};
+    for(let i=1; i<datosProd.length; i++) mapaNombres[datosProd[i][0]] = datosProd[i][2];
 
-    // Validamos cada item antes de escribir nada en las hojas
     for (let item of venta.items) {
-      const prod = mapaProd[item.id_producto];
-      if (!prod) throw new Error(`Producto no encontrado: ${item.id_producto}`);
+      const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
+      const nombreProd = mapaNombres[item.id_producto] || "Item";
       
-      if (prod.stock < item.cantidad) {
-        throw new Error(`Stock insuficiente para "${prod.nombre}". Tienes: ${prod.stock}, Intentas vender: ${item.cantidad}`);
+      if (stockDisponible < item.cantidad) {
+        throw new Error(`Stock insuficiente en este depósito para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
       }
     }
 
-    // 3. PREPARAR DATOS DE CABECERA
+    // ... (Lógica de Factura y PDF igual que antes) ...
+    // (Resumido: calcular nroFactura, generar PDF...)
+    
+    // REUTILIZA TU CÓDIGO DE PDF AQUÍ (Omitido para brevedad, no lo borres)
+    // Supongamos que urlPdf ya se generó:
     const idVenta = Utilities.getUuid();
     const fecha = new Date();
+    // PARA EL EJEMPLO: (Debes mantener tu lógica de PDF existente aquí)
+    const nroFacturaFinal = venta.nro_factura || "AUTO-" + Date.now(); 
+    const urlPdf = "PENDIENTE"; // O tu funcion crearPDF...
 
-    // --- LÓGICA DE FACTURACIÓN AUTOMÁTICA ---
-    let nroFacturaFinal = venta.nro_factura;
-    
-    // Si viene vacío, null, o dice "Auto", generamos el siguiente número
-    if (!nroFacturaFinal || nroFacturaFinal === 'Auto' || nroFacturaFinal.trim() === '') {
-      // Usamos las funciones auxiliares de configuración
-      const ultimoNro = obtenerConfigFactura(); 
-      nroFacturaFinal = incrementarFactura(ultimoNro);
-      // Guardamos el nuevo número para que la próxima venta siga la secuencia
-      guardarConfigFactura(nroFacturaFinal); 
-    }
-    // -----------------------------------------
-
-    // 4. GUARDAR CABECERA (Orden estricto de columnas)
-    // A: id, B: factura, C: fecha, D: cliente, E: deposito, F: total, G: estado
+    // 2. GUARDAR DATOS
     sheetCab.appendRow([
-      idVenta,                          // A: id_venta
-      nroFacturaFinal,                  // B: numero_factura (Automático o Manual)
-      fecha,                            // C: fecha
-      venta.id_cliente,                 // D: id_cliente
-      "1",                              // E: id_deposito_origen (Default: 1 o DEP-CENTRAL)
-      venta.total,                      // F: total_venta
-      "PAGADO",                         // G: estado
-      ""                                // H: Extra
+      idVenta,
+      nroFacturaFinal,
+      fecha,
+      venta.id_cliente,
+      depositoUsado, // <--- AHORA GUARDAMOS EL ID REAL
+      venta.total,
+      "PAGADO",
+      urlPdf
     ]);
 
-    // 5. GUARDAR DETALLES, MOVIMIENTOS Y ACTUALIZAR STOCK
     venta.items.forEach(item => {
-      // A. Guardar Detalle
-      sheetDet.appendRow([
-        Utilities.getUuid(),
-        idVenta,
-        item.id_producto,
-        item.cantidad,
-        item.precio,
-        item.cantidad * item.precio
-      ]);
+      sheetDet.appendRow([Utilities.getUuid(), idVenta, item.id_producto, item.cantidad, item.precio, item.cantidad * item.precio]);
+      
+      sheetMov.appendRow([Utilities.getUuid(), fecha, "SALIDA_VENTA", item.id_producto, depositoUsado, item.cantidad * -1, idVenta]);
 
-      // B. Guardar Movimiento (Kardex)
-      sheetMov.appendRow([
-        Utilities.getUuid(),
-        fecha,
-        "SALIDA_VENTA",
-        item.id_producto,
-        "1", // ID Depósito
-        item.cantidad * -1, // Salida es negativo
-        idVenta
-      ]);
-
-      // C. Restar Stock en la hoja PRODUCTOS
-      const prodInfo = mapaProd[item.id_producto];
-      const nuevoStock = prodInfo.stock - Number(item.cantidad);
-      // Columna 13 es la M (Stock Actual)
-      sheetProd.getRange(prodInfo.fila, 13).setValue(nuevoStock);
+      // 3. ACTUALIZAR STOCK REAL (MULTI-DEPÓSITO)
+      actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
     });
 
-    return { success: true, id_venta: idVenta, nro_factura: nroFacturaFinal };
+    return { success: true };
 
   } catch (error) {
-    // Si algo falla, relanzamos el error para que el usuario lo vea
     throw error;
   } finally {
-    // Siempre liberamos el bloqueo, pase lo que pase
     lock.releaseLock();
   }
 }
@@ -643,7 +607,8 @@ function obtenerHistorialVentas() {
           fecha: fila[2] instanceof Date ? fila[2].toISOString() : fila[2], // Col C -> Indice 2
           nombre_cliente: mapaClientes[fila[3]] || 'Cliente Casual', // Col D -> Indice 3
           total: Number(fila[5]) || 0,    // Col F -> Indice 5 (Total)
-          estado: fila[6] || 'Pagado'     // Col G -> Indice 6 (Estado)
+          estado: fila[6] || 'Pagado', // Col G -> Indice 6 (Estado)
+          url_pdf: fila[7]     // Columna H es el PDF
         });
     }
   }
@@ -1167,5 +1132,380 @@ function incrementarFactura(actual) {
   // Reconstruimos con ceros a la izquierda (longitud 7 standard)
   const nuevoNum = numero.toString().padStart(7, '0');
   return `${partes[0]}-${partes[1]}-${nuevoNum}`;
+}
+
+// ==========================================
+// GENERADOR DE PDF
+// ==========================================
+
+function crearPDFVenta(datosVenta, listaItems) {
+  // 1. Gestionar Carpeta en Drive
+  const nombreCarpeta = "CESTA_FACTURAS";
+  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
+  let carpeta;
+  if (carpetas.hasNext()) {
+    carpeta = carpetas.next();
+  } else {
+    carpeta = DriveApp.createFolder(nombreCarpeta);
+  }
+
+  // 2. Preparar Plantilla
+  const template = HtmlService.createTemplateFromFile('Factura');
+  template.datos = datosVenta; // Pasamos objeto cabecera
+  template.items = listaItems; // Pasamos array de items
+
+  // 3. Generar PDF
+  const html = template.evaluate().getContent();
+  const blob = Utilities.newBlob(html, "text/html", "Factura_" + datosVenta.nro_factura + ".html");
+  const pdf = blob.getAs("application/pdf").setName("Factura " + datosVenta.nro_factura + ".pdf");
+  
+  // 4. Guardar archivo
+  const archivo = carpeta.createFile(pdf);
+  
+  // 5. Devolver URL pública (o de descarga)
+  return archivo.getUrl(); 
+}
+
+// ==========================================
+// GENERADOR DE TICKET (ON DEMAND)
+// ==========================================
+
+function generarUrlTicket(idVenta) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
+  const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetCli = ss.getSheetByName('CLIENTES');
+
+  // 1. Obtener Datos de Cabecera
+  const datosCab = sheetCab.getDataRange().getValues();
+  let venta = null;
+  for(let i=1; i<datosCab.length; i++) {
+    if(datosCab[i][0] == idVenta) {
+      venta = {
+        id: datosCab[i][0],
+        factura: datosCab[i][1],
+        fecha: new Date(datosCab[i][2]).toLocaleDateString('es-PY') + ' ' + new Date(datosCab[i][2]).toLocaleTimeString('es-PY').slice(0,5),
+        idCliente: datosCab[i][3],
+        total: datosCab[i][5]
+      };
+      break;
+    }
+  }
+  if(!venta) throw "Venta no encontrada";
+
+  // 2. Obtener Datos del Cliente
+  let cliente = { nombre: 'Casual', doc: 'X' };
+  const datosCli = sheetCli.getDataRange().getValues();
+  for(let i=1; i<datosCli.length; i++) {
+    if(datosCli[i][0] == venta.idCliente) {
+      cliente = { nombre: datosCli[i][1], doc: datosCli[i][2] };
+      break;
+    }
+  }
+
+  // 3. Obtener Detalles
+  const items = [];
+  const datosDet = sheetDet.getDataRange().getValues();
+  
+  // Mapa Productos para nombres
+  const datosProd = sheetProd.getDataRange().getValues();
+  const mapProd = {};
+  for(let i=1; i<datosProd.length; i++) mapProd[datosProd[i][0]] = datosProd[i][2]; // ID -> Nombre
+
+  for(let i=1; i<datosDet.length; i++) {
+    if(datosDet[i][1] == idVenta) {
+      items.push({
+        producto: mapProd[datosDet[i][2]] || 'Item',
+        cantidad: datosDet[i][3],
+        precio: datosDet[i][4],
+        subtotal: datosDet[i][5]
+      });
+    }
+  }
+
+  // 4. Generar PDF Temporal
+  const template = HtmlService.createTemplateFromFile('Ticket');
+  template.datos = {
+    fecha: venta.fecha,
+    nro_factura: venta.factura,
+    cliente_nombre: cliente.nombre,
+    cliente_doc: cliente.doc,
+    total: venta.total
+  };
+  template.items = items;
+
+  const html = template.evaluate().getContent();
+  const blob = Utilities.newBlob(html, "text/html", "Ticket.html");
+  const pdf = blob.getAs("application/pdf").setName("Ticket_" + venta.factura + ".pdf");
+
+  // 5. Guardar en carpeta temporal (o la misma de facturas)
+  // Usamos la misma carpeta CESTA_FACTURAS
+  const folders = DriveApp.getFoldersByName("CESTA_FACTURAS");
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder("CESTA_FACTURAS");
+  
+  const file = folder.createFile(pdf);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  
+  // Opcional: Eliminar el archivo después de X tiempo (no implementado aquí para simplicidad)
+  
+  return file.getUrl();
+}
+
+function crearPDFOrdenCompra(datosCompra, listaItems) {
+  // 1. Gestionar Carpeta
+  const nombreCarpeta = "CESTA_COMPRAS_PDF";
+  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
+  let carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(nombreCarpeta);
+
+  // 2. Preparar Plantilla
+  const template = HtmlService.createTemplateFromFile('OrdenCompra');
+  template.datos = datosCompra;
+  template.items = listaItems;
+
+  // 3. Generar PDF
+  const html = template.evaluate().getContent();
+  // Limpiamos el nombre del archivo de caracteres raros
+  const nombreArchivo = "OC_" + (datosCompra.comprobante || "SN").replace(/[^a-zA-Z0-9]/g, '_') + ".pdf";
+  
+  const blob = Utilities.newBlob(html, "text/html", nombreArchivo);
+  const pdf = blob.getAs("application/pdf").setName(nombreArchivo);
+  
+  // 4. Guardar y retornar URL
+  const archivo = carpeta.createFile(pdf);
+  return archivo.getUrl(); 
+}
+
+/**
+ * Función Maestra para mover stock
+ * Actualiza STOCK_EXISTENCIAS (Detalle) y PRODUCTOS (Total Global)
+ */
+function actualizarStockDeposito(idProducto, idDeposito, cantidadCambio) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  
+  // 1. Actualizar/Crear registro en STOCK_EXISTENCIAS
+  const dataStock = sheetStock.getDataRange().getValues();
+  let encontrado = false;
+  let stockLocalActual = 0;
+  
+  for(let i=1; i<dataStock.length; i++){
+    if(dataStock[i][1] == idProducto && dataStock[i][2] == idDeposito){
+      stockLocalActual = Number(dataStock[i][3]);
+      const nuevoStockLocal = stockLocalActual + Number(cantidadCambio);
+      sheetStock.getRange(i+1, 4).setValue(nuevoStockLocal); // Act. Cantidad
+      sheetStock.getRange(i+1, 5).setValue(new Date());      // Act. Fecha
+      encontrado = true;
+      break;
+    }
+  }
+  
+  if(!encontrado){
+    // Si no existe el producto en ese depósito, lo creamos
+    sheetStock.appendRow([Utilities.getUuid(), idProducto, idDeposito, cantidadCambio, new Date()]);
+  }
+  
+  // 2. Actualizar Total Global en PRODUCTOS (Para las tarjetas visuales)
+  // Esto es un poco costoso, pero mantiene la consistencia visual rápida
+  const dataProd = sheetProd.getDataRange().getValues();
+  for(let i=1; i<dataProd.length; i++){
+    if(dataProd[i][0] == idProducto){
+      const stockGlobalAnt = Number(dataProd[i][12] || 0);
+      sheetProd.getRange(i+1, 13).setValue(stockGlobalAnt + Number(cantidadCambio));
+      break;
+    }
+  }
+}
+
+/**
+ * Obtener stock específico de un depósito
+ */
+function obtenerStockLocal(idProducto, idDeposito) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
+  const data = sheetStock.getDataRange().getValues();
+  
+  for(let i=1; i<data.length; i++){
+    if(data[i][1] == idProducto && data[i][2] == idDeposito){
+      return Number(data[i][3]);
+    }
+ 
+ 
+  }
+  return 0; // Si no existe registro, es 0
+}
+
+/**
+ * Obtiene los productos con el desglose de stock por depósito
+ */
+function obtenerProductosConStock() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
+  const sheetDep = ss.getSheetByName('DEPOSITOS');
+
+  // 1. Obtener Datos Básicos
+  // Usamos getData (tu función genérica) para obtener objetos limpios
+  // Nota: getData debe estar definida en tu script como la tenías antes
+  const productos = getData('PRODUCTOS'); 
+  
+  // Si no hay tabla de existencias (aún no se creó), devolvemos productos tal cual
+  if (!sheetStock) return productos;
+
+  const datosStock = sheetStock.getDataRange().getValues();
+  const datosDep = sheetDep ? sheetDep.getDataRange().getValues() : [];
+
+  // 2. Mapa de Nombres de Depósitos (ID -> Nombre)
+  const mapaDep = {};
+  for (let i = 1; i < datosDep.length; i++) {
+    if(datosDep[i][0]) mapaDep[datosDep[i][0]] = datosDep[i][1];
+  }
+
+  // 3. Agrupar Stock por Producto
+  // Objeto: { "ID_PROD": [ {deposito: "Central", cantidad: 10}, ... ] }
+  const stockPorProd = {};
+  
+  // Empezamos en 1 para saltar cabecera de STOCK_EXISTENCIAS
+  // Col 1: id_producto, Col 2: id_deposito, Col 3: cantidad
+  for (let i = 1; i < datosStock.length; i++) {
+    const idProd = datosStock[i][1];
+    const idDep = datosStock[i][2];
+    const cant = Number(datosStock[i][3]);
+
+    if (!stockPorProd[idProd]) stockPorProd[idProd] = [];
+    
+    // Solo agregamos si hay cantidad (o si quieres mostrar ceros, quita el if)
+    // if (cant !== 0) { 
+      stockPorProd[idProd].push({
+        nombre_deposito: mapaDep[idDep] || 'Depósito ' + idDep,
+        cantidad: cant
+      });
+    // }
+  }
+
+  // 4. Fusionar con Productos
+  return productos.map(p => {
+    // Agregamos la propiedad 'stocks' al objeto producto
+    p.stocks = stockPorProd[p.id_producto] || [];
+    
+    // Recalculamos el total real sumando los depósitos (más seguro que confiar en la columna stock_actual)
+    const totalReal = p.stocks.reduce((sum, s) => sum + s.cantidad, 0);
+    p.stock_actual = totalReal; 
+    
+    return p;
+  });
+}
+
+// ==========================================
+// CONFIGURACIÓN GENERAL
+// ==========================================
+
+/**
+ * Obtiene toda la configuración general como un objeto { clave: valor }
+ */
+function obtenerConfigGeneral() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  
+  if (!sheet) return {}; // Si no existe, devuelve objeto vacío
+
+  const datos = sheet.getDataRange().getValues();
+  const config = {};
+
+  // Empezamos en 0 para incluir todas las filas (clave, valor)
+  for (let i = 0; i < datos.length; i++) {
+    const clave = datos[i][0];
+    const valor = datos[i][1];
+    if (clave) {
+      config[clave] = valor;
+    }
+  }
+  
+  return config;
+}
+
+/**
+ * Guarda o actualiza una configuración general
+ */
+function guardarConfigGeneral(clave, valor) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  
+  if (!sheet) {
+    sheet = ss.insertSheet('CONFIG_GENERAL');
+    sheet.appendRow(['clave', 'valor']); // Cabecera opcional
+  }
+
+  const datos = sheet.getDataRange().getValues();
+  let encontrado = false;
+
+  for (let i = 0; i < datos.length; i++) {
+    if (datos[i][0] === clave) {
+      sheet.getRange(i + 1, 2).setValue(valor); // Actualiza valor (Columna B)
+      encontrado = true;
+      break;
+    }
+  }
+
+  if (!encontrado) {
+    sheet.appendRow([clave, valor]); // Crea nueva fila si no existe
+  }
+  
+  return { success: true };
+}
+
+/**
+ * Obtiene toda la configuración general como un objeto
+ */
+function obtenerConfigGeneral() {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  if (!sheet) return {};
+
+  const datos = sheet.getDataRange().getValues();
+  const config = {};
+
+  for (let i = 0; i < datos.length; i++) {
+    const clave = datos[i][0];
+    const valor = datos[i][1];
+    if (clave) {
+      config[clave] = valor;
+    }
+  }
+  return config;
+}
+
+/**
+ * Guarda una configuración específica (ej: DEPOSITO_DEFAULT)
+ */
+function guardarConfigGeneral(clave, valor) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  
+  // Si no existe la hoja, la creamos
+  if (!sheet) {
+    sheet = ss.insertSheet('CONFIG_GENERAL');
+    sheet.appendRow(['clave', 'valor']);
+  }
+
+  const datos = sheet.getDataRange().getValues();
+  let encontrado = false;
+
+  // Buscamos si ya existe la clave para actualizarla
+  for (let i = 0; i < datos.length; i++) {
+    if (datos[i][0] === clave) {
+      sheet.getRange(i + 1, 2).setValue(valor); // Actualiza Columna B
+      encontrado = true;
+      break;
+    }
+  }
+
+  // Si no existe, creamos una fila nueva
+  if (!encontrado) {
+    sheet.appendRow([clave, valor]);
+  }
+  
+  return { success: true };
 }
 

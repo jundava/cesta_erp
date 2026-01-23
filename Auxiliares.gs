@@ -62,6 +62,11 @@ function setupDatabase() {
       columnas: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado"]
     },
     {
+      nombre: "STOCK_EXISTENCIAS",
+      // Esta tabla es el corazón del sistema multi-depósito
+      columnas: ["id_existencia", "id_producto", "id_deposito", "cantidad", "fecha_actualizacion"]
+    },
+    {
       nombre: "VENTAS_DETALLE",
       columnas: ["id_detalle", "id_venta", "id_producto", "cantidad", "precio_unitario", "iva_aplicado", "subtotal"]
     }
@@ -103,3 +108,38 @@ function setupDatabase() {
 
   SpreadsheetApp.getUi().alert('¡Base de datos vinculada por ID y actualizada con éxito!');
 }
+
+function migrarStockInicial() {
+  const ss = SpreadsheetApp.openById(SS_ID); // Usa tu constante SS_ID
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
+  
+  const datosProd = sheetProd.getDataRange().getValues();
+  const filasNuevas = [];
+  const fecha = new Date();
+
+  // Empezamos en i=1 para saltar cabecera
+  for (let i = 1; i < datosProd.length; i++) {
+    const idProd = datosProd[i][0];
+    const stockActual = Number(datosProd[i][12] || 0); // Columna 13 (M)
+
+    if (stockActual !== 0) {
+      filasNuevas.push([
+        Utilities.getUuid(),
+        idProd,
+        "1", // ID Depósito 1 (Asumimos Central)
+        stockActual,
+        fecha
+      ]);
+    }
+  }
+
+  if (filasNuevas.length > 0) {
+    // Escribimos en lotes para mayor velocidad
+    sheetStock.getRange(sheetStock.getLastRow() + 1, 1, filasNuevas.length, 5).setValues(filasNuevas);
+    Logger.log("Migrados " + filasNuevas.length + " productos al Depósito 1.");
+  } else {
+    Logger.log("No había stock para migrar.");
+  }
+}
+
