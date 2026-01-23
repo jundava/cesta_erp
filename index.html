@@ -50,9 +50,38 @@
       .bottom-nav { background-color: white; border-top: 1px solid #dee2e6; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
       
       /* Estilos Barra Móvil */
-      .nav-item-mobile { flex: 1; text-align: center; padding: 8px 0; color: #adb5bd; cursor: pointer; text-decoration: none; font-size: 0.7rem; font-weight: 500; transition: color 0.2s; }
-      .nav-item-mobile.active { color: var(--color-primary); }
-      .nav-item-mobile.active i { transform: scale(1.1); }
+      .nav-item-mobile { 
+          flex: 1; 
+          text-align: center; 
+          padding: 12px 0; /* Más espacio para el dedo */
+          color: #adb5bd; 
+          cursor: pointer; 
+          text-decoration: none; 
+          transition: color 0.2s; 
+          display: flex;           /* Flexbox para alinear */
+          flex-direction: column;  /* Uno encima del otro */
+          align-items: center;
+          justify-content: center;
+      }
+      
+      .nav-item-mobile i { 
+          font-size: 1.6rem; /* Aumentado de tamaño (antes era aprox 1rem) */
+          margin-bottom: 2px;
+          line-height: 1;
+      }
+      
+      .nav-item-mobile span {
+          font-size: 0.75rem; /* Texto un poco más legible */
+          font-weight: 500;
+      }
+
+      .nav-item-mobile.active { 
+          color: var(--color-primary); 
+      }
+      /* Efecto de pulsación */
+      .nav-item-mobile:active i {
+          transform: scale(0.9); 
+      }
 
       /* Estilos Menú Lateral Móvil (Offcanvas) */
       .offcanvas-body .btn { font-weight: 500; color: #444; transition: background 0.2s; border-color: #eee; }
@@ -114,7 +143,7 @@
                 
                 <div v-if="vistaActual === 'ventas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Punto de Venta</h3>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas</h3>
                         <div class="btn-group shadow-sm">
                             <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button>
                             <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
@@ -823,23 +852,44 @@
             totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); }
         },
         mounted() {
+            // Inicializar componentes de Bootstrap
             this.modalDep = new bootstrap.Modal(document.getElementById('modalDeposito'));
             this.modalCmp = new bootstrap.Modal(document.getElementById('modalCampo'));
             this.modalProd = new bootstrap.Modal(document.getElementById('modalProducto'));
             this.modalCli = new bootstrap.Modal(document.getElementById('modalCliente'));
             this.modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
             this.modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
+            
+            // Cargar datos
             this.cargarDatosIniciales();
+
+            // --- LÓGICA DEL BOTÓN ATRÁS (NUEVO) ---
+            // 1. Crear el estado inicial
+            window.history.replaceState({ vista: 'ventas' }, null, '');
+
+            // 2. Escuchar cuando el usuario presiona "Atrás"
+            window.onpopstate = (event) => {
+                if (event.state && event.state.vista) {
+                    // Si hay un estado guardado, volvemos a esa vista
+                    this.vistaActual = event.state.vista;
+                    
+                    // Si estamos volviendo al menú principal, cerramos cualquier menú lateral abierto
+                    this.cerrarMenuMovil();
+                }
+            };
         },
         methods: {
             formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
-            cambiarVista(v) { this.vistaActual = v; window.scrollTo(0,0); },
-            
-            // Nueva función para cerrar el menú móvil al hacer clic en una opción
-            cerrarMenuMovil() {
-                const menuEl = document.getElementById('menuMovil');
-                const menuBS = bootstrap.Offcanvas.getInstance(menuEl);
-                if (menuBS) menuBS.hide();
+            cambiarVista(v) { 
+                // Si la vista es la misma, no hacemos nada para no ensuciar el historial
+                if(this.vistaActual === v) return;
+
+                this.vistaActual = v; 
+                window.scrollTo(0,0);
+                
+                // --- AGREGAR AL HISTORIAL (NUEVO) ---
+                // Esto crea un punto de retorno para el botón "Atrás"
+                window.history.pushState({ vista: v }, null, '');
             },
 
             esObligatorio(v) { return v === true || v === 'TRUE'; },
@@ -880,6 +930,12 @@
 
                     this.cargando = false;
                 });
+            },
+            cerrarMenuMovil() {
+                const menuEl = document.getElementById('menuMovil');
+                // Usamos getOrCreateInstance para asegurar que siempre lo capture
+                const menuBS = bootstrap.Offcanvas.getOrCreateInstance(menuEl);
+                menuBS.hide();
             },
 
               agregarAlCarritoTransf() {
