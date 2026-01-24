@@ -2,87 +2,107 @@
 <html>
 <head>
   <style>
-    body { font-family: 'Helvetica', sans-serif; color: #333; padding: 20px; }
-    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #E06920; padding-bottom: 10px; margin-bottom: 20px; }
-    .logo { font-size: 24px; font-weight: bold; color: #E06920; }
-    .info-empresa { text-align: right; font-size: 12px; color: #666; }
+    body { font-family: 'Helvetica', sans-serif; font-size: 11px; color: #333; padding: 30px; }
+    .header { width: 100%; margin-bottom: 20px; border-bottom: 2px solid #E06920; padding-bottom: 10px; }
+    .logo { float: left; width: 150px; }
+    .info-empresa { float: left; margin-left: 20px; }
+    .info-factura { float: right; text-align: right; }
     
-    .datos-factura { display: flex; justify-content: space-between; margin-bottom: 30px; }
-    .caja { width: 45%; }
-    .titulo-seccion { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 5px; color: #E06920; }
+    .box-cliente { 
+      background-color: #f9f9f9; 
+      padding: 10px; 
+      border: 1px solid #ddd; 
+      border-radius: 4px;
+      margin-bottom: 20px; 
+    }
     
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-    th { background-color: #f8f9fa; border-bottom: 2px solid #ddd; padding: 8px; text-align: left; }
-    td { border-bottom: 1px solid #eee; padding: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    
+    .table-items th { 
+      background-color: #333; 
+      color: white; 
+      padding: 8px; 
+      text-align: left; 
+      font-size: 10px; 
+      text-transform: uppercase; 
+    }
+    
+    .table-items td { 
+      border-bottom: 1px solid #eee; 
+      padding: 8px; 
+    }
+    
     .text-right { text-align: right; }
     .text-center { text-align: center; }
+    .fw-bold { font-weight: bold; }
     
-    .totales { float: right; width: 300px; }
-    .fila-total { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
-    .total-final { font-size: 18px; font-weight: bold; color: #E06920; border-top: 2px solid #E06920; padding-top: 5px; }
+    /* Sección de Totales */
+    .footer-totales { margin-top: 20px; page-break-inside: avoid; }
+    .tabla-totales { width: 40%; float: right; }
+    .tabla-totales td { padding: 4px; }
     
-    .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+    .liquidacion-iva {
+      margin-top: 30px;
+      border-top: 1px solid #ccc;
+      padding-top: 5px;
+      font-size: 9px;
+      color: #555;
+      text-align: right;
+      width: 100%;
+      clear: both;
+    }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <div class="logo">CESTA ERP</div>
     <div class="info-empresa">
-      Dirección de la Empresa<br>
-      Tel: (0981) 000-000<br>
-      email@cesta.com
+      <h1 style="margin: 0; color: #E06920;">CESTA</h1>
+      <p style="margin: 2px 0;">Sistema de Gestión de Stock</p>
     </div>
+    <div class="info-factura">
+      <h2 style="margin: 0;">FACTURA DE VENTA</h2>
+      <p style="font-size: 14px; margin: 5px 0;">Nro: <strong><?= datos.nro_factura ?></strong></p>
+      <p>Fecha: <?= datos.fecha ?></p>
+      <p>Condición: <?= datos.condicion ?></p>
+    </div>
+    <div style="clear:both;"></div>
   </div>
 
-  <div class="datos-factura">
-    <div class="caja">
-      <div class="titulo-seccion">CLIENTE</div>
-      <div><strong><?= datos.cliente_nombre ?></strong></div>
-      <div>RUC/CI: <?= datos.cliente_doc ?></div>
-      <div><?= datos.cliente_dir ?></div>
-    </div>
-    <div class="caja text-right">
-      <div class="titulo-seccion">COMPROBANTE</div>
-      <div style="font-size: 14px;">Nº <?= datos.nro_factura ?></div>
-      <div>Fecha: <?= datos.fecha ?></div>
-      <div>Estado: <?= datos.estado ?></div>
-    </div>
+  <div class="box-cliente">
+    <table border="0">
+      <tr>
+        <td width="60%"><strong>Cliente:</strong> <?= datos.cliente_nombre ?></td>
+        <td width="40%" class="text-right"><strong>RUC/CI:</strong> <?= datos.cliente_doc ?></td>
+      </tr>
+      <tr>
+        <td colspan="2"><strong>Dirección:</strong> <?= datos.cliente_dir || '(Sin dirección)' ?></td>
+      </tr>
+    </table>
   </div>
 
-  <table>
+  <table class="table-items">
     <thead>
       <tr>
-        <th width="50%">Producto</th>
-        <th width="15%" class="text-center">Cant.</th>
+        <th width="50%">Descripción</th>
+        <th width="10%" class="text-center">IVA</th>
+        <th width="10%" class="text-center">Cant.</th>
         <th width="15%" class="text-right">Precio Unit.</th>
-        <th width="20%" class="text-right">Subtotal</th>
+        <th width="15%" class="text-right">Subtotal</th>
       </tr>
     </thead>
     <tbody>
-      <? for (var i = 0; i < items.length; i++) { ?>
-      <tr>
-        <td><?= items[i].producto ?></td>
-        <td class="text-center"><?= items[i].cantidad ?></td>
-        <td class="text-right"><?= parseInt(items[i].precio).toLocaleString('es-PY') ?></td>
-        <td class="text-right"><?= parseInt(items[i].subtotal).toLocaleString('es-PY') ?></td>
-      </tr>
-      <? } ?>
+      <?!= datos.html_items ?>
     </tbody>
   </table>
 
-  <div class="totales">
-    <div class="fila-total total-final">
-      <span>TOTAL:</span>
-      <span>Gs. <?= parseInt(datos.total).toLocaleString('es-PY') ?></span>
+  <div class="footer-totales">
+    <div style="float:right; width: 50%;">
+       <table width="100%">
+         <?!= datos.html_totales ?>
+       </table>
     </div>
-  </div>
-
-  <div style="clear: both;"></div>
-
-  <div class="footer">
-    Documento generado electrónicamente por Cesta ERP.<br>
-    Gracias por su preferencia.
+    <div style="clear:both;"></div>
   </div>
 
 </body>
