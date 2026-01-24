@@ -616,7 +616,18 @@ function guardarVenta(venta) {
           idVenta
       ]);
 
-      actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
+      if (!venta.es_desde_remision) {  // <--- AGREGAR ESTE IF
+            shMov.appendRow([
+                Utilities.getUuid(),
+                new Date(),
+                "SALIDA_VENTA",
+                item.id_producto,
+                venta.id_deposito, // Asegúrate de usar venta.id_deposito (lo pasaremos)
+                item.cantidad * -1,
+                idVenta
+            ]);
+            actualizarStockDeposito(item.id_producto, venta.id_deposito, item.cantidad * -1);
+        }
     });
 
     return { success: true, pdf_url: urlPdf };
@@ -1476,14 +1487,17 @@ function actualizarStockDeposito(idProducto, idDeposito, cantidadCambio) {
 function obtenerStockLocal(idProducto, idDeposito) {
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
   const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
+  
+  // Si no existe la hoja, devolvemos 0 (seguridad para inicio del sistema)
+  if (!sheetStock) return 0;
+
   const data = sheetStock.getDataRange().getValues();
   
   for(let i=1; i<data.length; i++){
-    if(data[i][1] == idProducto && data[i][2] == idDeposito){
-      return Number(data[i][3]);
+    // Comparamos ID Producto (Col 1) e ID Deposito (Col 2)
+    if(String(data[i][1]) == String(idProducto) && String(data[i][2]) == String(idDeposito)){
+      return Number(data[i][3]); // Col 3 es Cantidad
     }
- 
- 
   }
   return 0; // Si no existe registro, es 0
 }
@@ -1602,39 +1616,6 @@ function obtenerConfigGeneral() {
     }
   }
   return config;
-}
-
-/**
- * Guarda una configuración específica (ej: DEPOSITO_DEFAULT)
- */
-function guardarConfigGeneral(clave, valor) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  
-  // Si no existe la hoja, la creamos
-  if (!sheet) {
-    sheet = ss.insertSheet('CONFIG_GENERAL');
-    sheet.appendRow(['clave', 'valor']);
-  }
-
-  const datos = sheet.getDataRange().getValues();
-  let encontrado = false;
-
-  // Buscamos si ya existe la clave para actualizarla
-  for (let i = 0; i < datos.length; i++) {
-    if (datos[i][0] === clave) {
-      sheet.getRange(i + 1, 2).setValue(valor); // Actualiza Columna B
-      encontrado = true;
-      break;
-    }
-  }
-
-  // Si no existe, creamos una fila nueva
-  if (!encontrado) {
-    sheet.appendRow([clave, valor]);
-  }
-  
-  return { success: true };
 }
 
 // ==========================================
@@ -1895,5 +1876,298 @@ function registrarCobro(datos) {
   return { success: true };
 }
 
+// =========================================================
+//  MÓDULO REMISIONES (CON PRECIO Y NUMERACIÓN AUTOMÁTICA)
+// =========================================================
 
+// 1. Obtener y Guardar Configuración de Remisión
+function obtenerConfigRemision() {
+  return obtenerValorConfig('ULTIMO_NRO_REMISION') || '001-001-0000000';
+}
+
+function guardarConfigRemision(nro) {
+  guardarValorConfig('ULTIMO_NRO_REMISION', nro);
+  return true;
+}
+
+// 2. Generar siguiente número (Lógica inteligente)
+function generarSiguienteRemision() {
+  const actual = obtenerConfigRemision();
+  const partes = actual.split('-'); // Separa 001-001-0000001
+  if(partes.length === 3) {
+    let secuencia = parseInt(partes[2], 10);
+    secuencia++;
+    const nuevaSecuencia = String(secuencia).padStart(7, '0');
+    return `${partes[0]}-${partes[1]}-${nuevaSecuencia}`;
+  }
+  return actual; // Si falla el formato, devuelve el actual
+}
+
+// 3. Guardar Remisión (Descuenta stock y guarda precios)
+function guardarRemision(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const shCab = ss.getSheetByName('REMISIONES_CABECERA');
+  const shDet = ss.getSheetByName('REMISIONES_DETALLE');
+  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const shProd = ss.getSheetByName('PRODUCTOS');
+  const shCli = ss.getSheetByName('CLIENTES');
+
+  // A. Generar Número Automático
+  const nuevoNumero = generarSiguienteRemision();
+
+  // B. Validar Stock
+  for (let item of datos.items) {
+    const stockDisp = obtenerStockLocal(item.id_producto, datos.id_deposito);
+    if (stockDisp < item.cantidad) {
+      throw new Error(`Stock insuficiente para: ${item.nombre_prod || 'un producto'}`);
+    }
+  }
+
+  const idRemision = Utilities.getUuid();
+  
+  // C. Preparar datos para PDF
+  // (Aquí buscamos nombres de cliente si no vienen completos)
+  // ... lógica de nombres ...
+
+  // D. Guardar Cabecera
+  // Estructura: id, fecha, numero, id_cliente, id_deposito, conductor, chapa, estado, url_pdf, total_valorizado
+  const totalValorizado = datos.items.reduce((sum, it) => sum + (it.cantidad * it.precio), 0);
+  
+  // Generar PDF (con precios)
+  const urlPdf = crearPDFRemision({
+    ...datos, 
+    numero: nuevoNumero, 
+    total: totalValorizado
+  });
+
+  shCab.appendRow([
+    idRemision, 
+    datos.fecha, 
+    nuevoNumero, 
+    datos.id_cliente, 
+    datos.id_deposito,
+    datos.conductor,
+    datos.chapa,
+    'PENDIENTE_FACTURAR', // Estado inicial
+    urlPdf,
+    totalValorizado
+  ]);
+
+  // E. Guardar Detalle y Mover Stock
+  datos.items.forEach(item => {
+    // Guardamos PRECIO UNITARIO en la col 5
+    shDet.appendRow([Utilities.getUuid(), idRemision, item.id_producto, item.cantidad, item.precio]);
+    
+    // Descontar Stock
+    shMov.appendRow([
+      Utilities.getUuid(), new Date(), "SALIDA_REMISION", item.id_producto, datos.id_deposito, item.cantidad * -1, idRemision
+    ]);
+    actualizarStockDeposito(item.id_producto, datos.id_deposito, item.cantidad * -1);
+  });
+
+  // F. Actualizar Configuración con el nuevo número
+  guardarConfigRemision(nuevoNumero);
+
+  lock.releaseLock();
+  return { success: true, pdf_url: urlPdf, numero: nuevoNumero };
+}
+
+// 4. Convertir Remisión a Factura (Sin tocar stock)
+function facturarRemision(remision) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const shRemCab = ss.getSheetByName('REMISIONES_CABECERA');
+  const shRemDet = ss.getSheetByName('REMISIONES_DETALLE'); // Necesitamos leer los items originales
+  
+  // 1. Recuperar items de la remisión
+  // (Simplificación: asumimos que recibimos los items desde el frontend para reutilizar la lógica de `guardarVenta`, 
+  // pero marcando que NO mueva stock).
+  
+  // TRUCO: Vamos a reutilizar `guardarVenta` pero le pasaremos un flag especial.
+  // Primero modificamos `guardarVenta` (ver abajo).
+  
+  // 2. Actualizar estado de la Remisión a FACTURADO
+  const dataCab = shRemCab.getDataRange().getValues();
+  for(let i=1; i<dataCab.length; i++) {
+    if(String(dataCab[i][0]) == String(remision.id_remision)) {
+      shRemCab.getRange(i+1, 8).setValue('FACTURADO'); // Columna 8 es Estado
+      break;
+    }
+  }
+  
+  lock.releaseLock();
+  return { success: true };
+}
+
+// 5. PDF Remisión (Actualizado con Precios)
+function crearPDFRemision(datos) {
+  try {
+    const html = `
+      <html>
+        <body style="font-family: Helvetica, sans-serif; padding: 40px; color:#333;">
+          <div style="border-bottom: 2px solid #E06920; padding-bottom:10px; margin-bottom:20px;">
+            <h2 style="margin:0; color:#E06920;">NOTA DE REMISIÓN</h2>
+            <p style="margin:0;">Nro: <strong>${datos.numero}</strong></p>
+            <p style="margin:0;">Fecha: ${new Date(datos.fecha).toLocaleDateString('es-PY')}</p>
+          </div>
+          
+          <div style="background:#f9f9f9; padding:15px; border-radius:5px; margin-bottom:20px;">
+            <p><strong>Destinatario:</strong> ${datos.nombre_cliente || 'Cliente'}</p>
+            <p><strong>Transporte:</strong> ${datos.conductor || '---'} (Chapa: ${datos.chapa || '---'})</p>
+          </div>
+
+          <table style="width:100%; border-collapse: collapse; font-size:12px;">
+            <tr style="background:#333; color:white;">
+              <th style="padding:8px; text-align:center;">Cant.</th>
+              <th style="padding:8px; text-align:left;">Descripción</th>
+              <th style="padding:8px; text-align:right;">Precio Ref.</th>
+              <th style="padding:8px; text-align:right;">Subtotal</th>
+            </tr>
+            ${datos.items.map(i => `
+              <tr style="border-bottom:1px solid #eee;">
+                <td style="padding:8px; text-align:center;">${i.cantidad}</td>
+                <td style="padding:8px;">${i.nombre_prod || 'Producto'}</td>
+                <td style="padding:8px; text-align:right;">${Number(i.precio).toLocaleString('es-PY')}</td>
+                <td style="padding:8px; text-align:right;">${(i.cantidad * i.precio).toLocaleString('es-PY')}</td>
+              </tr>`).join('')}
+             <tr>
+                <td colspan="3" style="text-align:right; padding:10px; font-weight:bold;">TOTAL VALORIZADO:</td>
+                <td style="text-align:right; padding:10px; font-weight:bold;">Gs. ${Number(datos.total).toLocaleString('es-PY')}</td>
+             </tr>
+          </table>
+          <p style="font-size:10px; color:#777; margin-top:30px; text-align:center;">Documento válido para traslado de mercaderías.</p>
+        </body>
+      </html>
+    `;
+    
+    const blob = Utilities.newBlob(html, "text/html", "Remision.html");
+    const pdf = blob.getAs("application/pdf").setName("Remision_" + datos.numero + ".pdf");
+    const carpeta = DriveApp.getFoldersByName("CESTA_REMISIONES").hasNext() ? DriveApp.getFoldersByName("CESTA_REMISIONES").next() : DriveApp.createFolder("CESTA_REMISIONES");
+    carpeta.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return carpeta.createFile(pdf).getUrl();
+  } catch(e) { return "ERROR_PDF: " + e.message; }
+}
+
+// Agrega esto en Code.gs
+function obtenerDetalleRemisionParaFacturar(idRemision) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const data = ss.getSheetByName('REMISIONES_DETALLE').getDataRange().getValues();
+  const items = [];
+  
+  // Estructura Detalle: id_det, id_rem, id_prod, cant, precio
+  for(let i=1; i<data.length; i++) {
+    if(String(data[i][1]) == String(idRemision)) {
+      items.push({
+        id_producto: data[i][2],
+        cantidad: data[i][3],
+        precio: data[i][4],
+        tasa_iva: 10 // Asumimos 10 o buscamos el producto si queremos ser exactos
+      });
+    }
+  }
+  return items;
+}
+
+// =========================================================
+//  FUNCIONES AUXILIARES DE CONFIGURACIÓN (FALTABAN ESTAS)
+// =========================================================
+
+function obtenerValorConfig(clave) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const sheet = ss.getSheetByName('CONFIG_GENERAL');
+  if (!sheet) return null;
+
+  const data = sheet.getDataRange().getValues();
+  for(let i=0; i<data.length; i++) {
+    // Comparamos la Clave (Columna A)
+    if(data[i][0] == clave) return data[i][1]; // Retorna el Valor (Columna B)
+  }
+  return null;
+}
+
+function guardarValorConfig(clave, valor) {
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  let sheet = ss.getSheetByName('CONFIG_GENERAL');
+  
+  if (!sheet) {
+    sheet = ss.insertSheet('CONFIG_GENERAL');
+    sheet.appendRow(['clave', 'valor']);
+  }
+
+  const data = sheet.getDataRange().getValues();
+  let encontrado = false;
+
+  for(let i=0; i<data.length; i++) {
+    if(data[i][0] == clave) {
+      sheet.getRange(i+1, 2).setValue(valor); // Actualiza valor existente
+      encontrado = true;
+      break;
+    }
+  }
+
+  if(!encontrado) {
+    sheet.appendRow([clave, valor]); // Crea nueva fila si no existe
+  }
+}
+
+function obtenerHistorialRemisiones() {
+  try {
+    const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+    const sh = ss.getSheetByName('REMISIONES_CABECERA');
+    const shCli = ss.getSheetByName('CLIENTES');
+    
+    // Si no existe la hoja o solo tiene el encabezado
+    if (!sh || sh.getLastRow() <= 1) return [];
+    
+    // Mapa de clientes para mostrar nombres
+    const mapCli = {};
+    if (shCli) {
+      const d = shCli.getDataRange().getValues();
+      for(let i=1; i<d.length; i++) {
+        // Col A = ID, Col B = Razón Social
+        mapCli[String(d[i][0]).trim()] = d[i][1]; 
+      }
+    }
+
+    const data = sh.getDataRange().getValues();
+    // Estructura Cabecera: 
+    // [0]id, [1]fecha, [2]numero, [3]id_cli, [4]id_dep, [5]conductor, [6]chapa, [7]estado, [8]pdf
+    
+    const result = [];
+    for(let i=1; i<data.length; i++) {
+      const fila = data[i];
+      
+      // Verificamos que tenga ID para no cargar filas vacías
+      if (fila[0]) {
+        // Convertir fecha a String ISO para que no falle en el frontend
+        let fechaSegura = fila[1];
+        if (fila[1] instanceof Date) {
+            fechaSegura = fila[1].toISOString();
+        }
+
+        result.push({
+          id_remision: fila[0],
+          fecha: fechaSegura,
+          numero: fila[2],
+          // Buscamos nombre cliente, si no hay, ponemos "Desconocido"
+          cliente: mapCli[String(fila[3]).trim()] || 'Cliente Desconocido',
+          estado: fila[7],
+          url_pdf: fila[8]
+        });
+      }
+    }
+    
+    // Devolvemos invertido (lo más nuevo arriba)
+    return result.reverse();
+
+  } catch (e) {
+    // Si falla, lanzamos el error para que el frontend lo muestre en la alerta
+    throw new Error("Error en Backend: " + e.toString());
+  }
+}
 

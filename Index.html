@@ -167,6 +167,9 @@
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt me-2"></i> Ventas / Caja</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus me-2"></i> Compras / Stock</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias')"><i class="bi bi-arrow-left-right me-2"></i> Transferencias</a>
+
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones')"><i class="bi bi-truck-flatbed me-2"></i> Notas de Remisión</a>
+
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'cobranzas'}" @click="cargarCobranzas()"><i class="bi bi-wallet2 me-2"></i> Cobranzas</a>
 
                 <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Gestión</small>
@@ -388,6 +391,130 @@
                                             <td class="small">{{ h.responsable }}</td>
                                             <td class="text-end pe-3">
                                                 <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i></a>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="vistaActual === 'remisiones'">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-truck-flatbed text-brand"></i> Notas de Remisión</h3>
+                        <div class="btn-group shadow-sm">
+                            <button class="btn" :class="subVistaRemision === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaRemision = 'nueva'">Nueva</button>
+                            <button class="btn" :class="subVistaRemision === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialRemisiones">Historial</button>
+                        </div>
+                    </div>
+
+                    <div v-if="subVistaRemision === 'nueva'">
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <h6 class="text-secondary small fw-bold mb-3 text-uppercase">Datos del Traslado</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold small">Fecha</label>
+                                        <input type="date" class="form-control" v-model="formRemision.fecha">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold small">Nro. Comprobante</label>
+                                        <input type="text" class="form-control" v-model="formRemision.numero" placeholder="Auto (Según Config)">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold small">Cliente Destino</label>
+                                        <select class="form-select" v-model="formRemision.id_cliente">
+                                            <option value="" disabled>Seleccionar...</option>
+                                            <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold small">Sale de Depósito</label>
+                                        <select class="form-select" v-model="formRemision.id_deposito">
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Conductor (Opcional)</label>
+                                        <input type="text" class="form-control" v-model="formRemision.conductor" placeholder="Nombre del chofer">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">Chapa / Vehículo (Opcional)</label>
+                                        <input type="text" class="form-control" v-model="formRemision.chapa" placeholder="ABC-123">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-3 border-top border-brand border-3">
+                            <div class="card-body bg-light">
+                                <form @submit.prevent="agregarAlCarritoRemision">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-8">
+                                            <label class="form-label small fw-bold">Producto a Trasladar</label>
+                                            <select class="form-select" v-model="lineaRemision.id_producto" required>
+                                                <option value="" disabled>Buscar producto...</option>
+                                                <option v-for="p in productos" :value="p.id_producto">{{ p.nombre }} (Stock Global: {{ p.stock_actual }})</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small fw-bold">Cantidad</label>
+                                            <input type="number" class="form-control" v-model.number="lineaRemision.cantidad" min="1" required>
+                                        </div>
+                                        <div class="col-md-2 d-grid">
+                                            <button class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i></button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm" v-if="carritoRemision.length > 0">
+                            <table class="table align-middle mb-0 table-striped">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Producto</th>
+                                        <th class="text-center">Cant.</th>
+                                        <th class="text-end">Precio Ref.</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(item, i) in carritoRemision" :key="i">
+                                        <td class="ps-3">{{ item.nombre_prod }}</td>
+                                        <td class="text-center fw-bold">{{ item.cantidad }}</td>
+                                        <td class="text-end text-muted small">{{ formatoMoneda(item.precio) }}</td>
+                                        <td class="text-end pe-3"><button class="btn btn-sm text-danger" @click="carritoRemision.splice(i,1)"><i class="bi bi-trash"></i></button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="card-footer bg-white text-end p-3">
+                                <button class="btn btn-brand fw-bold px-4" @click="guardarRemisionFinal"><i class="bi bi-file-earmark-check me-2"></i> GENERAR REMISIÓN</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="subVistaRemision === 'historial'">
+                        <div class="card border-0 shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Nro</th><th>Cliente</th><th>Estado</th><th class="text-end pe-3">Acciones</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="h in historialRemisiones" :key="h.id_remision">
+                                            <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td>
+                                            <td><span class="badge bg-light text-dark border">{{ h.numero }}</span></td>
+                                            <td class="fw-bold">{{ h.cliente }}</td>
+                                            <td>
+                                                <span v-if="h.estado === 'FACTURADO'" class="badge bg-success">FACTURADO</span>
+                                                <span v-else class="badge bg-warning text-dark border">PENDIENTE</span>
+                                            </td>
+                                            <td class="text-end pe-3">
+                                                <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+                                                
+                                                <button v-if="h.estado !== 'FACTURADO'" class="btn btn-sm btn-success text-white fw-bold" @click="facturarDesdeRemision(h)" title="Facturar esta remisión">
+                                                    <i class="bi bi-receipt"></i> Facturar
+                                                </button>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -626,6 +753,17 @@
                             <div class="input-group" style="max-width: 400px;">
                                 <input type="text" class="form-control" v-model="configFacturaActual" placeholder="001-001-0000000">
                                 <button class="btn btn-success" @click="guardarConfigFactura"><i class="bi bi-save"></i> Guardar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white fw-bold py-3 text-secondary">Secuencia de Remisiones</div>
+                        <div class="card-body">
+                            <p class="text-muted small">Último número de Nota de Remisión emitido.</p>
+                            <div class="input-group" style="max-width: 400px;">
+                                <input type="text" class="form-control" v-model="configRemisionActual" placeholder="001-001-0000000">
+                                <button class="btn btn-success" @click="guardarConfigRemision"><i class="bi bi-save"></i> Guardar</button>
                             </div>
                         </div>
                     </div>
@@ -994,6 +1132,21 @@
             formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false },
             configFacturaActual: '',
 
+            configRemisionActual: '', // Remision
+
+            subVistaRemision: 'nueva',
+            historialRemisiones: [],
+            carritoRemision: [],
+            formRemision: { 
+                fecha: new Date().toISOString().slice(0,10), 
+                numero: '', 
+                id_cliente: '', 
+                id_deposito: '', 
+                conductor: '', 
+                chapa: '' 
+            },
+            lineaRemision: { id_producto: '', cantidad: 1 },
+
             formVenta: { id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: '' },
             lineaVenta: { id_producto:'', cantidad:1, precio:0 },
             carritoVenta: [], historialVentas: [], itemsDetalle: [],
@@ -1108,8 +1261,8 @@
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigCampos()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerDepositos()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigFactura()),
-                    // 👇 1. AGREGAMOS ESTA NUEVA LLAMADA (Índice 8)
-                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigGeneral()) 
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigGeneral()),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigRemision())
                 ]).then(res => {
                     this.productos = res[0]; 
                     this.proveedores = res[1]; 
@@ -1119,10 +1272,8 @@
                     this.listaConfigCampos = res[5] || [];
                     this.listaDepositos = res[6] || [];
                     this.configFacturaActual = res[7];
-
-                    // 👇 2. PROCESAMOS LA CONFIGURACIÓN GENERAL (Respuesta 8)
                     this.configGeneral = res[8] || {};
-                    
+                    this.configRemisionActual = res[9];
                     // Extraemos el depósito default o dejamos vacío si no existe
                     this.depositoDefault = this.configGeneral['DEPOSITO_DEFAULT'] || '';
 
@@ -1133,7 +1284,135 @@
 
                     this.cargando = false;
                 });
+              },
+
+            guardarConfigRemision() {
+                this.cargando = true;
+                google.script.run.withSuccessHandler(() => {
+                    this.cargando = false;
+                    alert("✅ Secuencia de remisión actualizada");
+                }).guardarConfigRemision(this.configRemisionActual);
             },
+
+            // LÓGICA DE REMISIÓN MEJORADA (CON PRECIOS Y AUTO-NUM)
+            agregarAlCarritoRemision() {
+                if(!this.lineaRemision.id_producto || this.lineaRemision.cantidad < 1) return;
+
+                // Buscamos el producto para obtener su precio y nombre
+                const p = this.productos.find(x => x.id_producto == this.lineaRemision.id_producto);
+
+                if (p) {
+                    this.carritoRemision.push({ 
+                        ...this.lineaRemision, 
+                        nombre_prod: p.nombre,
+                        // Usamos el precio base como referencia para valorizar
+                        precio: p.precio_venta_base 
+                    });
+                    this.lineaRemision = { id_producto: '', cantidad: 1 };
+                }
+            },
+
+            guardarRemisionFinal() {
+                if(!this.formRemision.id_cliente || !this.formRemision.id_deposito || this.carritoRemision.length === 0) {
+                    return alert("Faltan datos.");
+                }
+
+                this.cargando = true;
+                // Calculamos el nombre del cliente para el PDF
+                const cli = this.clientes.find(c => c.id_cliente == this.formRemision.id_cliente);
+
+                const paquete = { 
+                    ...this.formRemision, 
+                    items: this.carritoRemision,
+                    nombre_cliente: cli ? cli.razon_social : 'Cliente' 
+                };
+
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        if(res.pdf_url) window.open(res.pdf_url, '_blank');
+                        alert("✅ Remisión " + res.numero + " generada correctamente.");
+                        this.carritoRemision = [];
+                        // Actualizamos el número visualmente
+                        this.cargarDatosIniciales(); 
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error: " + e);
+                    })
+                    .guardarRemision(paquete);
+            },
+
+            // 🚀 LA MAGIA: FACTURAR DESDE REMISIÓN
+            facturarDesdeRemision(h) {
+                if(!confirm("¿Convertir Remisión " + h.numero + " en Factura?")) return;
+
+                this.cargando = true;
+
+                // 1. Recuperar detalles de la remisión (necesitamos items y precios)
+                // Por simplicidad, aquí asumimos que llamamos al backend y el backend hace todo,
+                // O recuperamos los items. Para hacerlo robusto:
+
+                google.script.run.withSuccessHandler(itemsRemision => {
+                    if(!itemsRemision || itemsRemision.length === 0) {
+                        this.cargando = false;
+                        return alert("Error recuperando items de la remisión.");
+                    }
+
+                    // 2. Armar el paquete de Venta
+                    // OJO: Asignamos 'es_desde_remision: true' para que el backend NO duplique la salida de stock
+                    const paqueteVenta = {
+                        id_cliente: h.id_cliente_real, // Necesitas asegurarte de tener el ID real en el historial
+                        id_deposito: '782921', // O el deposito de la remisión
+                        fecha: new Date().toISOString().slice(0,10),
+                        nro_factura: '', // Automático
+                        condicion: 'CREDITO', // Por defecto o preguntar
+                        items: itemsRemision, // Items recuperados
+                        es_desde_remision: true, // 🛑 IMPORTANTE
+                        id_remision_origen: h.id_remision
+                    };
+
+                    // 3. Llamar a guardarVenta
+                    google.script.run.withSuccessHandler(res => {
+                        // 4. Si la venta fue exitosa, marcamos la remisión como FACTURADO
+                        google.script.run.withSuccessHandler(() => {
+                            this.cargando = false;
+                            alert("✅ Factura generada desde Remisión.");
+                            this.cargarHistorialRemisiones(); // Refrescar lista
+                        }).facturarRemision({ id_remision: h.id_remision });
+
+                        if(res.pdf_url) window.open(res.pdf_url, '_blank');
+
+                    }).guardarVenta(paqueteVenta);
+
+                }).obtenerDetalleRemisionParaFacturar(h.id_remision); // Necesitas crear esta funcioncita helper en Backend
+            },
+
+            cargarHistorialRemisiones() {
+                this.subVistaRemision = 'historial';
+                this.cargando = true;
+                
+                // Limpiamos la lista visualmente antes de cargar
+                this.historialRemisiones = []; 
+
+                google.script.run
+                    .withSuccessHandler(r => {
+                        console.log("📦 Historial Remisiones recibido:", r);
+                        this.historialRemisiones = r || []; // Si es null, usa array vacío
+                        this.cargando = false;
+                        
+                        if (this.historialRemisiones.length === 0) {
+                            // Opcional: Avisar si no hay datos
+                            // alert("No se encontraron remisiones registradas.");
+                        }
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("❌ Error al cargar historial: " + e);
+                    })
+                    .obtenerHistorialRemisiones();
+            },
+
             cargarCobranzas() {
                 this.vistaActual = 'cobranzas';
                 this.cargando = true;
