@@ -100,7 +100,45 @@
 </head>
 <body>
     <div id="app">
-      
+      <div class="modal fade" id="modalDetalle" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Detalle de la Operación</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <table class="table table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Producto</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-end">Precio</th>
+                            <th class="text-end pe-3">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="it in itemsDetalle" :key="it.producto">
+                            <td class="ps-3">{{ it.producto }}</td>
+                            <td class="text-center">{{ it.cantidad }}</td>
+                            <td class="text-end">{{ formatoMoneda(it.precio) }}</td>
+                            <td class="text-end pe-3 fw-bold">{{ formatoMoneda(it.subtotal) }}</td>
+                        </tr>
+                        
+                        <tr v-if="itemsDetalle.length === 0">
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                <i class="bi bi-info-circle me-1"></i> No hay items para mostrar o está cargando...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer bg-light py-1">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div v-if="cargando" class="loading-overlay">
         <div class="spinner-border text-brand mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
         <div class="text-muted fw-bold">Procesando...</div>
@@ -193,7 +231,22 @@
                         </div>
                     </div>
                         <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3"><div class="card-body bg-light"><form @submit.prevent="agregarAlCarritoVenta"><div class="row g-2 align-items-end"><div class="col-md-6"><label class="form-label small fw-bold">Producto</label><select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta"><option value="" disabled>🔍 Buscar producto...</option><option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">{{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}</option></select></div><div class="col-md-2 col-4"><label class="form-label small">Cantidad</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required></div><div class="col-md-2 col-8"><label class="form-label small">Precio Unit.</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.precio" min="0" required></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand btn-lg fw-bold"><i class="bi bi-cart-plus"></i></button></div></div></form></div></div>
-                        <div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0 table-striped"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoVenta" :key="index"><td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.precio) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button></td></tr><tr v-if="carritoVenta.length === 0"><td colspan="5" class="text-center py-5 text-muted">Carrito vacío</td></tr></tbody><tfoot v-if="carritoVenta.length > 0"><tr class="bg-brand text-white"><td colspan="3" class="text-end fw-bold fs-5 pt-3 border-0">TOTAL A PAGAR:</td><td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td><td class="border-0"></td></tr></tfoot></table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button><button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i> COBRAR</button></div></div>
+                        <div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0 table-striped"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoVenta" :key="index"><td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.precio) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button></td></tr><tr v-if="carritoVenta.length === 0"><td colspan="5" class="text-center py-5 text-muted">Carrito vacío</td></tr></tbody>
+                        <tfoot v-if="carritoVenta.length > 0">
+                          <tr class="text-muted small">
+                              <td colspan="3" class="text-end border-0 pt-3">Liquidación IVA:</td>
+                              <td class="text-end border-0 pt-3">{{ formatoMoneda(totalIVA) }}</td>
+                              <td class="border-0"></td>
+                          </tr>
+
+                          <tr class="bg-brand text-white">
+                              <td colspan="3" class="text-end fw-bold fs-5 border-0">TOTAL A PAGAR:</td>
+                              <td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td>
+                              <td class="border-0"></td>
+                          </tr>
+                      </tfoot>
+                        </tfoot>
+                        </table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button><button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i> COBRAR</button></div></div>
                     </div>
 
                     <div v-if="subVistaVentas === 'historial'">
@@ -786,27 +839,64 @@
                                                 <label class="form-label text-secondary small fw-bold">Nombre del Producto</label>
                                                 <input type="text" class="form-control" v-model="formProducto.nombre" required>
                                             </div>
-                                            <div class="row g-2">
-                                                <div class="col-6">
-                                                    <label class="form-label text-secondary small fw-bold">SKU / Código</label>
-                                                    <input type="text" class="form-control" v-model="formProducto.sku" required>
-                                                </div>
-                                                <div class="col-6">
-                                                    <label class="form-label text-secondary small fw-bold">Precio Venta</label>
-                                                    <input type="number" class="form-control" v-model="formProducto.precio_venta_base" required>
-                                                </div>
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-6">
+                                                <label class="form-label text-secondary small fw-bold">SKU / Código</label>
+                                                <input type="text" class="form-control" v-model="formProducto.sku" required>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label text-secondary small fw-bold">Precio Base</label>
+                                                <input type="number" class="form-control" v-model="formProducto.precio_venta_base" required>
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-2 mt-2 bg-light p-2 rounded border">
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold text-dark">Tasa IVA %</label>
+                                                <select class="form-select form-select-sm" v-model="formProducto.impuesto_iva">
+                                                    <option value="10">10%</option>
+                                                    <option value="5">5%</option>
+                                                    <option value="0">Exenta</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold text-dark">Método</label>
+                                                <select class="form-select form-select-sm" v-model="formProducto.metodo_iva">
+                                                    <option value="INCLUIDO">IVA Incluido</option>
+                                                    <option value="EXCLUIDO">IVA Excluido (+)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-12 text-end">
+                                                <small class="text-muted" v-if="formProducto.metodo_iva === 'EXCLUIDO'">
+                                                    Precio Final en Caja: <strong>{{ formatoMoneda(formProducto.precio_venta_base * (1 + (formProducto.impuesto_iva/100))) }}</strong>
+                                                </small>
+                                                <small class="text-muted" v-else>
+                                                    El precio de lista ya incluye el impuesto.
+                                                </small>
+                                            </div>
+                                        </div>
                                             </div>
                                             <div class="row g-2 mt-2">
-                                                <div class="col-6">
+                                                <div class="col-4">
                                                     <label class="form-label text-secondary small fw-bold">Categoría</label>
                                                     <select class="form-select" v-model="formProducto.id_categoria" required>
                                                         <option v-for="c in listaCategorias" :value="c.id_categoria">{{c.nombre}}</option>
                                                     </select>
                                                 </div>
-                                                <div class="col-6">
+                                                <div class="col-4">
                                                     <label class="form-label text-secondary small fw-bold">Stock Mínimo</label>
                                                     <input type="number" class="form-control" v-model="formProducto.stock_minimo">
                                                 </div>
+                                                <div class="col-4">
+                                                  <label class="form-label text-secondary small fw-bold">Unidad de Medida</label>
+                                                  <select class="form-select" v-model="formProducto.unidad_medida">
+                                                      <option value="Unidad">Unidad</option>
+                                                      <option value="Caja">Caja</option>
+                                                      <option value="Kg">Kg</option>
+                                                      <option value="Litro">Litro</option>
+                                                      <option value="Metro">Metro</option>
+                                                  </select>
+                                              </div>
                                             </div>
                                         </div>
                                     </div>
@@ -816,7 +906,7 @@
                             <div v-if="camposExtraProducto.length > 0" class="card border-0 shadow-sm mb-3">
                                 <div class="card-body">
                                     <div class="row g-3">
-                                        <div class="col-md-6" v-for="campo in camposExtraProducto" :key="campo.id_campo">
+                                        <div class="col-md-4" v-for="campo in camposExtraProducto" :key="campo.id_campo">
                                             <label class="form-label text-secondary small fw-bold mb-1">{{ campo.etiqueta_visible }}</label>
                                             
                                             <select v-if="campo.tipo_dato === 'select'" class="form-select" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
@@ -829,8 +919,7 @@
                                     </div>
                                 </div>
                             </div>
-
-                            <button type="submit" class="btn btn-brand w-100 py-2 fw-bold">Guardar</button>
+                            <button type="button" class="btn btn-brand w-100 py-2 fw-bold" @click="procesarGuardadoProducto"><i class="bi bi-save me-2"></i> Guardar </button>
                         </form>
                     </div>
                   </div>
@@ -838,61 +927,58 @@
               </div>
       
       <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
-              <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                  <div class="modal-header bg-brand text-white">
-                    <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Proveedor</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                  </div>
-                  <div class="modal-body bg-light">
-                      <form @submit.prevent="guardarProveedor">
-                          <div class="card border-0 shadow-sm mb-3">
-                              <div class="card-body">
-                                  <div class="mb-3">
-                                      <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
-                                      <input type="text" class="form-control" v-model="formProveedor.razon_social" required placeholder="Nombre de la empresa">
-                                  </div>
-                                  <div class="row mb-3">
-                                      <div class="col-6">
-                                          <label class="form-label fw-bold">Documento</label>
-                                          <input type="text" class="form-control" v-model="formProveedor.doc_identidad" required placeholder="RUC / CI">
-                                      </div>
-                                      <div class="col-6">
-                                          <label class="form-label fw-bold">Contacto</label>
-                                          <input type="text" class="form-control" v-model="formProveedor.contacto" placeholder="Teléfono / Email">
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header bg-brand text-white">
+                  <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Proveedor</h5>
+                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <form @submit.prevent="guardarProveedor">
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" v-model="formProveedor.razon_social" required placeholder="Nombre de la empresa">
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label fw-bold">Documento</label>
+                                        <input type="text" class="form-control" v-model="formProveedor.doc_identidad" required placeholder="RUC / CI">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label fw-bold">Contacto</label>
+                                        <input type="text" class="form-control" v-model="formProveedor.contacto" placeholder="Teléfono / Email">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                          <div v-if="camposExtraProveedor.length > 0" class="card border-0 shadow-sm mb-3">
-                              <div class="card-body">
-                                  <div class="row g-2">
-                                      <div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
-                                          <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
-                                          
-                                          <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                              <option value="">Seleccionar...</option>
-                                              <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
-                                          </select>
-                                          
-                                          <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
+                        <div v-if="camposExtraProveedor.length > 0" class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
+                                        <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
+                                        
+                                        <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                            <option value="">Seleccionar...</option>
+                                            <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
+                                        </select>
+                                        
+                                        <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                          <div class="d-grid gap-2">
-                              <button type="submit" class="btn btn-brand fw-bold">Guardar</button>
-                          </div>
-                      </form>
-                  </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-brand fw-bold">Guardar</button>
+                        </div>
+                    </form>
                 </div>
               </div>
             </div>
-      
-      <div class="modal fade" id="modalDetalle" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-dark text-white"><h5>Detalle</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><table class="table mb-0"><thead><tr><th>Prod</th><th>Cant</th><th>Subtotal</th></tr></thead><tbody><tr v-for="it in itemsDetalle"><td>{{it.producto}}</td><td>{{it.cantidad}}</td><td>{{formatoMoneda(it.subtotal)}}</td></tr></tbody></table></div></div></div></div>
-
+        </div>
     </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -927,8 +1013,13 @@
             clientesDeudores: [],
             formCobro: { id_cliente:'', monto:0, metodo:'Efectivo', observacion:'', nombre: '', deuda_total: 0 },
             subVistaCobranzas: 'listado',
-
-            formProducto: { datos_adicionales:{} }, formCliente: { datos_adicionales:{} }, formProveedor: { datos_adicionales:{} },
+            formProducto: { 
+                nombre:'', sku:'', precio_venta_base:0, 
+                impuesto_iva: 10, metodo_iva: 'INCLUIDO', // <--- AGREGAR ESTO
+                datos_adicionales:{} 
+            },
+            formCliente: { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }, 
+            formProveedor: { razon_social:'', doc_identidad:'', contacto:'', datos_adicionales:{} },
             modoEdicion: false, archivoParaSubir: null, imagenPreview: null,
             modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
           }
@@ -937,7 +1028,25 @@
             camposExtraProducto() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'producto'); },
             camposExtraCliente() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'cliente'); },
             camposExtraProveedor() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'proveedor'); },
-            totalVenta() { return this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio), 0); },
+            totalVenta() { return this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio_final), 0); },
+            totalIVA() {
+                return this.carritoVenta.reduce((acc, item) => {
+                    // Precio Final es lo que paga el cliente
+                    const totalLinea = item.cantidad * item.precio_final;
+                    const tasa = Number(item.tasa_iva);
+                    
+                    if (tasa === 0) return acc;
+
+                    // FÓRMULA PARAGUAY (IVA INCLUIDO EN EL PRECIO FINAL)
+                    // IVA 10% = Precio / 11
+                    // IVA 5% = Precio / 21
+                    let montoIVA = 0;
+                    if (tasa === 10) montoIVA = totalLinea / 11;
+                    if (tasa === 5) montoIVA = totalLinea / 21;
+                    
+                    return acc + montoIVA;
+                }, 0);
+            },
             totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); }
         },
         mounted() {
@@ -1196,13 +1305,119 @@
             eliminarProveedor(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else alert(r.error); }).eliminarProveedor(item.id_proveedor); },
 
             manejarArchivo(e) { const f = e.target.files[0]; if(!f) return; this.archivoParaSubir = f; const r = new FileReader(); r.onload = (e) => { this.imagenPreview = e.target.result; }; r.readAsDataURL(f); },
-            abrirModalProducto(item) { this.modoEdicion=!!item; this.archivoParaSubir=null; this.imagenPreview=null; this.formProducto = item ? JSON.parse(JSON.stringify(item)) : { nombre:'', sku:'', precio_venta_base:0, datos_adicionales:{} }; if(item && item.url_imagen) this.imagenPreview=item.url_imagen; if(!this.formProducto.datos_adicionales) this.formProducto.datos_adicionales={}; this.modalProd.show(); },
-            async procesarGuardadoProducto() { this.cargando=true; if(this.archivoParaSubir) { this.formProducto.url_imagen = await new Promise(r => { const reader = new FileReader(); reader.onload = e => google.script.run.withSuccessHandler(r).subirImagenDrive(e.target.result.split(',')[1], this.archivoParaSubir.name, this.archivoParaSubir.type); reader.readAsDataURL(this.archivoParaSubir); }); } const f = this.modoEdicion ? 'actualizarProducto' : 'guardarNuevoProducto'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalProd.hide(); this.cargarDatosIniciales();})[f](this.formProducto); },
+            abrirModalProducto(item) {
+                this.modoEdicion = !!item;
+                this.archivoParaSubir = null;
+                this.imagenPreview = null;
+                
+                if (item) {
+                    // MODO EDICIÓN: Copiamos el item
+                    this.formProducto = JSON.parse(JSON.stringify(item));
+                    
+                    // CORRECCIÓN IMPORTANTE: Si es un producto viejo sin datos de IVA, poner defaults
+                    if (this.formProducto.impuesto_iva === undefined) this.formProducto.impuesto_iva = 10;
+                    if (!this.formProducto.metodo_iva) this.formProducto.metodo_iva = 'INCLUIDO';
+                    
+                    // Cargar previsualización de imagen si existe
+                    if (this.formProducto.url_imagen) this.imagenPreview = this.formProducto.url_imagen;
+                } else {
+                    // MODO NUEVO
+                    this.formProducto = { 
+                        nombre: '', sku: '', precio_venta_base: 0, 
+                        impuesto_iva: 10, metodo_iva: 'INCLUIDO', // Defaults
+                        datos_adicionales: {} 
+                    };
+                }
+
+                // Asegurar que datos_adicionales exista
+                if (!this.formProducto.datos_adicionales) this.formProducto.datos_adicionales = {};
+                
+                this.modalProd.show();
+            },
+            async procesarGuardadoProducto() {
+                // Validación básica HTML5 (por si el navegador no la atrapa)
+                if (!this.formProducto.nombre || !this.formProducto.sku || !this.formProducto.precio_venta_base) {
+                    return alert("Por favor completa los campos obligatorios.");
+                }
+
+                this.cargando = true;
+
+                // Subida de imagen (si aplica)
+                if (this.archivoParaSubir) {
+                    try {
+                        this.formProducto.url_imagen = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = e => {
+                                google.script.run
+                                    .withSuccessHandler(url => resolve(url))
+                                    .withFailureHandler(err => reject(err))
+                                    .subirImagenDrive(e.target.result.split(',')[1], this.archivoParaSubir.name, this.archivoParaSubir.type);
+                            };
+                            reader.onerror = error => reject(error);
+                            reader.readAsDataURL(this.archivoParaSubir);
+                        });
+                    } catch (e) {
+                        this.cargando = false;
+                        return alert("Error subiendo imagen: " + e);
+                    }
+                }
+
+                const funcionBackend = this.modoEdicion ? 'actualizarProducto' : 'guardarNuevoProducto';
+
+                // 👇 1. TRUCO DE MAGIA: Convertimos el objeto Vue a un objeto puro de Javascript
+                // Esto elimina los "Proxies" que bloquean a Google Script
+                const productoLimpio = JSON.parse(JSON.stringify(this.formProducto));
+
+                console.log("Enviando al servidor:", productoLimpio); // Míralo en la consola para asegurar
+
+                google.script.run
+                    .withSuccessHandler((res) => {
+                        this.cargando = false;
+                        if (res && res.error) {
+                            alert("Error del sistema: " + res.error);
+                        } else {
+                            this.modalProd.hide();
+                            this.cargarDatosIniciales();
+                            alert("✅ Producto guardado correctamente");
+                        }
+                    })
+                    .withFailureHandler(error => {
+                        this.cargando = false;
+                        alert("❌ Error CRÍTICO: " + error);
+                    })
+                    [funcionBackend](productoLimpio); // <--- Enviamos la copia limpia
+            },
             eliminarProducto(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else alert(r.error); }).eliminarProducto(item.id_producto); },
 
             // TRANSACCIONES
-            alSeleccionarProductoVenta() { const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); if(p) this.lineaVenta.precio = p.precio_venta_base; },
-            agregarAlCarritoVenta() { const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); if(!p || this.lineaVenta.cantidad > p.stock_actual) return alert("Stock insuficiente"); this.carritoVenta.push({...this.lineaVenta}); this.lineaVenta={id_producto:'', cantidad:1, precio:0}; },
+            alSeleccionarProductoVenta() { 
+                const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); 
+                if(p) {
+                    // CÁLCULO DE PRECIO AUTOMÁTICO
+                    let precioFinal = Number(p.precio_venta_base);
+                    
+                    // Si el producto es "IVA EXCLUIDO", le sumamos el impuesto para cobrarle al cliente
+                    if (p.metodo_iva === 'EXCLUIDO') {
+                        precioFinal = precioFinal * (1 + (Number(p.impuesto_iva) / 100));
+                    }
+                    
+                    this.lineaVenta.precio = precioFinal; // Precio unitario final a cobrar
+                } 
+            },
+
+            agregarAlCarritoVenta() { 
+                const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); 
+                if(!p || this.lineaVenta.cantidad > p.stock_actual) return alert("Stock insuficiente"); 
+                
+                this.carritoVenta.push({
+                    ...this.lineaVenta,
+                    precio_final: this.lineaVenta.precio, // Precio cobrado
+                    tasa_iva: p.impuesto_iva || 10,       // Guardamos la tasa para calcular totales luego
+                    nombre_prod: p.nombre                 // Útil para ticket
+                });
+                
+                this.lineaVenta={id_producto:'', cantidad:1, precio:0}; 
+            },
             quitarDelCarritoVenta(i) { this.carritoVenta.splice(i,1); },
             limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
 
@@ -1243,11 +1458,29 @@
                 })
                 .guardarVenta(paquete);
             },
-
+            verDetalleVenta(h) {
+                console.log("🔍 Buscando venta:", h.id_venta);
+                this.itemsDetalle = []; // Limpiar lista
+                this.modalDetalle.show();
+                
+                google.script.run
+                    .withSuccessHandler(r => {
+                        console.log("📦 Datos recibidos:", r);
+                        if (!r || r.length === 0) {
+                            // Mensaje visual si no hay datos
+                            this.itemsDetalle = []; // Dejamos vacío para que el v-if del HTML muestre "No hay items"
+                        } else {
+                            this.itemsDetalle = r;
+                        }
+                    })
+                    .withFailureHandler(e => {
+                        alert("Error al cargar detalle: " + e);
+                        this.itemsDetalle = [];
+                    })
+                    .obtenerDetalleVenta(h.id_venta);
+            },
             cargarHistorialVentas() { this.subVistaVentas='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialVentas=r||[]; this.cargando=false;}).obtenerHistorialVentas(); },
             anularVenta(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorialVentas(); this.cargarDatosIniciales();}).anularVenta(h.id_venta); },
-            verDetalleVenta(h) { this.itemsDetalle=[]; this.modalDetalle.show(); google.script.run.withSuccessHandler(r=>this.itemsDetalle=r).obtenerDetalleVenta(h.id_venta); },
-
             agregarAlCarrito() { this.carritoCompra.push({...this.lineaTemp}); this.lineaTemp={id_producto:'', cantidad:'', costo:''}; },
             quitarDelCarrito(i) { this.carritoCompra.splice(i,1); },
             limpiarCarrito() { this.carritoCompra=[]; this.formCompra={id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: ''}; },
@@ -1279,10 +1512,23 @@
                 })
                 .guardarCompraCompleta(pkg); 
             },
-
+            verDetalleCompra(h) {
+                console.log("🔍 Buscando compra:", h.id_compra);
+                this.itemsDetalle = []; 
+                this.modalDetalle.show(); 
+                
+                google.script.run
+                    .withSuccessHandler(r => {
+                        console.log("📦 Datos recibidos:", r);
+                        this.itemsDetalle = r || [];
+                    })
+                    .withFailureHandler(e => {
+                        alert("Error al cargar detalle: " + e);
+                    })
+                    .obtenerDetalleCompra(h.id_compra);
+            },
             cargarHistorial() { this.subVistaCompras='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialCompras=r||[]; this.cargando=false;}).obtenerHistorialCompras(); },
-            anularCompra(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorial(); this.cargarDatosIniciales();}).anularCompra(h.id_compra); },
-            verDetalleCompra(h) { this.itemsDetalle=[]; this.modalDetalle.show(); google.script.run.withSuccessHandler(r=>this.itemsDetalle=r).obtenerDetalleCompra(h.id_compra); }
+            anularCompra(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorial(); this.cargarDatosIniciales();}).anularCompra(h.id_compra); }
         }
       }).mount('#app');
     </script>

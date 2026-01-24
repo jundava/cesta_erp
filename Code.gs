@@ -59,75 +59,75 @@ function getData(sheetName) {
  * @param {Object} producto - Objeto JSON enviado desde Vue.js
  */
 function guardarNuevoProducto(producto) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
   const ws = ss.getSheetByName('PRODUCTOS');
   
-  // 1. Generar ID Único (UUID)
   const idUnico = Utilities.getUuid();
   
-  // 2. Preparar el JSON de datos adicionales
-  // Convertimos el objeto {peso: "10kg", color: "rojo"} a texto stringify
-  const jsonAdicionales = JSON.stringify(producto.datos_adicionales || {});
-  
-  // 3. Crear la fila (El orden debe coincidir EXACTAMENTE con tus columnas)
-  // ["id_producto", "sku", "nombre", "id_categoria", "unidad_medida", "precio_venta_base", "costo_promedio", "stock_minimo", "impuesto_iva", "maneja_stock", "datos_adicionales"]
-  
+  // Orden EXACTO según tu archivo CSV PRODUCTOS:
+  // 1.id, 2.sku, 3.nombre, 4.cat, 5.unidad, 6.precio, 7.costo, 8.min, 9.iva, 10.maneja, 11.json, 12.img, 13.stock, 14.metodo
   const nuevaFila = [
-    idUnico,
-    producto.sku,
-    producto.nombre,
-    producto.id_categoria,
-    producto.unidad_medida,
-    producto.precio_venta_base,
-    0, // Costo promedio inicial (0 hasta que compres)
-    producto.stock_minimo,
-    producto.impuesto_iva,
-    producto.maneja_stock,
-    jsonAdicionales // Aquí va el JSON guardado como texto
+    idUnico,                        // A: id_producto
+    producto.sku,                   // B: sku
+    producto.nombre,                // C: nombre
+    producto.id_categoria,          // D: id_categoria
+    producto.unidad_medida,         // E: unidad_medida
+    producto.precio_venta_base,     // F: precio_venta_base
+    0,                              // G: costo_promedio (inicial 0)
+    producto.stock_minimo,          // H: stock_minimo
+    producto.impuesto_iva || 10,    // I: impuesto_iva
+    producto.maneja_stock || 'True',// J: maneja_stock
+    JSON.stringify(producto.datos_adicionales || {}), // K: datos_adicionales
+    producto.url_imagen || "",      // L: url_imagen
+    0,                              // M: stock_actual (inicial 0)
+    producto.metodo_iva || 'INCLUIDO' // N: metodo_iva (Aquí tenías el error de variable indefinida)
   ];
   
-  // 4. Guardar
   ws.appendRow(nuevaFila);
-  
   return { status: 'ok', id: idUnico };
 }
-
 /**
  * Actualiza un producto existente
  */
 function actualizarProducto(producto) {
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const sheet = ss.getSheetByName('PRODUCTOS');
-  const data = sheet.getDataRange().getValues();
+  const ws = ss.getSheetByName('PRODUCTOS');
+  const data = ws.getDataRange().getValues();
   
-  // 1. Buscar en qué fila está el ID del producto (empezamos en fila 1 porque la 0 es cabecera)
-  // map(r => r[0]) asume que la columna A es el id_producto
+  // Buscamos el índice del producto
   const ids = data.map(r => r[0]);
-  const filaIndex = ids.indexOf(producto.id_producto); // Devuelve el índice (0, 1, 2...)
+  const index = ids.indexOf(producto.id_producto);
   
-  if (filaIndex === -1) throw new Error("Producto no encontrado");
+  if (index === -1) throw new Error("Producto no encontrado");
 
-  // 2. Preparar los datos (igual que al crear)
-  const jsonAdicionales = JSON.stringify(producto.datos_adicionales || {});
+  const fila = index + 1; // +1 porque Apps Script cuenta filas desde 1
   
-  // 3. Sobrescribir celdas específicas
-  // Nota: getRange usa índices base 1. La fila es filaIndex + 1
-  const filaReal = filaIndex + 1;
+  // Actualizamos datos básicos
+  ws.getRange(fila, 2).setValue(producto.sku);           // Col B
+  ws.getRange(fila, 3).setValue(producto.nombre);        // Col C
+  ws.getRange(fila, 4).setValue(producto.id_categoria);  // Col D
+  ws.getRange(fila, 5).setValue(producto.unidad_medida); // Col E
+  ws.getRange(fila, 6).setValue(producto.precio_venta_base); // Col F
+  ws.getRange(fila, 8).setValue(producto.stock_minimo);  // Col H
   
-  // Orden de columnas: [id, sku, nombre, id_cat, unidad, precio, costo, stock_min, iva, maneja, datos]
-  // Empezamos en columna 2 (SKU) hasta la última
-  sheet.getRange(filaReal, 2).setValue(producto.sku);
-  sheet.getRange(filaReal, 3).setValue(producto.nombre);
-  sheet.getRange(filaReal, 4).setValue(producto.id_categoria);
-  sheet.getRange(filaReal, 5).setValue(producto.unidad_medida);
-  sheet.getRange(filaReal, 6).setValue(producto.precio_venta_base);
-  // La columna 7 (Costo) NO la tocamos aquí, se actualiza por compras
-  sheet.getRange(filaReal, 8).setValue(producto.stock_minimo);
-  sheet.getRange(filaReal, 11).setValue(jsonAdicionales); // Columna 11 es datos_adicionales
+  // --- ACTUALIZACIÓN DE NUEVOS CAMPOS ---
+  
+  // Columna I (9) -> Impuesto IVA
+  ws.getRange(fila, 9).setValue(producto.impuesto_iva); 
+  
+  // Columna K (11) -> JSON Datos Adicionales
+  ws.getRange(fila, 11).setValue(JSON.stringify(producto.datos_adicionales || {}));
+  
+  // Columna L (12) -> Imagen (Solo actualizamos si hay una nueva URL)
+  if (producto.url_imagen) {
+    ws.getRange(fila, 12).setValue(producto.url_imagen); 
+  }
+  
+  // Columna N (14) -> Método IVA (Corregido: antes intentabas escribir "metodo_iva" sin "producto.")
+  ws.getRange(fila, 14).setValue(producto.metodo_iva); 
   
   return { status: 'actualizado' };
 }
-
 /**
  * Elimina un producto SOLO si no tiene historial
  */
@@ -170,10 +170,6 @@ function eliminarProducto(idProducto) {
   }
 }
 
-// ==========================================
-// SECCIÓN PROVEEDORES
-// ==========================================
-
 function guardarNuevoProveedor(form) {
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
   const ws = ss.getSheetByName('PROVEEDORES');
@@ -192,16 +188,6 @@ function guardarNuevoProveedor(form) {
   return { status: 'ok', id: idUnico };
 }
 
-/**
- * Sube una imagen a Google Drive y devuelve la URL pública
- * @param {string} data - Base64 de la imagen
- * @param {string} nombre - Nombre del archivo
- * @param {string} tipo - MimeType (ej: image/jpeg)
- */
-/**
- * Sube una imagen a Google Drive y devuelve la URL pública
- * VERSIÓN CORREGIDA
- */
 function subirImagenDrive(data, nombre, tipo) {
   try {
     // 1. Buscamos (o creamos) la carpeta "Cesta_Imagenes"
@@ -231,71 +217,6 @@ function subirImagenDrive(data, nombre, tipo) {
   } catch (e) {
     throw new Error("Error subiendo imagen: " + e.toString());
   }
-}
-
-// IMPORTANTE: Actualizar las funciones de guardado para incluir la columna url_imagen
-// Reemplaza tus funciones anteriores de PRODUCTOS por estas versiones actualizadas:
-
-function guardarNuevoProducto(producto) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const ws = ss.getSheetByName('PRODUCTOS');
-  const idUnico = Utilities.getUuid();
-  
-  const nuevaFila = [
-    idUnico,
-    producto.sku,
-    producto.nombre,
-    producto.id_categoria,
-    producto.unidad_medida,
-    producto.precio_venta_base,
-    0, 
-    producto.stock_minimo,
-    producto.impuesto_iva,
-    producto.maneja_stock,
-    JSON.stringify(producto.datos_adicionales || {}),
-    producto.url_imagen || "" // <--- NUEVA COLUMNA (Índice 11)
-  ];
-  
-  ws.appendRow(nuevaFila);
-  return { status: 'ok', id: idUnico };
-}
-
-function actualizarProducto(producto) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const ws = ss.getSheetByName('PRODUCTOS');
-  const data = ws.getDataRange().getValues();
-  const ids = data.map(r => r[0]);
-  const index = ids.indexOf(producto.id_producto);
-  
-  if (index === -1) throw new Error("Producto no encontrado");
-
-  const fila = index + 1;
-  
-  // Actualizamos campos existentes
-  ws.getRange(fila, 2).setValue(producto.sku);
-  ws.getRange(fila, 3).setValue(producto.nombre);
-  ws.getRange(fila, 4).setValue(producto.id_categoria);
-  ws.getRange(fila, 5).setValue(producto.unidad_medida);
-  ws.getRange(fila, 6).setValue(producto.precio_venta_base);
-  ws.getRange(fila, 8).setValue(producto.stock_minimo);
-  ws.getRange(fila, 11).setValue(JSON.stringify(producto.datos_adicionales || {}));
-  
-  // NUEVO: Actualizar imagen solo si viene una nueva URL (si no, no tocamos lo que había)
-  if (producto.url_imagen) {
-    ws.getRange(fila, 12).setValue(producto.url_imagen); // Columna L es la 12
-  }
-  
-  return { status: 'actualizado' };
-}
-
-function FORZAR_PERMISOS() {
-  // 1. Creamos un archivo temporal para obligar a pedir permiso de ESCRITURA
-  var archivo = DriveApp.createFile("archivo_temporal_borrame.txt", "Hola, estoy activando permisos");
-  
-  // 2. Lo borramos inmediatamente (solo lo queríamos para la autorización)
-  archivo.setTrashed(true);
-  
-  console.log("✅ ¡Permisos de ESCRITURA concedidos correctamente!");
 }
 
 // ==========================================
@@ -404,12 +325,6 @@ function guardarCompraCompleta(compra) {
   return { success: true, pdf_url: urlPdf };
 }
 
-/**
- * Obtiene el historial de compras de forma segura y robusta
- */
-/**
- * Obtiene el historial de compras con formato para la vista
- */
 function obtenerHistorialCompras() {
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
   const hoja = ss.getSheetByName('COMPRAS_CABECERA');
@@ -526,13 +441,11 @@ function guardarVenta(venta) {
     const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
     const saldoInicial = esCredito ? venta.total : 0;
 
-    // Obtener nombres para validación de stock
+    // Obtener nombres para validación de stock y PDF
     const datosProd = sheetProd.getDataRange().getValues();
     const mapaNombres = {};
-    const mapaSKU = {}; // Útil para el PDF
     for(let i=1; i<datosProd.length; i++) {
-        mapaNombres[datosProd[i][0]] = datosProd[i][2];
-        mapaSKU[datosProd[i][0]] = datosProd[i][1];
+        mapaNombres[datosProd[i][0]] = datosProd[i][2]; // Columna 2 es Nombre
     }
 
     // Verificar Stock
@@ -544,11 +457,11 @@ function guardarVenta(venta) {
       }
     }
 
-    // 2. Generación de Datos para PDF y BD
+    // 2. Generación de Datos
     const idVenta = Utilities.getUuid();
-    const fecha = new Date(venta.fecha); // Usar la fecha del formulario
+    const fecha = new Date(venta.fecha); 
     
-    // Calcular Número de Factura (Auto-incremental si no viene)
+    // Calcular Número de Factura (Auto-incremental si no viene manual)
     let nroFacturaFinal = venta.nro_factura;
     if (!nroFacturaFinal) {
        const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
@@ -562,65 +475,135 @@ function guardarVenta(venta) {
     // Buscar datos del cliente para el PDF
     let nombreCli = "Cliente Ocasional";
     let docCli = "X";
+    let dirCli = "";
     const dataCli = sheetCli.getDataRange().getValues();
     for(let i=1; i<dataCli.length; i++){
         if(dataCli[i][0] == venta.id_cliente){
             nombreCli = dataCli[i][1];
             docCli = dataCli[i][2];
+            dirCli = dataCli[i][5] || "";
             break;
         }
     }
 
-    // Generar PDF (Reintegrado)
-    const datosPDF = {
+    // ======================================================
+    // 3. CÁLCULOS FISCALES (IVA) Y GENERACIÓN HTML PARA PDF
+    // ======================================================
+    let totalGrabada10 = 0;
+    let totalGrabada5 = 0;
+    let totalExenta = 0;
+    let totalIVA10 = 0;
+    let totalIVA5 = 0;
+
+    // Generamos las filas de la tabla HTML
+    const htmlFilasItems = venta.items.map(it => {
+        const precioUnitario = Number(it.precio); // Este ya es el precio final (con iva si aplica)
+        const cantidad = Number(it.cantidad);
+        const subtotal = cantidad * precioUnitario;
+        const tasa = Number(it.tasa_iva || 10); // Viene del frontend, default 10
+        const nombreProducto = mapaNombres[it.id_producto] || "Producto";
+
+        // Acumuladores Fiscales
+        let montoIVA = 0;
+        if (tasa === 10) {
+            montoIVA = subtotal / 11;
+            totalGrabada10 += subtotal;
+            totalIVA10 += montoIVA;
+        } else if (tasa === 5) {
+            montoIVA = subtotal / 21;
+            totalGrabada5 += subtotal;
+            totalIVA5 += montoIVA;
+        } else {
+            totalExenta += subtotal;
+        }
+
+        // Retornamos la fila HTML para este item
+        return `
+        <tr>
+            <td style="padding:5px; border-bottom:1px solid #eee;">${nombreProducto} <small style="color:#666;">(${tasa}%)</small></td>
+            <td style="padding:5px; border-bottom:1px solid #eee; text-align:center;">${cantidad}</td>
+            <td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${precioUnitario.toLocaleString('es-PY')}</td>
+            <td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${subtotal.toLocaleString('es-PY')}</td>
+        </tr>`;
+    }).join('');
+
+    const totalGeneral = totalGrabada10 + totalGrabada5 + totalExenta;
+    const totalLiquidacionIVA = totalIVA10 + totalIVA5;
+
+    // Generamos el bloque de Totales HTML
+    const htmlBloqueTotales = `
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold; padding-top:10px;">Total Grabada (10%):</td>
+            <td style="text-align:right; padding-top:10px;">${Math.round(totalGrabada10).toLocaleString('es-PY')}</td>
+        </tr>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Total Grabada (5%):</td>
+            <td style="text-align:right;">${Math.round(totalGrabada5).toLocaleString('es-PY')}</td>
+        </tr>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Total Exenta:</td>
+            <td style="text-align:right;">${Math.round(totalExenta).toLocaleString('es-PY')}</td>
+        </tr>
+        <tr style="background-color:#f8f9fa;">
+            <td colspan="3" style="text-align:right; font-weight:bold; font-size:1.2em; padding:10px;">TOTAL A PAGAR:</td>
+            <td style="text-align:right; font-weight:bold; font-size:1.2em; padding:10px;">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td>
+        </tr>
+        <tr>
+            <td colspan="4" style="text-align:right; font-size:0.85em; color:#555; padding-top:5px; border-top: 1px solid #ccc;">
+                <strong>Liquidación del IVA:</strong> (5%): ${Math.round(totalIVA5).toLocaleString('es-PY')} &nbsp;|&nbsp; (10%): ${Math.round(totalIVA10).toLocaleString('es-PY')} &nbsp;|&nbsp; <strong>Total IVA: ${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')}</strong>
+            </td>
+        </tr>
+    `;
+
+    // Preparar objeto para el PDF
+    const datosParaPDF = {
         fecha: fecha.toLocaleDateString('es-PY'),
         nro_factura: nroFacturaFinal,
         cliente_nombre: nombreCli,
         cliente_doc: docCli,
-        cliente_dir: "", // Opcional si tienes dirección
-        total: venta.total,
-        estado: estadoVenta
+        cliente_dir: dirCli,
+        condicion: venta.condicion || "CONTADO",
+        // Pasamos el HTML pre-generado
+        html_items: htmlFilasItems,
+        html_totales: htmlBloqueTotales
     };
     
-    const itemsPDF = venta.items.map(it => ({
-        producto: mapaNombres[it.id_producto],
-        cantidad: it.cantidad,
-        precio: it.precio,
-        subtotal: it.cantidad * it.precio
-    }));
-
-    // Llamada a función auxiliar de PDF (Asegúrate de tener esta función o la lógica aquí)
+    // Llamada a función auxiliar de PDF
     let urlPdf = "";
     try {
-        urlPdf = crearPDFFactura(datosPDF, itemsPDF); // <--- Asumo que tienes esta función o similar
+        urlPdf = crearPDFFactura(datosParaPDF); 
     } catch(e) {
         urlPdf = "ERROR_PDF"; 
+        console.error(e);
     }
+    // ======================================================
 
-    // 3. Guardar Cabecera
+    // 4. Guardar Cabecera
     sheetCab.appendRow([
       idVenta,
       nroFacturaFinal,
       fecha,
       venta.id_cliente,
       depositoUsado,
-      venta.total,
-      estadoVenta,
+      totalGeneral, // Guardamos el total calculado fiscalmente por seguridad
+      estadoVenta, 
       urlPdf,
       venta.condicion || 'CONTADO', 
       saldoInicial                  
     ]);
 
-    // 4. Guardar Detalle y Movimientos
+    // 5. Guardar Detalle y Movimientos
     venta.items.forEach(item => {
+      // Guardamos la tasa de IVA en el detalle (columna IVA_APLICADO si existe, o Subtotal)
+      // Ajusta las columnas si es necesario, aquí uso el orden estándar
       sheetDet.appendRow([
           Utilities.getUuid(), 
           idVenta, 
           item.id_producto, 
           item.cantidad, 
-          item.precio, 
-          0, // IVA (puedes ajustar si lo manejas)
-          item.cantidad * item.precio
+          item.precio,  // Precio Unitario Final
+          item.tasa_iva || 10, // <--- Guardamos la TASA (10, 5, 0)
+          item.cantidad * item.precio // Subtotal
       ]);
       
       sheetMov.appendRow([
@@ -636,8 +619,6 @@ function guardarVenta(venta) {
       actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
     });
 
-    // 5. Retorno (CORREGIDO)
-    // Es vital devolver 'pdf_url' para que el frontend lo abra
     return { success: true, pdf_url: urlPdf };
 
   } catch (error) {
@@ -645,6 +626,51 @@ function guardarVenta(venta) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// --- FUNCIÓN AUXILIAR DE PDF ACTUALIZADA ---
+// (Asegúrate de tener esta o actualizar la tuya)
+function crearPDFFactura(datos) {
+  const folder = DriveApp.getFoldersByName("CESTA_FACTURAS").hasNext() ? DriveApp.getFoldersByName("CESTA_FACTURAS").next() : DriveApp.createFolder("CESTA_FACTURAS");
+  
+  // Usamos una plantilla HTML simple directa para evitar errores de archivos
+  let html = `
+    <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="border: 1px solid #333; padding: 20px;">
+          <h2 style="text-align:center; margin-bottom:5px;">FACTURA DE VENTA</h2>
+          <p style="text-align:center; margin-top:0;">Nro: <strong>${datos.nro_factura}</strong></p>
+          <hr>
+          <table style="width:100%; margin-bottom:10px;">
+            <tr><td><strong>Fecha:</strong> ${datos.fecha}</td> <td style="text-align:right;"><strong>Condición:</strong> ${datos.condicion}</td></tr>
+            <tr><td><strong>Cliente:</strong> ${datos.cliente_nombre}</td> <td style="text-align:right;"><strong>RUC/CI:</strong> ${datos.cliente_doc}</td></tr>
+            <tr><td colspan="2"><strong>Dirección:</strong> ${datos.cliente_dir}</td></tr>
+          </table>
+          
+          <table style="width:100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+              <tr style="background-color:#eee;">
+                <th style="border:1px solid #ddd; padding:5px; text-align:left;">Descripción</th>
+                <th style="border:1px solid #ddd; padding:5px;">Cant.</th>
+                <th style="border:1px solid #ddd; padding:5px; text-align:right;">Precio</th>
+                <th style="border:1px solid #ddd; padding:5px; text-align:right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${datos.html_items}
+            </tbody>
+            <tfoot>
+              ${datos.html_totales}
+            </tfoot>
+          </table>
+        </div>
+      </body>
+    </html>
+  `;
+  
+  const blob = Utilities.newBlob(html, "text/html", "Factura.html");
+  const pdf = blob.getAs("application/pdf").setName("Factura_" + datos.nro_factura + ".pdf");
+  return folder.createFile(pdf).getUrl();
 }
 
 // Función auxiliar para PDF (si no la tienes separada, agrégala aquí)
@@ -802,37 +828,51 @@ function actualizarProveedor(form) {
   throw new Error("Proveedor no encontrado");
 }
 
-// ==========================================
-// CONSULTA DE DETALLES (HISTORIAL)
-// ==========================================
+// =======================================================
+//  FUNCIONES DE DETALLE (VERIFICADAS CON TUS ARCHIVOS)
+// =======================================================
 
 function obtenerDetalleCompra(idCompra) {
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const hojaDet = ss.getSheetByName('COMPRAS_DETALLE');
+  const hojaDet = ss.getSheetByName('COMPRAS_DETALLE'); // Asegúrate que la hoja se llame así
   const hojaProd = ss.getSheetByName('PRODUCTOS');
-  
+
+  if (!hojaDet || !hojaProd) return [{ producto: "❌ Error: Falta hoja COMPRAS_DETALLE", cantidad: 0, subtotal: 0 }];
+
   const datosDet = hojaDet.getDataRange().getValues();
   const datosProd = hojaProd.getDataRange().getValues();
-  
-  // Mapa de productos: ID -> Nombre
+
+  // 1. Mapa de productos (Columna A=ID, Columna C=Nombre)
   const mapaProd = {};
   for(let i=1; i<datosProd.length; i++) {
-    mapaProd[datosProd[i][0]] = datosProd[i][2]; // Col 0=ID, Col 2=Nombre
+    const idP = String(datosProd[i][0]).trim();
+    mapaProd[idP] = datosProd[i][2]; 
   }
 
   const items = [];
-  // Estructura COMPRAS_DETALLE: [id_det, id_compra, id_prod, cant, costo, subtotal]
-  // Indices: 0, 1, 2, 3, 4, 5
+  const idBuscado = String(idCompra).trim();
+
+  // 2. Recorremos COMPRAS (Estructura de 6 columnas)
+  // [0:id_det, 1:id_compra, 2:id_prod, 3:cant, 4:costo, 5:subtotal]
   for(let i=1; i<datosDet.length; i++) {
-    if(datosDet[i][1] == idCompra) {
+    const row = datosDet[i];
+    const idEnFila = String(row[1]).trim(); // Columna B
+    
+    if(idEnFila === idBuscado) {
+      const idProd = String(row[2]).trim();
       items.push({
-        producto: mapaProd[datosDet[i][2]] || 'Producto eliminado',
-        cantidad: datosDet[i][3],
-        precio: datosDet[i][4],
-        subtotal: datosDet[i][5]
+        producto: mapaProd[idProd] || 'Producto desconocido',
+        cantidad: row[3], // Columna D
+        precio: row[4],   // Columna E
+        subtotal: row[5]  // Columna F (Subtotal)
       });
     }
   }
+  
+  if (items.length === 0) {
+     return [{ producto: "⚠️ (v5) No encontrado: " + idBuscado, cantidad: 0, precio: 0, subtotal: 0 }];
+  }
+
   return items;
 }
 
@@ -840,27 +880,43 @@ function obtenerDetalleVenta(idVenta) {
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
   const hojaDet = ss.getSheetByName('VENTAS_DETALLE');
   const hojaProd = ss.getSheetByName('PRODUCTOS');
-  
+
+  if (!hojaDet || !hojaProd) return [{ producto: "❌ Error: Falta hoja VENTAS_DETALLE", cantidad: 0, subtotal: 0 }];
+
   const datosDet = hojaDet.getDataRange().getValues();
   const datosProd = hojaProd.getDataRange().getValues();
-  
+
   const mapaProd = {};
   for(let i=1; i<datosProd.length; i++) {
-    mapaProd[datosProd[i][0]] = datosProd[i][2];
+    const idP = String(datosProd[i][0]).trim();
+    mapaProd[idP] = datosProd[i][2];
   }
 
   const items = [];
-  // Estructura VENTAS_DETALLE: [id_det, id_venta, id_prod, cant, precio, subtotal]
+  const idBuscado = String(idVenta).trim();
+
+  // 3. Recorremos VENTAS (Estructura de 7 columnas)
+  // [0:id_det, 1:id_venta, 2:id_prod, 3:cant, 4:precio, 5:iva, 6:subtotal]
   for(let i=1; i<datosDet.length; i++) {
-    if(datosDet[i][1] == idVenta) {
+    const row = datosDet[i];
+    const idEnFila = String(row[1]).trim(); // Columna B
+    
+    if(idEnFila === idBuscado) {
+      const idProd = String(row[2]).trim();
       items.push({
-        producto: mapaProd[datosDet[i][2]] || 'Producto eliminado',
-        cantidad: datosDet[i][3],
-        precio: datosDet[i][4],
-        subtotal: datosDet[i][5]
+        producto: mapaProd[idProd] || 'Producto desconocido',
+        cantidad: row[3], // Columna D
+        precio: row[4],   // Columna E
+        // ¡OJO! Aquí saltamos la columna 5 (IVA) y vamos a la 6 (Subtotal)
+        subtotal: row[6]  // Columna G (Subtotal)
       });
     }
   }
+  
+  if (items.length === 0) {
+     return [{ producto: "⚠️ (v5) No encontrado: " + idBuscado, cantidad: 0, precio: 0, subtotal: 0 }];
+  }
+
   return items;
 }
 
@@ -1498,30 +1554,6 @@ function obtenerProductosConStock() {
 // ==========================================
 
 /**
- * Obtiene toda la configuración general como un objeto { clave: valor }
- */
-function obtenerConfigGeneral() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  
-  if (!sheet) return {}; // Si no existe, devuelve objeto vacío
-
-  const datos = sheet.getDataRange().getValues();
-  const config = {};
-
-  // Empezamos en 0 para incluir todas las filas (clave, valor)
-  for (let i = 0; i < datos.length; i++) {
-    const clave = datos[i][0];
-    const valor = datos[i][1];
-    if (clave) {
-      config[clave] = valor;
-    }
-  }
-  
-  return config;
-}
-
-/**
  * Guarda o actualiza una configuración general
  */
 function guardarConfigGeneral(clave, valor) {
@@ -1863,19 +1895,5 @@ function registrarCobro(datos) {
   return { success: true };
 }
 
-function obtenerClientesMock() {
-  // Datos inventados para probar si el frontend funciona
-  const datosFalsos = [{
-    id_cliente: "TEST-001",
-    nombre: "CLIENTE DE PRUEBA (SI VES ESTO, EL FRONTEND FUNCIONA)",
-    doc: "1234567-8",
-    total_deuda: 500000,
-    facturas_pendientes: [
-      { id_venta: "v1", fecha: "23/01/2026", factura: "001-001-TEST", saldo: 500000, total_orig: 500000 }
-    ]
-  }];
-  
-  // Enviamos como texto JSON, igual que la función real
-  return JSON.stringify(datosFalsos);
-}
+
 
