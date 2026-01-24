@@ -924,7 +924,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
       
       <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
             <div class="modal-dialog modal-dialog-centered">
@@ -959,12 +958,10 @@
                                 <div class="row g-2">
                                     <div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
                                         <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
-                                        
                                         <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
                                             <option value="">Seleccionar...</option>
                                             <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
                                         </select>
-                                        
                                         <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
                                     </div>
                                 </div>
@@ -979,6 +976,7 @@
               </div>
             </div>
         </div>
+
     </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
