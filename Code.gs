@@ -231,98 +231,167 @@ function guardarCompraCompleta(compra) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
-  const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
-  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const sheetProv = ss.getSheetByName('PROVEEDORES');
-
-  // Obtener configuración
-  const config = obtenerConfigGeneral();
-  const depositoDestino = config['DEPOSITO_DEFAULT'] || "1";
-
-  // 1. CARGAR DATOS DE PRODUCTOS Y PROVEEDOR
-  const datosProd = sheetProd.getDataRange().getValues();
-  const mapaProd = {}; // ID -> {fila, stock, costo, nombre}
-  for (let i = 1; i < datosProd.length; i++) {
-    mapaProd[datosProd[i][0]] = { 
-      fila: i + 1, 
-      nombre: datosProd[i][2],
-      stock: Number(datosProd[i][12] || 0), // Col M (13) stock_actual
-      costo: Number(datosProd[i][6] || 0)   // Col G (7) costo_promedio
-    };
-  }
-
-  let nombreProv = "Proveedor General";
-  let docProv = "";
-  let contactoProv = "";
-  const datosProv = sheetProv.getDataRange().getValues();
-  for(let p=1; p<datosProv.length; p++){
-    if(datosProv[p][0] == compra.id_proveedor){
-      nombreProv = datosProv[p][1];
-      docProv = datosProv[p][2];
-      contactoProv = datosProv[p][3];
-      break;
-    }
-  }
-
-  // 2. GENERAR PDF
-  const itemsParaPDF = compra.items.map(item => ({
-    producto: mapaProd[item.id_producto] ? mapaProd[item.id_producto].nombre : "Producto Desconocido",
-    cantidad: item.cantidad,
-    costo: item.costo,
-    subtotal: item.cantidad * item.costo
-  }));
-
-  const datosParaPDF = {
-    proveedor_nombre: nombreProv,
-    proveedor_doc: docProv,
-    proveedor_contacto: contactoProv || '',
-    comprobante: compra.comprobante || 'S/N',
-    fecha: new Date(compra.fecha).toLocaleDateString('es-PY'),
-    estado: 'APROBADO',
-    total: compra.total
-  };
-
-  const urlPdf = crearPDFOrdenCompra(datosParaPDF, itemsParaPDF);
-
-  // 3. GUARDAR EN HOJAS
-  const idCompra = Utilities.getUuid();
-  
-  // Cabecera: id, fecha, id_prov, id_dep, total, estado, url_pdf
-  sheetCab.appendRow([
-    idCompra, 
-    compra.fecha, 
-    compra.id_proveedor, 
-    depositoDestino, // Deposito destino default
-    compra.total, 
-    "APROBADO", 
-    urlPdf
-  ]);
-
-  compra.items.forEach(item => {
-    // Detalle
-    sheetDet.appendRow([Utilities.getUuid(), idCompra, item.id_producto, item.cantidad, item.costo, item.cantidad * item.costo]);
+  try {
+    // ✅ CORRECCIÓN 1: Usar hoja activa para asegurar que escribe en este archivo
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    // Movimiento
-    sheetMov.appendRow([Utilities.getUuid(), compra.fecha, "ENTRADA_COMPRA", item.id_producto, depositoDestino, item.cantidad, idCompra]);
+    const sheetProd = ss.getSheetByName('PRODUCTOS');
+    const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
+    const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
+    const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+    const sheetProv = ss.getSheetByName('PROVEEDORES');
+    
+    // ✅ CORRECCIÓN 2: Declarar la hoja de existencias que faltaba
+    const sheetExistencias = ss.getSheetByName('STOCK_EXISTENCIAS');
 
-    // Actualizar Stock y PMP
-    const p = mapaProd[item.id_producto];
-    if (p) {
-      const nuevoStock = p.stock + Number(item.cantidad);
-      // PMP = ((StockActual * CostoActual) + (CantCompra * CostoCompra)) / NuevoStock
-      const valorTotal = (p.stock * p.costo) + (Number(item.cantidad) * Number(item.costo));
-      const nuevoCosto = valorTotal / nuevoStock;
+    // Obtener configuración
+    const config = obtenerConfigGeneral();
+    const depositoDestino = config['DEPOSITO_DEFAULT'] || "1";
 
-      sheetProd.getRange(p.fila, 13).setValue(nuevoStock); // Stock
-      sheetProd.getRange(p.fila, 7).setValue(nuevoCosto);  // Costo Promedio
+    // 1. CARGAR DATOS DE PRODUCTOS Y PROVEEDOR
+    const datosProd = sheetProd.getDataRange().getValues();
+    const mapaProd = {}; // ID -> {fila, stock, costo, nombre}
+    for (let i = 1; i < datosProd.length; i++) {
+      mapaProd[datosProd[i][0]] = { 
+        fila: i + 1, 
+        nombre: datosProd[i][2],
+        stock: Number(datosProd[i][12] || 0), // Col M (13) stock_actual
+        costo: Number(datosProd[i][6] || 0)   // Col G (7) costo_promedio
+      };
     }
-  });
 
-  lock.releaseLock();
-  return { success: true, pdf_url: urlPdf };
+    let nombreProv = "Proveedor General";
+    let docProv = "";
+    let contactoProv = "";
+    const datosProv = sheetProv.getDataRange().getValues();
+    for(let p=1; p<datosProv.length; p++){
+      if(String(datosProv[p][0]) == String(compra.id_proveedor)){
+        nombreProv = datosProv[p][1];
+        docProv = datosProv[p][2];
+        contactoProv = datosProv[p][3];
+        break;
+      }
+    }
+
+    // 2. GENERAR PDF
+    const itemsParaPDF = compra.items.map(item => ({
+      producto: mapaProd[item.id_producto] ? mapaProd[item.id_producto].nombre : "Producto Desconocido",
+      cantidad: item.cantidad,
+      costo: item.costo,
+      subtotal: item.cantidad * item.costo
+    }));
+
+    const datosParaPDF = {
+      proveedor_nombre: nombreProv,
+      proveedor_doc: docProv,
+      proveedor_contacto: contactoProv || '',
+      comprobante: compra.comprobante || 'S/N',
+      fecha: new Date(compra.fecha).toLocaleDateString('es-PY'),
+      estado: 'APROBADO',
+      total: compra.total
+    };
+
+    let urlPdf = "";
+    try {
+       urlPdf = crearPDFOrdenCompra(datosParaPDF, itemsParaPDF);
+    } catch(e) {
+       console.error("Error generando PDF: " + e);
+       urlPdf = "ERROR_PDF";
+    }
+
+    // 3. GUARDAR EN HOJAS
+    const idCompra = Utilities.getUuid();
+    
+    // Guardar Cabecera
+    sheetCab.appendRow([
+      idCompra, 
+      new Date(compra.fecha), // Asegurar formato fecha 
+      compra.id_proveedor, 
+      depositoDestino, 
+      compra.total, 
+      "APROBADO", 
+      urlPdf
+    ]);
+
+    // Cargar datos de existencias para no leer en cada iteración (Optimización)
+    const datosExistencias = sheetExistencias.getDataRange().getValues();
+
+    compra.items.forEach(item => {
+      const cantidad = Number(item.cantidad);
+      const costo = Number(item.costo);
+
+      // A. Guardar Detalle
+      sheetDet.appendRow([
+          Utilities.getUuid(), 
+          idCompra, 
+          item.id_producto, 
+          cantidad, 
+          costo, 
+          cantidad * costo
+      ]);
+      
+      // B. Guardar Movimiento (Esto ahora sí se verá reflejado)
+      sheetMov.appendRow([
+          Utilities.getUuid(), 
+          new Date(), 
+          "ENTRADA_COMPRA", 
+          item.id_producto, 
+          depositoDestino, 
+          cantidad, 
+          idCompra
+      ]);
+
+      // C. Actualizar Stock Global y PMP en PRODUCTOS
+      const p = mapaProd[item.id_producto];
+      if (p) {
+        const nuevoStockGlobal = p.stock + cantidad;
+        // PMP = ((StockActual * CostoActual) + (CantCompra * CostoCompra)) / NuevoStock
+        const valorTotal = (p.stock * p.costo) + (cantidad * costo);
+        const nuevoCosto = valorTotal / nuevoStockGlobal;
+
+        sheetProd.getRange(p.fila, 13).setValue(nuevoStockGlobal); // Stock Global
+        sheetProd.getRange(p.fila, 7).setValue(nuevoCosto);   // Costo Promedio
+      }
+
+      // ✅ D. ACTUALIZAR STOCK_EXISTENCIAS (Por Depósito) - Lógica Nueva
+      let encontrado = false;
+      for(let k=1; k<datosExistencias.length; k++){
+          // Si coincide Producto y Depósito
+          if(String(datosExistencias[k][1]) == String(item.id_producto) && 
+             String(datosExistencias[k][2]) == String(depositoDestino)) {
+              
+              const filaReal = k + 1;
+              const stockActualLocal = Number(datosExistencias[k][3] || 0);
+              const nuevoStockLocal = stockActualLocal + cantidad;
+              
+              // Actualizamos la celda específica
+              sheetExistencias.getRange(filaReal, 4).setValue(nuevoStockLocal); // Col 4: Cantidad
+              sheetExistencias.getRange(filaReal, 5).setValue(new Date());      // Col 5: Fecha Act.
+              encontrado = true;
+              break;
+          }
+      }
+
+      // Si no existía registro en ese depósito, creamos uno nuevo
+      if(!encontrado) {
+          sheetExistencias.appendRow([
+              Utilities.getUuid(),
+              item.id_producto,
+              depositoDestino,
+              cantidad,
+              new Date()
+          ]);
+      }
+
+    });
+
+    return { success: true, pdf_url: urlPdf };
+
+  } catch (error) {
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function obtenerHistorialCompras() {
@@ -424,7 +493,9 @@ function guardarVenta(venta) {
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   try {
-    const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+    // ✅ CORRECCIÓN 1: Usar hoja activa para evitar problemas de ID
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
     const sheetProd = ss.getSheetByName('PRODUCTOS');
     const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
     const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
@@ -441,44 +512,49 @@ function guardarVenta(venta) {
     const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
     const saldoInicial = esCredito ? venta.total : 0;
 
-    // Obtener nombres para validación de stock y PDF
+    // Obtener nombres
     const datosProd = sheetProd.getDataRange().getValues();
     const mapaNombres = {};
     for(let i=1; i<datosProd.length; i++) {
-        mapaNombres[datosProd[i][0]] = datosProd[i][2]; // Columna 2 es Nombre
+        mapaNombres[datosProd[i][0]] = datosProd[i][2]; 
     }
 
-    // Verificar Stock
-    for (let item of venta.items) {
-      const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
-      const nombreProd = mapaNombres[item.id_producto] || "Item";
-      if (stockDisponible < item.cantidad) {
-        throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
-      }
+    // ✅ CORRECCIÓN 2: NO validar stock si viene de remisión (porque ya se entregó)
+    if (!venta.es_desde_remision) {
+        for (let item of venta.items) {
+          const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
+          const nombreProd = mapaNombres[item.id_producto] || "Item";
+          if (stockDisponible < item.cantidad) {
+            throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
+          }
+        }
     }
 
     // 2. Generación de Datos
     const idVenta = Utilities.getUuid();
+    // Asegurar fecha correcta
     const fecha = new Date(venta.fecha); 
+    // Ajuste de zona horaria simple para que no reste un día
+    fecha.setHours(12,0,0,0); 
     
-    // Calcular Número de Factura (Auto-incremental si no viene manual)
+    // Auto-incremental
     let nroFacturaFinal = venta.nro_factura;
     if (!nroFacturaFinal) {
        const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
        const partes = ultimoNro.split('-');
+       // Logica simple: sumar 1 al final
        const nuevoSec = Number(partes[2]) + 1;
        nroFacturaFinal = `${partes[0]}-${partes[1]}-${String(nuevoSec).padStart(7, '0')}`;
-       // Actualizar config
        guardarConfigGeneral('ULTIMO_NRO_FACTURA', nroFacturaFinal);
     }
 
-    // Buscar datos del cliente para el PDF
+    // Buscar Cliente
     let nombreCli = "Cliente Ocasional";
     let docCli = "X";
     let dirCli = "";
     const dataCli = sheetCli.getDataRange().getValues();
     for(let i=1; i<dataCli.length; i++){
-        if(dataCli[i][0] == venta.id_cliente){
+        if(String(dataCli[i][0]) === String(venta.id_cliente)){
             nombreCli = dataCli[i][1];
             docCli = dataCli[i][2];
             dirCli = dataCli[i][5] || "";
@@ -486,16 +562,9 @@ function guardarVenta(venta) {
         }
     }
 
-    // ======================================================
-    // 3. CÁLCULOS FISCALES (IVA) Y GENERACIÓN HTML PARA PDF
-    // ======================================================
-    let totalGrabada10 = 0;
-    let totalGrabada5 = 0;
-    let totalExenta = 0;
-    let totalIVA10 = 0;
-    let totalIVA5 = 0;
+    // 3. Cálculos e HTML (Igual que antes)
+    let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0, totalIVA10 = 0, totalIVA5 = 0;
 
-    // Generamos las filas de la tabla HTML
     const htmlFilasItems = venta.items.map(it => {
         const precioUnitario = Number(it.precio); 
         const cantidad = Number(it.cantidad);
@@ -503,7 +572,6 @@ function guardarVenta(venta) {
         const tasa = Number(it.tasa_iva || 10); 
         const nombreProducto = mapaNombres[it.id_producto] || "Producto";
 
-        // Acumuladores Fiscales (Misma lógica que tenías, no cambia)
         let montoIVA = 0;
         if (tasa === 10) {
             montoIVA = subtotal / 11;
@@ -517,7 +585,6 @@ function guardarVenta(venta) {
             totalExenta += subtotal;
         }
 
-        // RETORNAMOS FILA CON CLASES CSS ESPECÍFICAS
         return `
         <tr class="item-row">
             <td class="col-desc">${nombreProducto}</td>
@@ -531,31 +598,15 @@ function guardarVenta(venta) {
     const totalGeneral = totalGrabada10 + totalGrabada5 + totalExenta;
     const totalLiquidacionIVA = totalIVA10 + totalIVA5;
 
-    // Generamos el bloque de Totales HTML
     const htmlBloqueTotales = `
-        <tr>
-            <td class="total-label">Total Exenta:</td>
-            <td>${Math.round(totalExenta).toLocaleString('es-PY')}</td>
-        </tr>
-        <tr>
-            <td class="total-label">Total IVA 5%:</td>
-            <td>${Math.round(totalGrabada5).toLocaleString('es-PY')}</td>
-        </tr>
-        <tr>
-            <td class="total-label">Total IVA 10%:</td>
-            <td>${Math.round(totalGrabada10).toLocaleString('es-PY')}</td>
-        </tr>
-        <tr>
-            <td class="total-label grand-total">TOTAL A PAGAR:</td>
-            <td class="grand-total">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td>
-        </tr>
-        <tr>
-            <td colspan="2" style="font-size: 9px; color: #777; padding-top: 5px;">
-                (Liq. IVA: 5%=${Math.round(totalIVA5).toLocaleString('es-PY')} | 10%=${Math.round(totalIVA10).toLocaleString('es-PY')} | Tot=${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')})
-            </td>
-        </tr>
+        <tr><td class="total-label">Total Exenta:</td><td>${Math.round(totalExenta).toLocaleString('es-PY')}</td></tr>
+        <tr><td class="total-label">Total IVA 5%:</td><td>${Math.round(totalGrabada5).toLocaleString('es-PY')}</td></tr>
+        <tr><td class="total-label">Total IVA 10%:</td><td>${Math.round(totalGrabada10).toLocaleString('es-PY')}</td></tr>
+        <tr><td class="total-label grand-total">TOTAL A PAGAR:</td><td class="grand-total">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td></tr>
+        <tr><td colspan="2" style="font-size: 9px; color: #777; padding-top: 5px;">(Liq. IVA: 5%=${Math.round(totalIVA5).toLocaleString('es-PY')} | 10%=${Math.round(totalIVA10).toLocaleString('es-PY')} | Tot=${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')})</td></tr>
     `;
-    // Preparar objeto para el PDF
+
+    // Generar PDF
     const datosParaPDF = {
         fecha: fecha.toLocaleDateString('es-PY'),
         nro_factura: nroFacturaFinal,
@@ -563,20 +614,17 @@ function guardarVenta(venta) {
         cliente_doc: docCli,
         cliente_dir: dirCli,
         condicion: venta.condicion || "CONTADO",
-        // Pasamos el HTML pre-generado
         html_items: htmlFilasItems,
         html_totales: htmlBloqueTotales
     };
     
-    // Llamada a función auxiliar de PDF
     let urlPdf = "";
     try {
         urlPdf = crearPDFFactura(datosParaPDF); 
     } catch(e) {
+        console.error("Error PDF: " + e);
         urlPdf = "ERROR_PDF"; 
-        console.error(e);
     }
-    // ======================================================
 
     // 4. Guardar Cabecera
     sheetCab.appendRow([
@@ -585,7 +633,7 @@ function guardarVenta(venta) {
       fecha,
       venta.id_cliente,
       depositoUsado,
-      totalGeneral, // Guardamos el total calculado fiscalmente por seguridad
+      totalGeneral,
       estadoVenta, 
       urlPdf,
       venta.condicion || 'CONTADO', 
@@ -594,40 +642,221 @@ function guardarVenta(venta) {
 
     // 5. Guardar Detalle y Movimientos
     venta.items.forEach(item => {
-      // Guardamos la tasa de IVA en el detalle (columna IVA_APLICADO si existe, o Subtotal)
-      // Ajusta las columnas si es necesario, aquí uso el orden estándar
+      // Guardar detalle siempre
       sheetDet.appendRow([
           Utilities.getUuid(), 
           idVenta, 
           item.id_producto, 
           item.cantidad, 
-          item.precio,  // Precio Unitario Final
-          item.tasa_iva || 10, // <--- Guardamos la TASA (10, 5, 0)
-          item.cantidad * item.precio // Subtotal
+          item.precio, 
+          item.tasa_iva || 10,
+          item.cantidad * item.precio 
       ]);
       
-      sheetMov.appendRow([
-          Utilities.getUuid(), 
-          new Date(), 
-          "SALIDA_VENTA", 
-          item.id_producto, 
-          depositoUsado, 
-          item.cantidad * -1, 
-          idVenta
-      ]);
+      // ✅ CORRECCIÓN 3: Descontar Stock SOLO si NO es remisión
+      if (!venta.es_desde_remision) { 
+          sheetMov.appendRow([
+              Utilities.getUuid(), 
+              new Date(), 
+              "SALIDA_VENTA", 
+              item.id_producto, 
+              depositoUsado, 
+              item.cantidad * -1, 
+              idVenta
+          ]);
+          // Actualizar caché visual
+          actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
+      }
+    });
 
-      if (!venta.es_desde_remision) {  // <--- AGREGAR ESTE IF
-            shMov.appendRow([
-                Utilities.getUuid(),
-                new Date(),
-                "SALIDA_VENTA",
-                item.id_producto,
-                venta.id_deposito, // Asegúrate de usar venta.id_deposito (lo pasaremos)
-                item.cantidad * -1,
-                idVenta
-            ]);
-            actualizarStockDeposito(item.id_producto, venta.id_deposito, item.cantidad * -1);
+    return { success: true, pdf_url: urlPdf };
+
+  } catch (error) {
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function guardarVenta(venta) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+
+  try {
+    // ✅ CORRECCIÓN 1: Usar hoja activa para evitar problemas de ID
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    const sheetProd = ss.getSheetByName('PRODUCTOS');
+    const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
+    const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
+    const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+    const sheetCli = ss.getSheetByName('CLIENTES');
+
+    // 1. Validaciones y Configuración
+    const config = obtenerConfigGeneral();
+    const depositoDefault = config['DEPOSITO_DEFAULT'] || "1"; 
+    const depositoUsado = venta.id_deposito || depositoDefault;
+
+    // Lógica de Crédito
+    const esCredito = venta.condicion === 'CREDITO';
+    const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
+    const saldoInicial = esCredito ? venta.total : 0;
+
+    // Obtener nombres
+    const datosProd = sheetProd.getDataRange().getValues();
+    const mapaNombres = {};
+    for(let i=1; i<datosProd.length; i++) {
+        mapaNombres[datosProd[i][0]] = datosProd[i][2]; 
+    }
+
+    // ✅ CORRECCIÓN 2: NO validar stock si viene de remisión (porque ya se entregó)
+    if (!venta.es_desde_remision) {
+        for (let item of venta.items) {
+          const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
+          const nombreProd = mapaNombres[item.id_producto] || "Item";
+          if (stockDisponible < item.cantidad) {
+            throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
+          }
         }
+    }
+
+    // 2. Generación de Datos
+    const idVenta = Utilities.getUuid();
+    // Asegurar fecha correcta
+    const fecha = new Date(venta.fecha); 
+    // Ajuste de zona horaria simple para que no reste un día
+    fecha.setHours(12,0,0,0); 
+    
+    // Auto-incremental
+    let nroFacturaFinal = venta.nro_factura;
+    if (!nroFacturaFinal) {
+       const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
+       const partes = ultimoNro.split('-');
+       // Logica simple: sumar 1 al final
+       const nuevoSec = Number(partes[2]) + 1;
+       nroFacturaFinal = `${partes[0]}-${partes[1]}-${String(nuevoSec).padStart(7, '0')}`;
+       guardarConfigGeneral('ULTIMO_NRO_FACTURA', nroFacturaFinal);
+    }
+
+    // Buscar Cliente
+    let nombreCli = "Cliente Ocasional";
+    let docCli = "X";
+    let dirCli = "";
+    const dataCli = sheetCli.getDataRange().getValues();
+    for(let i=1; i<dataCli.length; i++){
+        if(String(dataCli[i][0]) === String(venta.id_cliente)){
+            nombreCli = dataCli[i][1];
+            docCli = dataCli[i][2];
+            dirCli = dataCli[i][5] || "";
+            break;
+        }
+    }
+
+    // 3. Cálculos e HTML (Igual que antes)
+    let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0, totalIVA10 = 0, totalIVA5 = 0;
+
+    const htmlFilasItems = venta.items.map(it => {
+        const precioUnitario = Number(it.precio); 
+        const cantidad = Number(it.cantidad);
+        const subtotal = cantidad * precioUnitario;
+        const tasa = Number(it.tasa_iva || 10); 
+        const nombreProducto = mapaNombres[it.id_producto] || "Producto";
+
+        let montoIVA = 0;
+        if (tasa === 10) {
+            montoIVA = subtotal / 11;
+            totalGrabada10 += subtotal;
+            totalIVA10 += montoIVA;
+        } else if (tasa === 5) {
+            montoIVA = subtotal / 21;
+            totalGrabada5 += subtotal;
+            totalIVA5 += montoIVA;
+        } else {
+            totalExenta += subtotal;
+        }
+
+        return `
+        <tr class="item-row">
+            <td class="col-desc">${nombreProducto}</td>
+            <td class="col-iva">${tasa === 0 ? 'Exenta' : tasa + '%'}</td>
+            <td class="col-cant">${cantidad}</td>
+            <td class="col-money">${precioUnitario.toLocaleString('es-PY')}</td>
+            <td class="col-money fw-bold">${subtotal.toLocaleString('es-PY')}</td>
+        </tr>`;
+    }).join('');
+
+    const totalGeneral = totalGrabada10 + totalGrabada5 + totalExenta;
+    const totalLiquidacionIVA = totalIVA10 + totalIVA5;
+
+    const htmlBloqueTotales = `
+        <tr><td class="total-label">Total Exenta:</td><td>${Math.round(totalExenta).toLocaleString('es-PY')}</td></tr>
+        <tr><td class="total-label">Total IVA 5%:</td><td>${Math.round(totalGrabada5).toLocaleString('es-PY')}</td></tr>
+        <tr><td class="total-label">Total IVA 10%:</td><td>${Math.round(totalGrabada10).toLocaleString('es-PY')}</td></tr>
+        <tr><td class="total-label grand-total">TOTAL A PAGAR:</td><td class="grand-total">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td></tr>
+        <tr><td colspan="2" style="font-size: 9px; color: #777; padding-top: 5px;">(Liq. IVA: 5%=${Math.round(totalIVA5).toLocaleString('es-PY')} | 10%=${Math.round(totalIVA10).toLocaleString('es-PY')} | Tot=${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')})</td></tr>
+    `;
+
+    // Generar PDF
+    const datosParaPDF = {
+        fecha: fecha.toLocaleDateString('es-PY'),
+        nro_factura: nroFacturaFinal,
+        cliente_nombre: nombreCli,
+        cliente_doc: docCli,
+        cliente_dir: dirCli,
+        condicion: venta.condicion || "CONTADO",
+        html_items: htmlFilasItems,
+        html_totales: htmlBloqueTotales
+    };
+    
+    let urlPdf = "";
+    try {
+        urlPdf = crearPDFFactura(datosParaPDF); 
+    } catch(e) {
+        console.error("Error PDF: " + e);
+        urlPdf = "ERROR_PDF"; 
+    }
+
+    // 4. Guardar Cabecera
+    sheetCab.appendRow([
+      idVenta,
+      nroFacturaFinal,
+      fecha,
+      venta.id_cliente,
+      depositoUsado,
+      totalGeneral,
+      estadoVenta, 
+      urlPdf,
+      venta.condicion || 'CONTADO', 
+      saldoInicial                  
+    ]);
+
+    // 5. Guardar Detalle y Movimientos
+    venta.items.forEach(item => {
+      // Guardar detalle siempre
+      sheetDet.appendRow([
+          Utilities.getUuid(), 
+          idVenta, 
+          item.id_producto, 
+          item.cantidad, 
+          item.precio, 
+          item.tasa_iva || 10,
+          item.cantidad * item.precio 
+      ]);
+      
+      // ✅ CORRECCIÓN 3: Descontar Stock SOLO si NO es remisión
+      if (!venta.es_desde_remision) { 
+          sheetMov.appendRow([
+              Utilities.getUuid(), 
+              new Date(), 
+              "SALIDA_VENTA", 
+              item.id_producto, 
+              depositoUsado, 
+              item.cantidad * -1, 
+              idVenta
+          ]);
+          // Actualizar caché visual
+          actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
+      }
     });
 
     return { success: true, pdf_url: urlPdf };
@@ -1834,90 +2063,115 @@ function obtenerHistorialTransferencias() {
 /**
  * Obtiene lista de clientes que tienen saldo pendiente > 0
  */
+
 function obtenerClientesConDeuda() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
-  const sheetClientes = ss.getSheetByName('CLIENTES');
-  
-  // LOGS QUE ENVIAREMOS AL FRONTEND
-  let debugLogs = []; 
-  debugLogs.push("1. Iniciando función...");
+  const log = []; // Array para guardar logs de depuración
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shVentas = ss.getSheetByName('VENTAS_CABECERA');
+    const shClientes = ss.getSheetByName('CLIENTES');
+    
+    if (!shVentas) throw new Error("No se encontró la hoja VENTAS_CABECERA");
 
-  if(!sheetVentas || !sheetClientes) return JSON.stringify({ error: "Faltan hojas", logs: debugLogs });
+    // 1. Obtener Datos (Optimizamos leyendo solo si existen filas)
+    if (shVentas.getLastRow() <= 1) return JSON.stringify({ logs: ["Sin datos"], datos: [] });
+    
+    const dataVentas = shVentas.getDataRange().getValues();
+    const deudasPorCliente = {}; 
 
-  // LEEMOS TODO COMO TEXTO PARA EVITAR ERRORES DE FORMATO
-  // Forzamos leer 15 columnas para asegurar que leemos la J
-  const lastRow = Math.max(sheetVentas.getLastRow(), 1);
-  const dataV = sheetVentas.getRange(1, 1, lastRow, 15).getDisplayValues(); 
-  const dataC = sheetClientes.getDataRange().getValues();
-  
-  debugLogs.push(`2. Filas encontradas en Ventas: ${dataV.length}`);
-
-  // Mapa de Clientes (Limpiamos IDs con trim por si hay espacios)
-  const mapCli = {};
-  for(let i=1; i<dataC.length; i++) {
-    const idLimpio = String(dataC[i][0]).trim();
-    mapCli[idLimpio] = { nombre: dataC[i][1], doc: dataC[i][2] };
-  }
-
-  const deudaPorCliente = {};
-  let encontrados = 0;
-
-  for(let i=1; i<dataV.length; i++) {
-    const fila = dataV[i];
-    if(!fila[0]) continue; // Fila vacía
-
-    // DATOS CRUDOS
-    const idVenta = fila[0];
-    const idCliente = String(fila[3] || "").trim(); // Col D
-    const estado = String(fila[6] || "").toUpperCase().trim(); // Col G
-    const saldoTexto = String(fila[9] || "0"); // Col J
-
-    // LIMPIEZA AGRESIVA DE NÚMEROS
-    // Convertimos "420.000" -> 420000. Si falla, es 0.
-    const saldo = Number(saldoTexto.replace(/[^0-9-]/g, ''));
-
-    // DIAGNÓSTICO DE LA FILA 12 (O cualquiera con saldo)
-    if (saldo > 0) {
-        debugLogs.push(`>> Fila ${i+1}: ID=${idVenta}, Estado=${estado}, Saldo=${saldo}. ¿Es válido? ${estado !== 'ANULADO'}`);
-    }
-
-    // LÓGICA MAESTRA
-    if (saldo > 0 && estado !== 'ANULADO') {
-      encontrados++;
-      
-      // Si no encuentra el nombre, usa el ID como nombre (para que aparezca sí o sí)
-      const nombreCli = mapCli[idCliente]?.nombre || `⚠️ ID: ${idCliente}`;
-      const docCli = mapCli[idCliente]?.doc || '---';
-
-      if (!deudaPorCliente[idCliente]) {
-        deudaPorCliente[idCliente] = {
-          id_cliente: idCliente,
-          nombre: nombreCli,
-          doc: docCli,
-          total_deuda: 0,
-          facturas_pendientes: []
-        };
+    // 2. Mapear Nombres de Clientes (Optimizacion: Mapa de acceso rápido)
+    const mapNombres = {};
+    if (shClientes && shClientes.getLastRow() > 1) {
+      const dataCli = shClientes.getDataRange().getValues();
+      for(let i=1; i<dataCli.length; i++) {
+        // Guardamos ID como String para evitar errores de tipo
+        if(dataCli[i][0]) mapNombres[String(dataCli[i][0])] = dataCli[i][1];
       }
-      
-      deudaPorCliente[idCliente].total_deuda += saldo;
-      deudaPorCliente[idCliente].facturas_pendientes.push({
-        id_venta: idVenta,
-        fecha: fila[2],
-        factura: fila[1],
-        saldo: saldo,
-        total_orig: fila[5]
-      });
     }
+
+    // 3. Recorrer Ventas
+    // Estructura esperada: [0:ID, 1:Nro, 2:Fecha, 3:Cliente, 5:Total, 6:Estado, 8:Condicion, 9:Saldo]
+    let contadorFacturas = 0;
+
+    for(let i=1; i<dataVentas.length; i++) {
+      const row = dataVentas[i];
+      if (!row[0]) continue; // Saltar filas vacías
+
+      const idCliente = String(row[3]);
+      
+      // A. LIMPIEZA DE DATOS (Trim y UpperCase seguro)
+      const condicion = String(row[8] || '').toUpperCase().trim(); 
+      const estado = String(row[6] || '').toUpperCase().trim();    
+      
+      // B. LÓGICA DE SALDO INTELIGENTE (CORRECCIÓN PRINCIPAL)
+      // Si la columna Saldo (9) está vacía, usamos el Total (5)
+      let saldo = row[9];
+      if (saldo === "" || saldo == null || saldo === undefined) {
+          saldo = Number(row[5] || 0); 
+      } else {
+          saldo = Number(saldo);
+      }
+
+      // C. FILTRO MAESTRO
+      // Solo Credito, con Deuda y que no esté anulada/pagada
+      if (condicion === 'CREDITO' && saldo > 0 && estado !== 'ANULADO' && estado !== 'PAGADO') {
+        
+        if (!deudasPorCliente[idCliente]) {
+          deudasPorCliente[idCliente] = {
+            id_cliente: idCliente,
+            nombre: mapNombres[idCliente] || 'Cliente Desconocido',
+            total_deuda: 0,
+            facturas_pendientes: [],
+            mostrar_detalle: false 
+          };
+        }
+
+        // Manejo de fecha seguro
+        let fechaFmt = row[2];
+        let fechaObj = null;
+        try { 
+            if (row[2] instanceof Date) {
+                fechaFmt = row[2].toISOString();
+                fechaObj = row[2];
+            } else {
+                fechaObj = new Date(row[2]); // Intentar parsear si es string
+            }
+        } catch(e){}
+
+        deudasPorCliente[idCliente].facturas_pendientes.push({
+          id_venta: String(row[0]),
+          numero: String(row[1]),
+          fecha: fechaFmt,
+          fecha_obj: fechaObj, // Para ordenar
+          total_original: Number(row[5] || 0),
+          saldo: saldo
+        });
+
+        deudasPorCliente[idCliente].total_deuda += saldo;
+        contadorFacturas++;
+      }
+    }
+
+    // 4. Convertir a array y ORDENAR
+    const listaFinal = Object.values(deudasPorCliente);
+
+    // Ordenar facturas internas por antigüedad (la más vieja primero)
+    listaFinal.forEach(cliente => {
+        cliente.facturas_pendientes.sort((a, b) => {
+            if (!a.fecha_obj) return 1;
+            if (!b.fecha_obj) return -1;
+            return a.fecha_obj - b.fecha_obj;
+        });
+    });
+
+    log.push(`Proceso OK. Clientes: ${listaFinal.length}, Facturas: ${contadorFacturas}`);
+    
+    return JSON.stringify({ logs: log, datos: listaFinal });
+
+  } catch (e) {
+    Logger.log("Error Grave: " + e.toString());
+    return JSON.stringify({ logs: ["Error Crítico: " + e.toString()], datos: [] });
   }
-
-  debugLogs.push(`3. Total registros procesados con deuda: ${encontrados}`);
-
-  // DEVOLVEMOS UN OBJETO ESPECIAL
-  return JSON.stringify({
-      logs: debugLogs,
-      datos: Object.values(deudaPorCliente)
-  });
 }
 /**
  * Registra un pago y descuenta de las facturas (FIFO - Primero entra, primero sale)
@@ -1926,47 +2180,66 @@ function registrarCobro(datos) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const sheetCobros = ss.getSheetByName('COBRANZAS');
-  const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
-  
-  let montoRestante = Number(datos.monto);
-  const fecha = new Date();
-  
-  // 1. Guardar el cobro global
-  const idCobro = Utilities.getUuid();
-  sheetCobros.appendRow([idCobro, fecha, datos.id_cliente, datos.monto, datos.metodo, datos.observacion, ""]);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shCob = ss.getSheetByName('COBRANZAS');
+  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
 
-  // 2. Imputar a facturas pendientes (recorremos para descontar saldo)
-  const dataV = sheetVentas.getDataRange().getValues();
-  
-  for(let i=1; i<dataV.length; i++) {
-    if(montoRestante <= 0) break;
+  // 1. Buscar la Factura Específica por ID
+  const data = shVentas.getDataRange().getValues();
+  let filaEncontrada = -1;
+  let saldoActual = 0;
 
-    const rowClientId = dataV[i][3];
-    const saldoRow = Number(dataV[i][9] || 0); // Columna J (Saldo)
-    const estado = dataV[i][6];
-
-    if (rowClientId === datos.id_cliente && saldoRow > 0 && estado !== 'ANULADO') {
-      let aPagar = 0;
-      
-      if (montoRestante >= saldoRow) {
-        aPagar = saldoRow;
-        montoRestante -= saldoRow;
-        // Actualizar fila: Saldo 0, Estado PAGADO
-        sheetVentas.getRange(i+1, 10).setValue(0); // Col J Saldo
-        sheetVentas.getRange(i+1, 7).setValue("PAGADO"); // Col G Estado
-      } else {
-        aPagar = montoRestante;
-        const nuevoSaldo = saldoRow - montoRestante;
-        montoRestante = 0;
-        // Actualizar fila: Nuevo saldo, Estado PARCIAL
-        sheetVentas.getRange(i+1, 10).setValue(nuevoSaldo);
-        sheetVentas.getRange(i+1, 7).setValue("PARCIAL");
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(datos.id_venta)) { // Col A: ID Venta
+      filaEncontrada = i + 1; // +1 porque la hoja empieza en 1
+      // Col 9 (Indice 9, Columna J) es el Saldo Pendiente
+      // Si está vacío, asumimos que es el total original (Col 5 / Indice 5)
+      saldoActual = Number(data[i][9]);
+      if ((data[i][9] === "" || data[i][9] == null)) {
+         saldoActual = Number(data[i][5]);
       }
+      break;
     }
   }
+
+  if (filaEncontrada === -1) {
+    lock.releaseLock();
+    throw "No se encontró la factura indicada.";
+  }
+
+  // 2. Validar que no pague más de lo que debe
+  const montoAPagar = Number(datos.monto);
   
+  // Pequeño margen de error por decimales (0.1)
+  if (montoAPagar > (saldoActual + 0.1)) { 
+    lock.releaseLock();
+    throw "El monto supera el saldo pendiente de la factura.";
+  }
+
+  // 3. Registrar el Cobro en Historial
+  shCob.appendRow([
+    Utilities.getUuid(),
+    new Date(),
+    datos.id_cliente,
+    montoAPagar,
+    datos.metodo,
+    datos.observacion,
+    datos.id_venta // Ahora SÍ guardamos el ID de la venta asociada
+  ]);
+
+  // 4. Actualizar la Factura en Ventas
+  const nuevoSaldo = saldoActual - montoAPagar;
+  
+  // Columna 10 (J) es el Saldo
+  shVentas.getRange(filaEncontrada, 10).setValue(nuevoSaldo);
+
+  // Si el saldo es 0 (o menor por decimales), cambiar estado a PAGADO
+  if (nuevoSaldo <= 0.1) {
+    // Columna 7 (G) es Estado
+    shVentas.getRange(filaEncontrada, 7).setValue('PAGADO'); 
+    shVentas.getRange(filaEncontrada, 10).setValue(0); // Forzar 0 exacto
+  }
+
   lock.releaseLock();
   return { success: true };
 }
@@ -2358,4 +2631,65 @@ function anularRemision(idRemision) {
 
   lock.releaseLock();
   return { success: true };
+}
+
+// ==========================================
+// GESTIÓN DE CATEGORÍAS
+// ==========================================
+
+function guardarCategoria(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('CATEGORIAS');
+  
+  // Si no tiene ID, es nuevo. Generamos uno simple o UUID.
+  // Usaremos UUID para consistencia con el resto del sistema.
+  const id = datos.id_categoria || Utilities.getUuid();
+  const nombre = datos.nombre.toString().trim();
+
+  const data = sh.getDataRange().getValues();
+  let filaEncontrada = -1;
+
+  // Buscar si ya existe (Modo Edición)
+  if (datos.id_categoria) {
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) == String(id)) {
+        filaEncontrada = i + 1;
+        break;
+      }
+    }
+  }
+
+  if (filaEncontrada > 0) {
+    // Actualizar
+    sh.getRange(filaEncontrada, 2).setValue(nombre);
+  } else {
+    // Crear Nuevo
+    sh.appendRow([id, nombre]);
+  }
+
+  lock.releaseLock();
+  return { success: true };
+}
+
+function eliminarCategoria(id) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('CATEGORIAS');
+  const data = sh.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) == String(id)) {
+      sh.deleteRow(i + 1);
+      lock.releaseLock();
+      return { success: true };
+    }
+  }
+  
+  lock.releaseLock();
+  return { error: "Categoría no encontrada" };
 }

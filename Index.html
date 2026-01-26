@@ -188,25 +188,132 @@
                         </div>
                     </div>
 
-                    <div v-if="subVistaVentas === 'nueva'">
+                      <div v-if="subVistaVentas === 'nueva'">
+                        <div class="card border-0 shadow-sm mb-3 no-hover">
+                            <div class="card-body">
+                                <div class="row g-3 align-items-end">
+                                    
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Cliente</label>
+                                        <div class="input-group">
+                                            <select class="form-select" v-model="formVenta.id_cliente">
+                                                <option value="" disabled>Seleccionar cliente...</option>
+                                                <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}</option>
+                                            </select>
+                                            <button class="btn btn-outline-secondary" type="button" @click="abrirModalCliente(null)" title="Crear Nuevo Cliente">
+                                                <i class="bi bi-person-plus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Desde Depósito</label>
+                                        <select class="form-select text-brand fw-bold" v-model="formVenta.id_deposito">
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                        </select>
+                                    </div>
 
-                        <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3"><div class="card-body bg-light"><form @submit.prevent="agregarAlCarritoVenta"><div class="row g-2 align-items-end"><div class="col-md-6"><label class="form-label small fw-bold">Producto</label><select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta"><option value="" disabled>🔍 Buscar producto...</option><option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">{{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}</option></select></div><div class="col-md-2 col-4"><label class="form-label small">Cantidad</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required></div><div class="col-md-2 col-8"><label class="form-label small">Precio Unit.</label><input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.precio" min="0" required></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand btn-lg fw-bold"><i class="bi bi-cart-plus"></i></button></div></div></form></div></div>
-                        <div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0 table-striped"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoVenta" :key="index"><td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.precio) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button></td></tr><tr v-if="carritoVenta.length === 0"><td colspan="5" class="text-center py-5 text-muted">Carrito vacío</td></tr></tbody>
-                        <tfoot v-if="carritoVenta.length > 0">
-                          <tr class="text-muted small">
-                              <td colspan="3" class="text-end border-0 pt-3">Liquidación IVA:</td>
-                              <td class="text-end border-0 pt-3">{{ formatoMoneda(totalIVA) }}</td>
-                              <td class="border-0"></td>
-                          </tr>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-bold">Condición</label>
+                                        <select class="form-select" v-model="formVenta.condicion">
+                                            <option value="CONTADO">Contado</option>
+                                            <option value="CREDITO">Crédito</option>
+                                        </select>
+                                    </div>
 
-                          <tr class="bg-brand text-white">
-                              <td colspan="3" class="text-end fw-bold fs-5 border-0">TOTAL A PAGAR:</td>
-                              <td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td>
-                              <td class="border-0"></td>
-                          </tr>
-                      </tfoot>
-                        </tfoot>
-                        </table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button><button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i> COBRAR</button></div></div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-bold">Fecha</label>
+                                        <input type="date" class="form-control" v-model="formVenta.fecha">
+                                    </div>
+                                    
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-bold">Nº Factura</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               v-model="formVenta.nro_factura" 
+                                               placeholder="Automático">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3">
+                            <div class="card-body bg-light">
+                                <form @submit.prevent="agregarAlCarritoVenta">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold">Producto</label>
+                                            <select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta">
+                                                <option value="" disabled>🔍 Buscar producto...</option>
+                                                <option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">
+                                                    {{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2 col-4">
+                                            <label class="form-label small">Cantidad</label>
+                                            <input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required>
+                                        </div>
+                                        <div class="col-md-2 col-8">
+                                            <label class="form-label small">Precio Unit.</label>
+                                            <input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.precio" min="0" required>
+                                        </div>
+                                        <div class="col-md-2 d-grid">
+                                            <button type="submit" class="btn btn-brand btn-lg fw-bold"><i class="bi bi-cart-plus"></i></button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm no-hover">
+                            <div class="table-responsive">
+                                <table class="table align-middle mb-0 table-striped">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th class="text-center">Cant.</th>
+                                            <th class="text-end">Precio</th>
+                                            <th class="text-end">Subtotal</th>
+                                            <th style="width: 50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(item, index) in carritoVenta" :key="index">
+                                            <td class="fw-bold text-secondary">{{ obtenerNombreProducto(item.id_producto) }}</td>
+                                            <td class="text-center">{{ item.cantidad }}</td>
+                                            <td class="text-end">{{ formatoMoneda(item.precio) }}</td>
+                                            <td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio) }}</td>
+                                            <td>
+                                                <button class="btn btn-sm text-danger" @click="quitarDelCarritoVenta(index)"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="carritoVenta.length === 0">
+                                            <td colspan="5" class="text-center py-5 text-muted">Carrito vacío, agrega productos arriba.</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot v-if="carritoVenta.length > 0">
+                                        <tr class="text-muted small">
+                                            <td colspan="3" class="text-end border-0 pt-3">Liquidación IVA:</td>
+                                            <td class="text-end border-0 pt-3">{{ formatoMoneda(totalIVA) }}</td>
+                                            <td class="border-0"></td>
+                                        </tr>
+                                        <tr class="bg-brand text-white">
+                                            <td colspan="3" class="text-end fw-bold fs-5 border-0">TOTAL A PAGAR:</td>
+                                            <td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}</td>
+                                            <td class="border-0"></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
+                                <button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button>
+                                <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal">
+                                    <i class="bi bi-cash-coin me-2"></i> COBRAR
+                                </button>
+                            </div>
+                        </div>
+
                     </div>
 
                     <div v-if="subVistaVentas === 'historial'">
@@ -534,29 +641,61 @@
                         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-brand"></i> Cuentas por Cobrar</h3>
                         <button v-if="subVistaCobranzas === 'nuevo'" class="btn btn-outline-secondary" @click="subVistaCobranzas='listado'">Volver</button>
                     </div>
-
                     <div v-if="subVistaCobranzas === 'listado'">
                         <div class="card border-0 shadow-sm">
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light"><tr><th>Cliente</th><th class="text-end">Deuda Total</th><th class="text-end">Acción</th></tr></thead>
-                                    <tbody>
-                                        <tr v-for="c in clientesDeudores" :key="c.id_cliente">
-                                            <td>
-                                                <div class="fw-bold">{{ c.nombre }}</div>
-                                                <small class="text-muted">{{ c.facturas_pendientes.length }} facturas pendientes</small>
-                                            </td>
-                                            <td class="text-end fw-bold text-danger">{{ formatoMoneda(c.total_deuda) }}</td>
-                                            <td class="text-end">
-                                                <button class="btn btn-sm btn-success text-white fw-bold" @click="abrirCobro(c)">
-                                                    <i class="bi bi-cash-coin me-1"></i> Cobrar
-                                                </button>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="clientesDeudores.length === 0">
-                                            <td colspan="3" class="text-center p-5 text-muted">🎉 ¡Todo al día! No hay deudas pendientes.</td>
-                                        </tr>
-                                    </tbody>
+                                      <tbody>
+                                          <template v-for="c in clientesDeudores" :key="c.id_cliente">
+                                              
+                                              <tr class="table-light" :class="{'border-bottom-0': c.mostrar_detalle}" style="cursor: pointer;" @click="c.mostrar_detalle = !c.mostrar_detalle">
+                                                  <td>
+                                                      <div class="d-flex align-items-center">
+                                                          <i class="bi me-2 text-primary" :class="c.mostrar_detalle ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                                                          <div>
+                                                              <div class="fw-bold">{{ c.nombre }}</div>
+                                                              <small class="text-muted">{{ c.facturas_pendientes.length }} facturas pendientes</small>
+                                                          </div>
+                                                      </div>
+                                                  </td>
+                                                  <td class="text-end fw-bold text-danger fs-5">{{ formatoMoneda(c.total_deuda) }}</td>
+                                                  <td class="text-end">
+                                                      <span class="text-muted small">Ver detalle <i class="bi bi-arrow-down"></i></span>
+                                                  </td>
+                                              </tr>
+
+                                              <tr v-if="c.mostrar_detalle">
+                                                  <td colspan="3" class="p-0 bg-white border-bottom">
+                                                      <div class="p-3 bg-light bg-opacity-50">
+                                                          <table class="table table-sm table-bordered mb-0 bg-white shadow-sm align-middle">
+                                                              <thead class="text-muted small bg-light">
+                                                                  <tr>
+                                                                      <th>Fecha</th>
+                                                                      <th>Nro. Factura</th>
+                                                                      <th class="text-end">Importe Orig.</th>
+                                                                      <th class="text-end text-danger">Saldo</th>
+                                                                      <th class="text-center" style="width: 100px;">Acción</th> </tr>
+                                                              </thead>
+                                                              <tbody>
+                                                                  <tr v-for="f in c.facturas_pendientes" :key="f.id_venta">
+                                                                      <td class="small">{{ new Date(f.fecha).toLocaleDateString() }}</td>
+                                                                      <td class="fw-bold text-dark">{{ f.numero }}</td>
+                                                                      <td class="text-end text-muted small">{{ formatoMoneda(f.total_original) }}</td>
+                                                                      <td class="text-end fw-bold text-danger">{{ formatoMoneda(f.saldo) }}</td>
+                                                                      <td class="text-center">
+                                                                          <button class="btn btn-sm btn-outline-success fw-bold" @click="abrirCobro(f, c)">
+                                                                              Pagar
+                                                                          </button>
+                                                                      </td>
+                                                                  </tr>
+                                                              </tbody>
+                                                          </table>
+                                                      </div>
+                                                  </td>
+                                              </tr>
+                                          </template>
+                                          </tbody>
                                 </table>
                             </div>
                         </div>
@@ -566,10 +705,12 @@
                         <div class="card border-0 shadow-sm" style="max-width: 500px; margin: 0 auto;">
                             <div class="card-header bg-success text-white fw-bold">Registrar Cobro</div>
                             <div class="card-body">
-                                <div class="alert alert-warning d-flex justify-content-between align-items-center">
-                                    <span>Deuda Actual:</span>
-                                    <span class="fw-bold fs-5">{{ formatoMoneda(formCobro.deuda_total) }}</span>
-                                </div>
+                    <div class="alert alert-warning">
+                      <div class="d-flex justify-content-between align-items-center">
+                          <span>Factura: <strong>{{ formCobro.nro_factura_visual }}</strong></span>
+                          <span class="fw-bold fs-5">Saldo: {{ formatoMoneda(formCobro.deuda_total) }}</span>
+                      </div>
+                    </div>
                                 
                                 <form @submit.prevent="guardarCobro">
                                     <div class="mb-3">
@@ -749,87 +890,187 @@
                 </div>
 
                 <div v-if="vistaActual === 'config'">
-                    <h3 class="fw-bold mb-4 text-dark"><i class="bi bi-gear text-brand"></i> Configuración</h3>
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="bg-brand text-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <i class="bi bi-gear-fill fs-4"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold text-dark mb-0">Configuración del Sistema</h3>
+                            <small class="text-muted">Ajustes generales y parámetros</small>
+                        </div>
+                    </div>
                     
-                    <div class="card shadow-sm border-0 mb-4">
-                        <div class="card-header bg-white fw-bold py-3 text-secondary">Secuencia de Facturación</div>
-                        <div class="card-body">
-                            <p class="text-muted small">Último número de factura emitido. El sistema sumará +1 automáticamente.</p>
-                            <div class="input-group" style="max-width: 400px;">
-                                <input type="text" class="form-control" v-model="configFacturaActual" placeholder="001-001-0000000">
-                                <button class="btn btn-success" @click="guardarConfigFactura"><i class="bi bi-save"></i> Guardar</button>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="card h-100 shadow-sm border-0">
+                                <div class="card-body">
+                                    <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-receipt me-2 text-brand"></i>Secuencia Facturación</h6>
+                                    <p class="text-muted small mb-2" style="font-size: 0.8rem;">Último número emitido. Se incrementará automáticamente.</p>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" v-model="configFacturaActual" placeholder="001-001-0000000">
+                                        <button class="btn btn-outline-success" @click="guardarConfigFactura" title="Guardar"><i class="bi bi-check-lg"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="card h-100 shadow-sm border-0">
+                                <div class="card-body">
+                                    <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-truck me-2 text-brand"></i>Secuencia Remisiones</h6>
+                                    <p class="text-muted small mb-2" style="font-size: 0.8rem;">Último número de Nota de Remisión emitido.</p>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" v-model="configRemisionActual" placeholder="001-001-0000000">
+                                        <button class="btn btn-outline-success" @click="guardarConfigRemision" title="Guardar"><i class="bi bi-check-lg"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="card h-100 shadow-sm border-0">
+                                <div class="card-body">
+                                    <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-house-door me-2 text-brand"></i>Depósito Predeterminado</h6>
+                                    <p class="text-muted small mb-2" style="font-size: 0.8rem;">Selección automática para nuevas operaciones.</p>
+                                    <div class="input-group">
+                                        <select class="form-select" v-model="depositoDefault">
+                                            <option value="" disabled>Seleccionar...</option>
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                        </select>
+                                        <button class="btn btn-outline-success" @click="guardarConfigDepositoDefault" title="Guardar"><i class="bi bi-check-lg"></i></button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="card shadow-sm border-0 mb-4">
-                        <div class="card-header bg-white fw-bold py-3 text-secondary">Secuencia de Remisiones</div>
-                        <div class="card-body">
-                            <p class="text-muted small">Último número de Nota de Remisión emitido.</p>
-                            <div class="input-group" style="max-width: 400px;">
-                                <input type="text" class="form-control" v-model="configRemisionActual" placeholder="001-001-0000000">
-                                <button class="btn btn-success" @click="guardarConfigRemision"><i class="bi bi-save"></i> Guardar</button>
-                            </div>
+                    <div class="card shadow-sm border-0 mb-4 border-top border-4 border-brand">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold m-0"><i class="bi bi-building me-2"></i>Administrar Depósitos</h6>
+                            <button class="btn btn-sm btn-brand text-white fw-bold" @click="abrirModalDeposito(null)">
+                                <i class="bi bi-plus-lg me-1"></i> Nuevo
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Nombre</th>
+                                        <th>Dirección</th>
+                                        <th>Responsable</th>
+                                        <th>Estado</th>
+                                        <th class="text-end pe-3">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="d in listaDepositos" :key="d.id_deposito">
+                                        <td class="ps-3 fw-bold">{{ d.nombre }}</td>
+                                        <td class="small text-muted">{{ d.direccion }}</td>
+                                        <td class="small">{{ d.responsable }}</td>
+                                        <td><span class="badge" :class="d.activo=='Si'?'bg-success bg-opacity-75':'bg-secondary'">{{ d.activo }}</span></td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-sm btn-light text-primary border me-1" @click="abrirModalDeposito(d)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-sm btn-light text-danger border" @click="eliminarDeposito(d)"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <div class="card shadow-sm border-0 mb-4">
-                        <div class="card-header bg-white fw-bold py-3 text-secondary">Depósito Predeterminado</div>
-                        <div class="card-body">
-                            <p class="text-muted small">Este depósito se seleccionará automáticamente en nuevas ventas y compras.</p>
-                            <div class="input-group" style="max-width: 400px;">
-                                <select class="form-select" v-model="depositoDefault">
-                                    <option value="" disabled>Seleccionar depósito...</option>
-                                    <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
-                                </select>
-                                <button class="btn btn-success" @click="guardarConfigDepositoDefault"><i class="bi bi-save"></i> Guardar</button>
-                            </div>
+                    <div class="card shadow-sm border-0 mb-4 border-top border-4 border-warning">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold m-0"><i class="bi bi-tags-fill me-2 text-warning"></i>Categorías de Productos</h6>
+                            <button class="btn btn-sm btn-warning text-dark fw-bold" @click="abrirModalCategoria(null)">
+                                <i class="bi bi-plus-lg me-1"></i> Nueva
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Nombre de la Categoría</th>
+                                        <th class="text-end pe-3">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="c in listaCategorias" :key="c.id_categoria">
+                                        <td class="ps-3 fw-bold text-dark">{{ c.nombre }}</td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-sm btn-light text-primary border me-1" @click="abrirModalCategoria(c)" title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-light text-danger border" @click="eliminarCategoria(c)" title="Eliminar">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="listaCategorias.length === 0">
+                                        <td colspan="2" class="text-center py-3 text-muted">No hay categorías registradas.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <div class="card shadow-sm border-0 mb-4">
-                        <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center text-secondary">
-                            <span>Depósitos</span>
-                            <button class="btn btn-sm btn-outline-brand" @click="abrirModalDeposito(null)">+ Nuevo</button>
+                    <div class="card shadow-sm border-0 border-top border-4 border-secondary">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold m-0"><i class="bi bi-input-cursor-text me-2"></i>Campos Personalizados</h6>
+                            <button class="btn btn-sm btn-secondary fw-bold" @click="abrirModalCampo(null)">
+                                <i class="bi bi-plus-lg me-1"></i> Nuevo
+                            </button>
                         </div>
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light"><tr><th>Nombre</th><th>Dirección</th><th>Responsable</th><th>Activo</th><th class="text-end">Acción</th></tr></thead>
-                            <tbody>
-                                <tr v-for="d in listaDepositos" :key="d.id_deposito">
-                                    <td>{{ d.nombre }}</td>
-                                    <td class="small text-muted">{{ d.direccion }}</td>
-                                    <td class="small">{{ d.responsable }}</td>
-                                    <td><span class="badge" :class="d.activo=='Si'?'bg-success':'bg-secondary'">{{ d.activo }}</span></td>
-                                    <td class="text-end">
-                                        <button class="btn btn-sm text-primary" @click="abrirModalDeposito(d)"><i class="bi bi-pencil"></i></button>
-                                        <button class="btn btn-sm text-danger" @click="eliminarDeposito(d)"><i class="bi bi-trash"></i></button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Entidad</th>
+                                        <th>Etiqueta</th>
+                                        <th>Tipo</th>
+                                        <th class="text-center">Obligatorio</th>
+                                        <th class="text-end pe-3">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="c in listaConfigCampos" :key="c.id_campo">
+                                        <td class="ps-3"><span class="badge bg-light text-dark border text-uppercase">{{ c.entidad_objetivo }}</span></td>
+                                        <td class="fw-bold text-secondary">{{ c.etiqueta_visible }}</td>
+                                        <td class="small text-muted font-monospace">{{ c.tipo_dato }}</td>
+                                        <td class="text-center">
+                                            <i v-if="esObligatorio(c.es_obligatorio)" class="bi bi-check-circle-fill text-success" title="Obligatorio"></i>
+                                            <span v-else class="text-muted text-opacity-25">-</span>
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-sm btn-light text-primary border me-1" @click="abrirModalCampo(c)"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-sm btn-light text-danger border" @click="eliminarCampo(c)"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                </div>
 
-                    <div class="card shadow-sm border-0">
-                        <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center text-secondary">
-                            <span>Campos Personalizados</span>
-                            <button class="btn btn-sm btn-outline-brand" @click="abrirModalCampo(null)">+ Nuevo</button>
-                        </div>
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light"><tr><th>Entidad</th><th>Etiqueta</th><th>Tipo</th><th>Obligatorio</th><th class="text-end">Acción</th></tr></thead>
-                            <tbody>
-                                <tr v-for="c in listaConfigCampos" :key="c.id_campo">
-                                    <td><span class="badge bg-secondary">{{ c.entidad_objetivo }}</span></td>
-                                    <td>{{ c.etiqueta_visible }}</td>
-                                    <td class="small">{{ c.tipo_dato }}</td>
-                                    <td><i v-if="esObligatorio(c.es_obligatorio)" class="bi bi-check-circle-fill text-success"></i></td>
-                                    <td class="text-end">
-                                        <button class="btn btn-sm text-primary" @click="abrirModalCampo(c)"><i class="bi bi-pencil"></i></button>
-                                        <button class="btn btn-sm text-danger" @click="eliminarCampo(c)"><i class="bi bi-trash"></i></button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="modal fade" id="modalCategoria" tabindex="-1">
+                  <div class="modal-dialog modal-dialog-centered modal-sm">
+                      <div class="modal-content">
+                          <div class="modal-header bg-warning">
+                              <h5 class="modal-title fw-bold text-dark">{{ formCategoria.id_categoria ? 'Editar' : 'Nueva' }} Categoría</h5>
+                              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                          </div>
+                          <div class="modal-body">
+                              <form @submit.prevent="guardarCategoria">
+                                  <div class="mb-3">
+                                      <label class="form-label fw-bold small">Nombre</label>
+                                      <input type="text" class="form-control" v-model="formCategoria.nombre" required placeholder="Ej: Bebidas, Limpieza...">
+                                  </div>
+                                  <div class="d-grid">
+                                      <button type="submit" class="btn btn-dark fw-bold">Guardar</button>
+                                  </div>
+                              </form>
+                          </div>
+                      </div>
+                  </div>
                 </div>
 
             </div>
@@ -1069,6 +1310,7 @@
                     </div>
                   </div>
                 </div>
+            </div>
       
       <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
             <div class="modal-dialog modal-dialog-centered">
@@ -1121,8 +1363,7 @@
               </div>
             </div>
         </div>
-
-    </div>
+    </div>    
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1140,9 +1381,8 @@
             configFacturaActual: '',
 
             configRemisionActual: '', // Remision
-
             busquedaRemision: '',
-
+            
             subVistaRemision: 'nueva',
             historialRemisiones: [],
             carritoRemision: [],
@@ -1155,6 +1395,9 @@
                 chapa: '' 
             },
             lineaRemision: { id_producto: '', cantidad: 1 },
+
+            formCategoria: { id_categoria: '', nombre: '' },
+            modalCat: null, // Referencia al modal
 
             formVenta: { id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: '' },
             lineaVenta: { id_producto:'', cantidad:1, precio:0 },
@@ -1174,7 +1417,16 @@
 
             // Nuevos datos para Cobranzas
             clientesDeudores: [],
-            formCobro: { id_cliente:'', monto:0, metodo:'Efectivo', observacion:'', nombre: '', deuda_total: 0 },
+            formCobro: { 
+                id_cliente:'', 
+                id_venta: '', // <--- IMPORTANTE: Agregado
+                monto:0, 
+                metodo:'Efectivo', 
+                observacion:'', 
+                nombre: '', 
+                deuda_total: 0, // Esto ahora será "Saldo Factura" visualmente
+                nro_factura_visual: '' // Para mostrar en el modal
+            },
             subVistaCobranzas: 'listado',
             formProducto: { 
                 nombre:'', sku:'', precio_venta_base:0, 
@@ -1260,6 +1512,7 @@
             this.modalCli = new bootstrap.Modal(document.getElementById('modalCliente'));
             this.modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
             this.modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
+            this.modalCat = new bootstrap.Modal(document.getElementById('modalCategoria'));
             
             // Cargar datos
             this.cargarDatosIniciales();
@@ -1298,6 +1551,45 @@
                 const menuEl = document.getElementById('menuMovil');
                 const menuBS = bootstrap.Offcanvas.getOrCreateInstance(menuEl);
                 if (menuBS) menuBS.hide();
+            },
+
+            abrirModalCategoria(item) {
+                this.formCategoria = item ? { ...item } : { id_categoria: '', nombre: '' };
+                this.modalCat.show();
+            },
+
+            guardarCategoria() {
+                if (!this.formCategoria.nombre) return alert("Escribe un nombre");
+                this.cargando = true;
+                
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        this.modalCat.hide();
+                        this.cargarDatosIniciales(); // Recargar para ver los cambios y actualizar selectores de productos
+                        alert("✅ Categoría guardada");
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error: " + e);
+                    })
+                    .guardarCategoria(this.formCategoria);
+            },
+
+            eliminarCategoria(item) {
+                if (!confirm("¿Eliminar la categoría '" + item.nombre + "'?\n(Asegúrate que no tenga productos asociados)")) return;
+                
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        this.cargarDatosIniciales();
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error: " + e);
+                    })
+                    .eliminarCategoria(item.id_categoria);
             },
 
             esObligatorio(v) { return v === true || v === 'TRUE'; },
@@ -1529,21 +1821,40 @@
                     })
                     .obtenerClientesConDeuda();
             },
-            abrirCobro(cliente) {
-                this.formCobro = { id_cliente: cliente.id_cliente, monto: 0, metodo: 'Efectivo', observacion: '', nombre: cliente.nombre, deuda_total: cliente.total_deuda };
+            abrirCobro(factura, cliente) {
+                this.formCobro = { 
+                    id_cliente: cliente.id_cliente,
+                    id_venta: factura.id_venta, // Guardamos ID Factura
+                    monto: 0, 
+                    metodo: 'Efectivo', 
+                    observacion: '', 
+                    nombre: cliente.nombre, 
+                    deuda_total: factura.saldo, // Ahora el límite es el saldo de ESTA factura
+                    nro_factura_visual: factura.numero 
+                };
                 this.subVistaCobranzas = 'nuevo';
             },
             guardarCobro() {
                 if(this.formCobro.monto <= 0) return alert("Monto inválido");
-                if(this.formCobro.monto > this.formCobro.deuda_total) return alert("El monto excede la deuda");
+                
+                // Validación estricta del saldo
+                if(this.formCobro.monto > this.formCobro.deuda_total) {
+                    return alert("❌ Error: No puedes cobrar más del saldo pendiente de esta factura (" + this.formatoMoneda(this.formCobro.deuda_total) + ")");
+                }
                 
                 this.cargando = true;
-                google.script.run.withSuccessHandler(() => {
-                    this.cargando = false;
-                    alert("Pago registrado con éxito");
-                    this.subVistaCobranzas = 'listado';
-                    this.cargarCobranzas(); // Recargar lista
-                }).registrarCobro(this.formCobro);
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        alert("✅ Pago aplicado a la factura " + this.formCobro.nro_factura_visual);
+                        this.subVistaCobranzas = 'listado';
+                        this.cargarCobranzas(); 
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error: " + e);
+                    })
+                    .registrarCobro(this.formCobro);
             },
 
               agregarAlCarritoTransf() {
