@@ -497,13 +497,13 @@ function guardarVenta(venta) {
 
     // Generamos las filas de la tabla HTML
     const htmlFilasItems = venta.items.map(it => {
-        const precioUnitario = Number(it.precio); // Este ya es el precio final (con iva si aplica)
+        const precioUnitario = Number(it.precio); 
         const cantidad = Number(it.cantidad);
         const subtotal = cantidad * precioUnitario;
-        const tasa = Number(it.tasa_iva || 10); // Viene del frontend, default 10
+        const tasa = Number(it.tasa_iva || 10); 
         const nombreProducto = mapaNombres[it.id_producto] || "Producto";
 
-        // Acumuladores Fiscales
+        // Acumuladores Fiscales (Misma lógica que tenías, no cambia)
         let montoIVA = 0;
         if (tasa === 10) {
             montoIVA = subtotal / 11;
@@ -517,13 +517,14 @@ function guardarVenta(venta) {
             totalExenta += subtotal;
         }
 
-        // Retornamos la fila HTML para este item
+        // RETORNAMOS FILA CON CLASES CSS ESPECÍFICAS
         return `
-        <tr>
-            <td style="padding:5px; border-bottom:1px solid #eee;">${nombreProducto} <small style="color:#666;">(${tasa}%)</small></td>
-            <td style="padding:5px; border-bottom:1px solid #eee; text-align:center;">${cantidad}</td>
-            <td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${precioUnitario.toLocaleString('es-PY')}</td>
-            <td style="padding:5px; border-bottom:1px solid #eee; text-align:right;">${subtotal.toLocaleString('es-PY')}</td>
+        <tr class="item-row">
+            <td class="col-desc">${nombreProducto}</td>
+            <td class="col-iva">${tasa === 0 ? 'Exenta' : tasa + '%'}</td>
+            <td class="col-cant">${cantidad}</td>
+            <td class="col-money">${precioUnitario.toLocaleString('es-PY')}</td>
+            <td class="col-money fw-bold">${subtotal.toLocaleString('es-PY')}</td>
         </tr>`;
     }).join('');
 
@@ -533,28 +534,27 @@ function guardarVenta(venta) {
     // Generamos el bloque de Totales HTML
     const htmlBloqueTotales = `
         <tr>
-            <td colspan="3" style="text-align:right; font-weight:bold; padding-top:10px;">Total Grabada (10%):</td>
-            <td style="text-align:right; padding-top:10px;">${Math.round(totalGrabada10).toLocaleString('es-PY')}</td>
+            <td class="total-label">Total Exenta:</td>
+            <td>${Math.round(totalExenta).toLocaleString('es-PY')}</td>
         </tr>
         <tr>
-            <td colspan="3" style="text-align:right; font-weight:bold;">Total Grabada (5%):</td>
-            <td style="text-align:right;">${Math.round(totalGrabada5).toLocaleString('es-PY')}</td>
+            <td class="total-label">Total IVA 5%:</td>
+            <td>${Math.round(totalGrabada5).toLocaleString('es-PY')}</td>
         </tr>
         <tr>
-            <td colspan="3" style="text-align:right; font-weight:bold;">Total Exenta:</td>
-            <td style="text-align:right;">${Math.round(totalExenta).toLocaleString('es-PY')}</td>
-        </tr>
-        <tr style="background-color:#f8f9fa;">
-            <td colspan="3" style="text-align:right; font-weight:bold; font-size:1.2em; padding:10px;">TOTAL A PAGAR:</td>
-            <td style="text-align:right; font-weight:bold; font-size:1.2em; padding:10px;">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td>
+            <td class="total-label">Total IVA 10%:</td>
+            <td>${Math.round(totalGrabada10).toLocaleString('es-PY')}</td>
         </tr>
         <tr>
-            <td colspan="4" style="text-align:right; font-size:0.85em; color:#555; padding-top:5px; border-top: 1px solid #ccc;">
-                <strong>Liquidación del IVA:</strong> (5%): ${Math.round(totalIVA5).toLocaleString('es-PY')} &nbsp;|&nbsp; (10%): ${Math.round(totalIVA10).toLocaleString('es-PY')} &nbsp;|&nbsp; <strong>Total IVA: ${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')}</strong>
+            <td class="total-label grand-total">TOTAL A PAGAR:</td>
+            <td class="grand-total">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td>
+        </tr>
+        <tr>
+            <td colspan="2" style="font-size: 9px; color: #777; padding-top: 5px;">
+                (Liq. IVA: 5%=${Math.round(totalIVA5).toLocaleString('es-PY')} | 10%=${Math.round(totalIVA10).toLocaleString('es-PY')} | Tot=${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')})
             </td>
         </tr>
     `;
-
     // Preparar objeto para el PDF
     const datosParaPDF = {
         fecha: fecha.toLocaleDateString('es-PY'),
@@ -641,51 +641,145 @@ function guardarVenta(venta) {
 
 // --- FUNCIÓN AUXILIAR DE PDF ACTUALIZADA ---
 // (Asegúrate de tener esta o actualizar la tuya)
+// ==========================================
+// GENERADOR DE PDF (DISEÑO PROFESIONAL)
+// ==========================================
+
 function crearPDFFactura(datos) {
-  const folder = DriveApp.getFoldersByName("CESTA_FACTURAS").hasNext() ? DriveApp.getFoldersByName("CESTA_FACTURAS").next() : DriveApp.createFolder("CESTA_FACTURAS");
-  
-  // Usamos una plantilla HTML simple directa para evitar errores de archivos
-  let html = `
+  // 1. Gestión de Carpeta (Igual que antes)
+  const nombreCarpeta = "CESTA_FACTURAS";
+  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
+  let carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(nombreCarpeta);
+  carpeta.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  // 2. Plantilla HTML con CSS Profesional
+  const html = `
+    <!DOCTYPE html>
     <html>
-      <body style="font-family: Arial, sans-serif; padding: 20px;">
-        <div style="border: 1px solid #333; padding: 20px;">
-          <h2 style="text-align:center; margin-bottom:5px;">FACTURA DE VENTA</h2>
-          <p style="text-align:center; margin-top:0;">Nro: <strong>${datos.nro_factura}</strong></p>
-          <hr>
-          <table style="width:100%; margin-bottom:10px;">
-            <tr><td><strong>Fecha:</strong> ${datos.fecha}</td> <td style="text-align:right;"><strong>Condición:</strong> ${datos.condicion}</td></tr>
-            <tr><td><strong>Cliente:</strong> ${datos.cliente_nombre}</td> <td style="text-align:right;"><strong>RUC/CI:</strong> ${datos.cliente_doc}</td></tr>
-            <tr><td colspan="2"><strong>Dirección:</strong> ${datos.cliente_dir}</td></tr>
-          </table>
-          
-          <table style="width:100%; border-collapse: collapse; margin-top: 20px;">
-            <thead>
-              <tr style="background-color:#eee;">
-                <th style="border:1px solid #ddd; padding:5px; text-align:left;">Descripción</th>
-                <th style="border:1px solid #ddd; padding:5px;">Cant.</th>
-                <th style="border:1px solid #ddd; padding:5px; text-align:right;">Precio</th>
-                <th style="border:1px solid #ddd; padding:5px; text-align:right;">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${datos.html_items}
-            </tbody>
-            <tfoot>
-              ${datos.html_totales}
-            </tfoot>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        @page { margin: 40px; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11px; color: #333; line-height: 1.4; }
+        
+        /* ENCABEZADO */
+        .header-table { width: 100%; border-bottom: 2px solid #E06920; padding-bottom: 10px; margin-bottom: 20px; }
+        .company-name { font-size: 20px; font-weight: bold; color: #E06920; text-transform: uppercase; }
+        .invoice-title { font-size: 18px; font-weight: bold; text-align: right; color: #444; }
+        .invoice-details { text-align: right; font-size: 12px; }
+
+        /* CLIENTE */
+        .client-box { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; border-radius: 4px; margin-bottom: 20px; }
+        .client-table { width: 100%; }
+        .label { font-weight: bold; color: #666; }
+
+        /* TABLA DE ITEMS */
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .items-table th { 
+            background-color: #333; 
+            color: #fff; 
+            padding: 8px; 
+            text-align: left; 
+            font-size: 10px; 
+            text-transform: uppercase; 
+        }
+        .items-table td { border-bottom: 1px solid #eee; padding: 8px 6px; vertical-align: top; }
+        
+        /* COLUMNAS Y ANCHOS */
+        .col-desc  { width: 45%; text-align: left; }
+        .col-iva   { width: 10%; text-align: center; }
+        .col-cant  { width: 10%; text-align: center; }
+        .col-money { width: 17.5%; text-align: right; white-space: nowrap; }
+        
+        /* TOTALES */
+        .totals-container { width: 100%; display: table; }
+        .totals-right { float: right; width: 45%; } /* Ocupa casi la mitad derecha */
+        .totals-table { width: 100%; border-collapse: collapse; }
+        .totals-table td { padding: 4px; text-align: right; }
+        .total-label { font-weight: bold; color: #555; }
+        .total-value { font-weight: bold; font-size: 12px; }
+        .grand-total { background-color: #E06920; color: white; font-size: 14px; padding: 8px !important; }
+
+        /* FOOTER */
+        .footer { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 9px; text-align: center; color: #777; }
+        .fw-bold { font-weight: bold; }
+      </style>
+    </head>
+    <body>
+
+      <table class="header-table">
+        <tr>
+          <td valign="top">
+            <div class="company-name">CESTA ERP</div>
+            <div>Gestión de Stock y Ventas</div>
+            <div>Asunción, Paraguay</div>
+          </td>
+          <td valign="top">
+            <div class="invoice-title">FACTURA DE VENTA</div>
+            <div class="invoice-details">
+              Nro: <strong>${datos.nro_factura}</strong><br>
+              Fecha: ${datos.fecha}<br>
+              Condición: ${datos.condicion}
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="client-box">
+        <table class="client-table">
+          <tr>
+            <td width="60%"><span class="label">Cliente:</span> ${datos.cliente_nombre}</td>
+            <td width="40%" align="right"><span class="label">RUC/CI:</span> ${datos.cliente_doc}</td>
+          </tr>
+          <tr>
+            <td colspan="2"><span class="label">Dirección:</span> ${datos.cliente_dir || '---'}</td>
+          </tr>
+        </table>
+      </div>
+
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th class="col-desc">Descripción</th>
+            <th class="col-iva">IVA</th>
+            <th class="col-cant">Cant.</th>
+            <th class="col-money">Precio Unit.</th>
+            <th class="col-money">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${datos.html_items} 
+        </tbody>
+      </table>
+
+      <div class="totals-container">
+        <div class="totals-right">
+          <table class="totals-table">
+             ${datos.html_totales}
           </table>
         </div>
-      </body>
+      </div>
+
+      <div class="footer">
+        Gracias por su preferencia. Documento generado electrónicamente por Cesta ERP.
+      </div>
+
+    </body>
     </html>
   `;
+
+  // 3. Generar y Guardar
+  const blob = Utilities.newBlob(html, "text/html", "Factura_temp.html");
+  const pdf = blob.getAs("application/pdf").setName("Factura " + datos.nro_factura + ".pdf");
   
-  const blob = Utilities.newBlob(html, "text/html", "Factura.html");
-  const pdf = blob.getAs("application/pdf").setName("Factura_" + datos.nro_factura + ".pdf");
-  return folder.createFile(pdf).getUrl();
+  const archivo = carpeta.createFile(pdf);
+  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  
+  return archivo.getUrl(); 
 }
 
 // Función auxiliar para PDF (si no la tienes separada, agrégala aquí)
-function crearPDFFactura(datos, items) {
+function crearPDFFactura1(datos, items) {
   const folder = DriveApp.getFoldersByName("CESTA_FACTURAS").hasNext() ? DriveApp.getFoldersByName("CESTA_FACTURAS").next() : DriveApp.createFolder("CESTA_FACTURAS");
   const template = HtmlService.createTemplateFromFile('Factura');
   template.datos = datos;
@@ -726,7 +820,8 @@ function obtenerHistorialVentas() {
           nombre_cliente: mapaClientes[fila[3]] || 'Cliente Casual', // Col D -> Indice 3
           total: Number(fila[5]) || 0,    // Col F -> Indice 5 (Total)
           estado: fila[6] || 'Pagado', // Col G -> Indice 6 (Estado)
-          url_pdf: fila[7]     // Columna H es el PDF
+          url_pdf: fila[7],     // Columna H es el PDF
+          condicion: fila[8] || 'CONTADO'
         });
     }
   }
@@ -2121,53 +2216,146 @@ function obtenerHistorialRemisiones() {
     const sh = ss.getSheetByName('REMISIONES_CABECERA');
     const shCli = ss.getSheetByName('CLIENTES');
     
-    // Si no existe la hoja o solo tiene el encabezado
     if (!sh || sh.getLastRow() <= 1) return [];
     
-    // Mapa de clientes para mostrar nombres
+    // Mapa de clientes (ID -> Nombre)
     const mapCli = {};
     if (shCli) {
       const d = shCli.getDataRange().getValues();
       for(let i=1; i<d.length; i++) {
-        // Col A = ID, Col B = Razón Social
         mapCli[String(d[i][0]).trim()] = d[i][1]; 
       }
     }
 
     const data = sh.getDataRange().getValues();
-    // Estructura Cabecera: 
-    // [0]id, [1]fecha, [2]numero, [3]id_cli, [4]id_dep, [5]conductor, [6]chapa, [7]estado, [8]pdf
-    
     const result = [];
+
+    // Recorremos los datos (fila 1 en adelante)
     for(let i=1; i<data.length; i++) {
       const fila = data[i];
       
-      // Verificamos que tenga ID para no cargar filas vacías
-      if (fila[0]) {
-        // Convertir fecha a String ISO para que no falle en el frontend
-        let fechaSegura = fila[1];
-        if (fila[1] instanceof Date) {
+      // Validamos que exista ID de remisión
+      if (fila[0] && String(fila[0]).trim() !== "") {
+        
+        // 1. TRATAMIENTO SEGURO DE FECHA
+        let fechaSegura = "";
+        try {
+          if (fila[1] instanceof Date) {
             fechaSegura = fila[1].toISOString();
+          } else {
+            // Si es texto, intentamos convertirlo o dejarlo tal cual
+            fechaSegura = String(fila[1]); 
+          }
+        } catch(e) {
+          fechaSegura = new Date().toISOString(); // Fallback si falla la fecha
         }
 
+        // 2. OBTENCIÓN SEGURA DE VALORES (Todo a String para evitar errores)
+        const idCliente = String(fila[3] || "").trim();
+        const idDeposito = String(fila[4] || "").trim();
+
         result.push({
-          id_remision: fila[0],
+          id_remision: String(fila[0]),
           fecha: fechaSegura,
-          numero: fila[2],
-          // Buscamos nombre cliente, si no hay, ponemos "Desconocido"
-          cliente: mapCli[String(fila[3]).trim()] || 'Cliente Desconocido',
-          estado: fila[7],
-          url_pdf: fila[8]
+          numero: String(fila[2] || "---"),
+          id_cliente_raw: idCliente,
+          id_deposito_raw: idDeposito,
+          cliente: mapCli[idCliente] || 'Cliente Desconocido', // Nombre visual
+          estado: String(fila[7] || "PENDIENTE"), // Estado
+          url_pdf: String(fila[8] || "")
         });
       }
     }
     
-    // Devolvemos invertido (lo más nuevo arriba)
-    return result.reverse();
+    return result.reverse(); // Devolver lo más nuevo primero
 
   } catch (e) {
-    // Si falla, lanzamos el error para que el frontend lo muestre en la alerta
-    throw new Error("Error en Backend: " + e.toString());
+    Logger.log("ERROR EN HISTORIAL REMISIONES: " + e.toString());
+    throw new Error("Backend Error: " + e.toString());
   }
 }
 
+
+// ==========================================
+//  ANULACIÓN DE REMISIONES
+// ==========================================
+
+function anularRemision(idRemision) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+
+  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const shCab = ss.getSheetByName('REMISIONES_CABECERA');
+  const shDet = ss.getSheetByName('REMISIONES_DETALLE');
+  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const shProd = ss.getSheetByName('PRODUCTOS'); // Necesario para devolver stock visual
+
+  // 1. Buscar la Remisión y Verificar Estado
+  const dataCab = shCab.getDataRange().getValues();
+  let filaCab = -1;
+  let idDepositoOrigen = "";
+  
+  for (let i = 1; i < dataCab.length; i++) {
+    // Col A: id_remision (índice 0)
+    if (String(dataCab[i][0]) === String(idRemision)) {
+      const estadoActual = dataCab[i][7]; // Col H: estado
+      
+      if (estadoActual === 'ANULADO') {
+        lock.releaseLock();
+        throw "Esta remisión ya está anulada.";
+      }
+      
+      if (estadoActual === 'FACTURADO') {
+        lock.releaseLock();
+        throw "⛔ No se puede anular: Esta remisión ya fue facturada. Debes anular la factura primero.";
+      }
+      
+      idDepositoOrigen = dataCab[i][4]; // Col E: id_deposito
+      filaCab = i + 1; // Guardamos la fila para actualizar luego
+      break;
+    }
+  }
+
+  if (filaCab === -1) {
+    lock.releaseLock();
+    throw "Remisión no encontrada.";
+  }
+
+  // 2. Recuperar Items para Devolver Stock
+  const dataDet = shDet.getDataRange().getValues();
+  const itemsADevolver = [];
+  
+  for (let i = 1; i < dataDet.length; i++) {
+    // Col B: id_remision (índice 1)
+    if (String(dataDet[i][1]) === String(idRemision)) {
+      itemsADevolver.push({
+        id_producto: dataDet[i][2], // Col C
+        cantidad: Number(dataDet[i][3]) // Col D
+      });
+    }
+  }
+
+  // 3. Ejecutar Devolución de Stock
+  itemsADevolver.forEach(item => {
+    // A. Registrar Movimiento de Entrada (Corrección)
+    shMov.appendRow([
+      Utilities.getUuid(),
+      new Date(),
+      "ENTRADA_ANULACION_REM", // Tipo movimiento especial
+      item.id_producto,
+      idDepositoOrigen,
+      item.cantidad, // Positivo porque vuelve a entrar
+      idRemision
+    ]);
+
+    // B. Actualizar Stock Real (Tabla Existencias y Productos)
+    actualizarStockDeposito(item.id_producto, idDepositoOrigen, item.cantidad);
+  });
+
+  // 4. Actualizar Estado en Cabecera
+  // Columna 8 (H) es Estado
+  shCab.getRange(filaCab, 8).setValue("ANULADO");
+
+  lock.releaseLock();
+  return { success: true };
+}
