@@ -3072,3 +3072,134 @@ function cambiarPassword(idUsuario, passActual, passNueva) {
   throw "Usuario no encontrado.";
 }
 
+// ==========================================
+// 📊 DASHBOARD Y ANALÍTICA
+// ==========================================
+
+function obtenerDatosDashboard() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  const anioActual = hoy.getFullYear();
+  
+  // Calcular fecha del mes pasado
+  let mesPasado = mesActual - 1;
+  let anioPasado = anioActual;
+  if (mesPasado < 0) { mesPasado = 11; anioPasado = anioActual - 1; }
+
+  // --- FUNCIÓN AUXILIAR PARA SUMAR COLUMNAS POR FECHA ---
+  // hoja: nombre de la pestaña
+  // colFecha: índice de la columna fecha (empezando en 0)
+  // colMonto: índice de la columna monto
+  function sumarPorPeriodo(hoja, colFecha, colMonto) {
+    const sh = ss.getSheetByName(hoja);
+    let datos = { hoy: 0, mesActual: 0, mesPasado: 0 };
+    
+    if (sh) {
+      const data = sh.getDataRange().getValues();
+      // Empezamos i=1 para saltar encabezados
+      for (let i = 1; i < data.length; i++) {
+        const fechaFila = new Date(data[i][colFecha]);
+        const monto = parseFloat(data[i][colMonto]) || 0;
+        
+        // Validar que sea fecha válida
+        if (!isNaN(fechaFila.getTime())) {
+          
+          // 1. Sumar Hoy
+          if (fechaFila.getDate() === hoy.getDate() && 
+              fechaFila.getMonth() === mesActual && 
+              fechaFila.getFullYear() === anioActual) {
+            datos.hoy += monto;
+          }
+
+          // 2. Sumar Mes Actual
+          if (fechaFila.getMonth() === mesActual && fechaFila.getFullYear() === anioActual) {
+            datos.mesActual += monto;
+          }
+
+          // 3. Sumar Mes Pasado
+          if (fechaFila.getMonth() === mesPasado && fechaFila.getFullYear() === anioPasado) {
+            datos.mesPasado += monto;
+          }
+        }
+      }
+    }
+    return datos;
+  }
+
+  // --- OBTENER DATOS REALES ---
+  // NOTA: Ajustaremos los índices (0, 4) cuando creemos las hojas reales.
+  // Asumimos temporalmente: Col 0 = Fecha, Col 4 = Total
+  const ventas = sumarPorPeriodo('VENTAS_CABECERA', 2, 5); 
+  const gastos = sumarPorPeriodo('GASTOS', 1, 4); 
+
+  // --- 4. ALERTAS DE STOCK (CRUCE ENTRE PRODUCTOS Y EXISTENCIAS) ---
+  let alertasStock = 0;
+  let productosBajos = [];
+  
+  const shProd = ss.getSheetByName('PRODUCTOS');
+  const shExist = ss.getSheetByName('STOCK_EXISTENCIAS'); // <--- TU NUEVA HOJA
+  
+  if (shProd && shExist) {
+    const dataProd = shProd.getDataRange().getValues();
+    const dataExist = shExist.getDataRange().getValues();
+
+    // A. MAPEO DE EXISTENCIAS (Creamos un diccionario "Producto" -> "Cantidad")
+    // =========================================================================
+    // Ajusta estos índices según tu hoja STOCK_EXISTENCIAS
+    const COL_EXIST_NOMBRE = 1; // Columna con el Nombre o Código del producto
+    const COL_EXIST_CANT = 3;   // Columna con la Cantidad Actual
+    
+    let inventarioReal = {}; // Aquí guardaremos: { "Coca Cola": 50, "Pan": 10 }
+
+    for (let j = 1; j < dataExist.length; j++) {
+      const nombreItem = String(dataExist[j][COL_EXIST_NOMBRE]).trim(); 
+      const cantidadItem = parseFloat(dataExist[j][COL_EXIST_CANT]) || 0;
+      
+      // Guardamos en el diccionario (si hay duplicados, sumamos)
+      if (inventarioReal[nombreItem]) {
+        inventarioReal[nombreItem] += cantidadItem;
+      } else {
+        inventarioReal[nombreItem] = cantidadItem;
+      }
+    }
+
+    // B. COMPARACIÓN CON MÍNIMOS (Recorremos PRODUCTOS)
+    // =========================================================================
+    // Ajusta estos índices según tu hoja PRODUCTOS
+    const COL_PROD_NOMBRE = 2; // Columna Nombre (Debe coincidir con la de Existencias)
+    const COL_PROD_MIN = 7;    // Columna Stock Mínimo
+    
+    for (let i = 1; i < dataProd.length; i++) {
+      const nombreProd = String(dataProd[i][COL_PROD_NOMBRE]).trim();
+      const stockMinimo = parseFloat(dataProd[i][COL_PROD_MIN]) || 0;
+
+      // Buscamos cuánto stock real tiene este producto usando el diccionario
+      // Si no existe en la hoja de existencias, asumimos que hay 0
+      const stockActual = inventarioReal[nombreProd] || 0;
+
+      // Si el nombre no está vacío y el stock es crítico
+      if (nombreProd && stockActual <= stockMinimo) {
+        alertasStock++;
+        productosBajos.push(`${nombreProd} (${stockActual})`);
+      }
+    }
+  }
+
+  return {
+    kpi: {
+      ventasHoy: ventas.hoy,
+      ventasMes: ventas.mesActual,
+      gastosMes: gastos.mesActual,
+      stockBajo: alertasStock
+    },
+    flujoCaja: {
+      ingresoActual: ventas.mesActual,
+      ingresoPasado: ventas.mesPasado,
+      gastoActual: gastos.mesActual,
+      gastoPasado: gastos.mesPasado,
+      balanceActual: ventas.mesActual - gastos.mesActual
+    }
+  };
+}
+
