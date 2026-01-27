@@ -3571,7 +3571,277 @@ function generarReporte(peticion) {
       }
     }
   }
+}
 
+function generarReporte(peticion) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tipo = peticion.tipo;
+  
+  // Fechas: Inicio y Fin
+  const fInicio = new Date(peticion.fechaInicio);
+  fInicio.setHours(0,0,0);
+  const fFin = new Date(peticion.fechaFin);
+  fFin.setHours(23,59,59);
+
+  let cabeceras = []; 
+  let filas = [];     
+  let totales = { suma: 0, conteo: 0 };
+  
+  const fmtFecha = (d) => Utilities.formatDate(new Date(d), Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+  // ======================================================
+  // 1. CARGA DE DICCIONARIOS (ID -> NOMBRE)
+  // ======================================================
+  let mapaNombres = {}; // Clientes, Proveedores, Depósitos, Categorías
+  let mapaProductos = {}; // ID Prod -> Nombre Producto
+
+  // Helper para cargar mapas
+  const cargarMapa = (hoja, colId, colVal) => {
+    const sh = ss.getSheetByName(hoja);
+    if(sh) {
+      const data = sh.getDataRange().getValues();
+      for(let i=1; i<data.length; i++) mapaNombres[data[i][colId]] = data[i][colVal];
+    }
+  };
+
+  cargarMapa('CLIENTES', 0, 1);
+  cargarMapa('PROVEEDORES', 0, 1);
+  cargarMapa('DEPOSITOS', 0, 1);
+  cargarMapa('CATEGORIAS', 0, 1);
+
+  // Cargar Productos Especial (ID -> Nombre)
+  const shProd = ss.getSheetByName('PRODUCTOS');
+  if(shProd) {
+    const data = shProd.getDataRange().getValues();
+    for(let i=1; i<data.length; i++) {
+       mapaProductos[data[i][0]] = data[i][2]; // Col 0: ID, Col 2: Nombre
+    }
+  }
+
+  // ======================================================
+  // 2. PROCESAMIENTO POR TIPO
+  // ======================================================
+
+  // ======================================================
+  // 2. PROCESAMIENTO POR TIPO (ENCABEZADOS CORREGIDOS)
+  // ======================================================
+
+  switch (tipo) {
+    
+    // --- VENTAS ---
+    // Orden de Datos: Fecha, Nro Factura, Cliente, Producto, Cant, Precio, Subtotal
+    case 'ventas':
+      cabeceras = ["Fecha", "Nro Factura", "Cliente", "Producto", "Cantidad", "Precio Unit.", "Subtotal"];
+      procesarDetalleCompleto({
+         hojaCab: 'VENTAS_CABECERA', 
+         hojaDet: 'VENTAS_DETALLE',
+         colFecha: 2, colLinkCab: 0, colLinkDet: 1,
+         datosCab: [1, 3], // [1:Nro, 3:Cliente]
+         datosDet: [2, 3, 4, 6], // [2:Prod, 3:Cant, 4:Precio, 6:Subtotal]
+         idxCliente: 3, idxProductoEnDet: 2, idxMontoSumar: 6
+      });
+      break;
+
+    // --- COMPRAS ---
+    // Orden de Datos: Fecha, ID Compra, Proveedor, Producto, Cant, Costo, Subtotal
+    case 'compras':
+      cabeceras = ["Fecha", "ID Compra", "Proveedor", "Producto", "Cantidad", "Costo Unit.", "Subtotal"];
+      procesarDetalleCompleto({
+         hojaCab: 'COMPRAS_CABECERA', 
+         hojaDet: 'COMPRAS_DETALLE',
+         colFecha: 1, colLinkCab: 0, colLinkDet: 1,
+         datosCab: [0, 2], // [0:ID, 2:Prov]
+         datosDet: [2, 3, 4, 5], // [2:Prod, 3:Cant, 4:Costo, 5:Subtotal]
+         idxCliente: 2, idxProductoEnDet: 2, idxMontoSumar: 5
+      });
+      break;
+
+    // --- TRANSFERENCIAS ---
+    // Orden de Datos: Fecha, Origen, Destino, Responsable, Producto, Cantidad
+    case 'transferencias':
+      cabeceras = ["Fecha", "Origen", "Destino", "Responsable", "Producto", "Cantidad"];
+      procesarDetalleCompleto({
+         hojaCab: 'TRANSFERENCIAS_CABECERA', 
+         hojaDet: 'TRANSFERENCIAS_DETALLE',
+         colFecha: 1, colLinkCab: 0, colLinkDet: 1,
+         datosCab: [2, 3, 4], // [2:Origen, 3:Destino, 4:Responsable]
+         datosDet: [2, 3],    // [2:Prod, 3:Cant]
+         idxCliente: null, 
+         indicesCabTraducir: [2, 3],
+         idxProductoEnDet: 2, idxMontoSumar: null
+      });
+      break;
+
+    // --- REMISIONES ---
+    // Orden de Datos: Fecha, Nro Remisión, Cliente, Destino, Producto, Cantidad
+    case 'remisiones':
+      cabeceras = ["Fecha", "Nro Remisión", "Cliente", "Destino", "Producto", "Cantidad"];
+      procesarDetalleCompleto({
+         hojaCab: 'REMISIONES_CABECERA', 
+         hojaDet: 'REMISIONES_DETALLE',
+         colFecha: 1, colLinkCab: 0, colLinkDet: 1,
+         datosCab: [2, 3, 4], // [2:Nro, 3:Cliente, 4:Destino]
+         datosDet: [2, 3],    // [2:Prod, 3:Cant]
+         idxCliente: 3, 
+         indicesCabTraducir: [4], // Traducir destino
+         idxProductoEnDet: 2, idxMontoSumar: null
+      });
+      break;
+
+    // --- AJUSTES ---
+    // Orden de Datos: Fecha, Motivo, Producto, Depósito, Cantidad
+    case 'ajustes':
+      cabeceras = ["Fecha", "Motivo", "Producto", "Depósito", "Cantidad"];
+      const shAj = ss.getSheetByName('MOVIMIENTOS_STOCK');
+      if(shAj){
+        const data = shAj.getDataRange().getValues();
+        for(let i=1; i<data.length; i++){
+           let fecha = new Date(data[i][1]);
+           if(!isNaN(fecha) && fecha >= fInicio && fecha <= fFin){
+             let nomProd = mapaProductos[data[i][3]] || data[i][3];
+             let nomDep = mapaNombres[data[i][4]] || data[i][4];
+             filas.push([fmtFecha(fecha), data[i][2], nomProd, nomDep, data[i][5]]);
+             totales.conteo++;
+           }
+        }
+      }
+      break;
+
+    // --- GASTOS (Simple) ---
+    case 'gastos':
+      cabeceras = ["Fecha", "Descripción", "Monto", "Categoría"];
+      procesarSimple('GASTOS', [1, 3, 4, 2], 1, 4, [2]);
+      break;
+      
+    // --- COBRANZAS (Simple) ---
+    case 'cobranzas':
+      cabeceras = ["ID Recibo", "Fecha", "Cliente", "Monto", "Forma Pago"];
+      procesarSimple('COBRANZAS', [0, 1, 2, 3, 4], 1, 3, [2]);
+      break;
+
+    // --- STOCK / MAESTROS (Sin Cambios) ---
+    case 'stock_deposito':
+    case 'productos_categoria':
+      cabeceras = ["SKU", "Producto", "Categoría", "Depósito", "Stock Actual", "Costo Prom."];
+      generarReporteStock();
+      break;
+
+    case 'clientes':
+      cabeceras = ["ID", "Nombre / Razón Social", "RUC/CI", "Teléfono", "Dirección"];
+      procesarMaestro('CLIENTES', [0, 1, 2, 4, 5]);
+      break;
+
+    case 'proveedores':
+      cabeceras = ["ID", "Empresa", "RUC", "Contacto", "Datos Adic."];
+      procesarMaestro('PROVEEDORES', [0, 1, 2, 3, 4]);
+      break;
+  }
+
+  // ======================================================
+  // 3. FUNCIONES AUXILIARES INTERNAS
+  // ======================================================
+
+  // A. PROCESAR DETALLE COMPLETO (Cabecera + Detalle + Producto)
+  function procesarDetalleCompleto(cfg) {
+    const shCab = ss.getSheetByName(cfg.hojaCab);
+    const shDet = ss.getSheetByName(cfg.hojaDet);
+    if(!shCab || !shDet) return;
+
+    const dataCab = shCab.getDataRange().getValues();
+    const dataDet = shDet.getDataRange().getValues();
+
+    // 1. Filtrar Cabeceras válidas por Fecha
+    let cabecerasValidas = {}; // { id_venta: [Fecha, Nro, Cliente...] }
+    
+    for(let i=1; i<dataCab.length; i++){
+      let fecha = new Date(dataCab[i][cfg.colFecha]);
+      if(!isNaN(fecha) && fecha >= fInicio && fecha <= fFin) {
+        let idLink = dataCab[i][cfg.colLinkCab]; // ID Venta/Compra
+        
+        // Preparar datos de cabecera
+        let datosFilaCab = [];
+        datosFilaCab.push(fmtFecha(fecha)); // La fecha siempre va primero
+        
+        cfg.datosCab.forEach(idx => {
+           let val = dataCab[i][idx];
+           // Traducir Cliente/Proveedor/Deposito si corresponde
+           if(idx === cfg.idxCliente || (cfg.indicesCabTraducir && cfg.indicesCabTraducir.includes(idx))){
+             val = mapaNombres[val] || val;
+           }
+           datosFilaCab.push(val);
+        });
+
+        cabecerasValidas[idLink] = datosFilaCab;
+      }
+    }
+
+    // 2. Recorrer Detalles y cruzar
+    for(let j=1; j<dataDet.length; j++){
+       let idLink = dataDet[j][cfg.colLinkDet]; // ID Venta en detalle
+       
+       // Si este detalle pertenece a una cabecera válida (fecha correcta)
+       if(cabecerasValidas[idLink]) {
+         let infoCabecera = cabecerasValidas[idLink]; // Array base [Fecha, Nro, Cliente]
+         
+         let infoDetalle = cfg.datosDet.map(idx => {
+            let val = dataDet[j][idx];
+            // Traducir Producto
+            if(idx === cfg.idxProductoEnDet) {
+               return mapaProductos[val] || val;
+            }
+            return val;
+         });
+
+         // Unir: [Cabecera] + [Detalle]
+         filas.push([...infoCabecera, ...infoDetalle]);
+         
+         totales.conteo++;
+         if(cfg.idxMontoSumar !== null) {
+            // El índice del monto en dataDet es el último del array infoDetalle usualmente?
+            // Mejor leemos directo de dataDet usando el indice configurado
+            let monto = parseFloat(dataDet[j][cfg.idxMontoSumar]) || 0;
+            totales.suma += monto;
+         }
+       }
+    }
+  }
+
+  // B. PROCESAR SIMPLE (Solo Cabecera - Gastos, Cobranzas)
+  function procesarSimple(nombreHoja, indicesCols, idxFecha, idxMonto, indicesAtraducir = []) {
+    const sh = ss.getSheetByName(nombreHoja);
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      let fecha = new Date(data[i][idxFecha]);
+      if (!isNaN(fecha) && fecha >= fInicio && fecha <= fFin) {
+        let fila = indicesCols.map(idx => {
+            let val = data[i][idx];
+            if (idx === idxFecha) return fmtFecha(val);
+            if (indicesAtraducir.includes(idx)) return mapaNombres[val] || val;
+            return val;
+        });
+        filas.push(fila);
+        totales.conteo++;
+        if (idxMonto !== null) totales.suma += parseFloat(data[i][idxMonto]) || 0;
+      }
+    }
+  }
+
+  // C. MAESTROS
+  function procesarMaestro(nombreHoja, indicesCols) {
+    const sh = ss.getSheetByName(nombreHoja);
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if(data[i][0] !== "") { 
+        filas.push(indicesCols.map(idx => data[i][idx]));
+        totales.conteo++;
+      }
+    }
+  }
+
+  // D. STOCK
   function generarReporteStock() {
       const shProd = ss.getSheetByName('PRODUCTOS'); 
       const shExist = ss.getSheetByName('STOCK_EXISTENCIAS'); 
@@ -3580,39 +3850,22 @@ function generarReporte(peticion) {
       const dataProd = shProd.getDataRange().getValues();
       const dataExist = shExist.getDataRange().getValues();
       
-      // 1. Mapa de Productos con Categoría Traducida
       let infoProd = {};
       for(let i=1; i<dataProd.length; i++){
-          let idProd = dataProd[i][0];
-          let idCat = dataProd[i][3]; // Columna Categoría en Productos
-          
-          // AQUÍ SE USA EL DICCIONARIO PARA OBTENER EL NOMBRE REAL DE LA CATEGORÍA
-          let nombreCategoria = mapaNombres[idCat] || 'Sin Categoría'; 
-
-          infoProd[idProd] = { 
-              sku: dataProd[i][1], 
-              nombre: dataProd[i][2], 
-              cat: nombreCategoria, 
+          let idCat = dataProd[i][3];
+          infoProd[dataProd[i][0]] = { 
+              sku: dataProd[i][1], nombre: dataProd[i][2], 
+              cat: mapaNombres[idCat] || 'Sin Categoría', 
               costo: dataProd[i][6] 
           };
       }
-
-      // 2. Recorrer Existencias
       for(let j=1; j<dataExist.length; j++){
-          let idProd = dataExist[j][1];
-          let idDep = dataExist[j][2];
-          
-          // AQUÍ SE TRADUCE EL NOMBRE DEL DEPÓSITO
-          let nombreDep = mapaNombres[idDep] || 'General'; 
-          
-          let cantidad = parseFloat(dataExist[j][3]) || 0;
-          let p = infoProd[idProd] || { sku: '-', nombre: 'Desconocido', cat: '-', costo: 0 };
-          
-          // Aplicar filtro si es por categoría (Opcional: puedes filtrar aquí si el usuario eligió una sola categoría)
-          
-          filas.push([p.sku, p.nombre, p.cat, nombreDep, cantidad, p.costo]);
+          let p = infoProd[dataExist[j][1]] || { sku:'-', nombre:'?', cat:'-', costo:0 };
+          let deposito = mapaNombres[dataExist[j][2]] || 'General';
+          let cant = parseFloat(dataExist[j][3]) || 0;
+          filas.push([p.sku, p.nombre, p.cat, deposito, cant, p.costo]);
           totales.conteo++;
-          totales.suma += (cantidad * (parseFloat(p.costo)||0)); 
+          totales.suma += (cant * (parseFloat(p.costo)||0)); 
       }
   }
 
