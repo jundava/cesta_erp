@@ -98,7 +98,10 @@ function setupDatabase() {
       nombre: "REMISIONES_DETALLE",
       cols: ["id_detalle", "id_remision", "id_producto", "cantidad", "precio_unitario"]
     },
-    // --- MÓDULO GASTOS (NUEVO) ---
+    {
+      nombre: "USUARIOS",
+      cols: ["id_usuario", "nombre", "email", "password", "rol", "modulos_permitidos", "activo"]
+    },
     {
       nombre: "GASTOS",
       cols: ["id_gasto", "fecha", "categoria", "descripcion", "monto", "metodo_pago"]

@@ -4,7 +4,7 @@
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Cesta App</title>
+    <title>Cesta Control de Stock</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -96,10 +96,110 @@
       .img-producto-card img { width: 100%; height: 100%; object-fit: contain; padding: 15px; }
       .card { transition: transform 0.2s; border: none; }
       .no-hover:hover { transform: none; }
+
+      .login-bg {
+          background-color: #f8f9fa;
+          /* Usamos tu variable --color-primary con transparencia para los puntos */
+          background-image: radial-gradient(rgba(224, 105, 32, 0.2) 1px, transparent 1px);
+          background-size: 20px 20px;
+      }
+
+      .input-dots::placeholder {
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: clip; /* Corta los puntos extra sin poner "..." */
+          letter-spacing: 2px; /* Opcional: separa los puntos para llenar más rápido */
+      }
+
+      .user-icon-brand {
+          background-color: var(--color-primary);
+          transition: background-color 0.3s ease;
+          cursor: default; /* O pointer si planeas hacerlo clicable */
+      }
+
+      .user-icon-brand:hover {
+          background-color: var(--color-primary-hover);
+      }
+
+      /* Estilo Botón Menú Móvil */
+      .nav-mobile-btn {
+          width: 100%;
+          text-align: left;
+          background: transparent;
+          border: none;
+          padding: 15px 20px;
+          color: #555;
+          font-weight: 500;
+          border-left: 4px solid transparent; /* Borde invisible para efecto activo */
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+      }
+
+      .nav-mobile-btn i {
+          font-size: 1.2rem;
+          margin-right: 15px;
+          color: #adb5bd; /* Gris por defecto */
+          transition: color 0.2s;
+      }
+
+      /* Estado Activo (Naranja) */
+      .nav-mobile-btn.active {
+          background-color: #fff4e6; /* Fondo naranja muy suave */
+          color: var(--color-primary);
+          border-left-color: var(--color-primary); /* Borde naranja a la izquierda */
+      }
+
+      .nav-mobile-btn.active i {
+          color: var(--color-primary); /* Icono naranja */
+      }
+
     </style>
 </head>
 <body>
-    <div id="app">
+    <div id="app" class="d-flex h-100 flex-column">
+          <div v-if="!usuarioLogueado" class="position-fixed top-0 start-0 w-100 h-100 login-bg d-flex align-items-center justify-content-center" style="z-index: 9999;">  
+            <div class="card border-0 shadow-lg" style="width: 100%; max-width: 400px; border-top: 5px solid var(--color-primary);">
+                <div class="card-body p-5">
+
+                    <div class="text-center mb-4">                       
+                        <h4 class="fw-bold text-dark mb-1"><img src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w900" alt="CESTA Logo" class="logo-img"> Bienvenido</h4>
+                        <p class="text-muted small">Ingresa tus credenciales para acceder</p>
+                    </div>
+
+                    <form @submit.prevent="iniciarSesion">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-secondary">Usuario</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0"><i class="bi bi-person text-brand"></i></span>
+                                <input type="text" class="form-control border-start-0 ps-0 bg-light" v-model="loginData.usuario" placeholder="" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small text-secondary">Contraseña</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock text-brand"></i></span>
+                                <input type="password" class="form-control border-start-0 ps-0 bg-light" v-model="loginData.password" placeholder="" required>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-brand btn-lg shadow-sm fw-bold">
+                                Iniciar Sesión
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-4 text-center border-top pt-3">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">
+                            © 2024 Cesta ERP • Control de Stock
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
       <div class="modal fade" id="modalDetalle" tabindex="-1">
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
@@ -145,38 +245,119 @@
       </div>
 
       <nav class="navbar navbar-dark bg-brand shadow sticky-top z-3">
-        <div class="container-fluid d-flex justify-content-between align-items-center">
-          <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="#">
-            <img src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w500" alt="CESTA Logo" class="logo-img">
-              <span>CESTA Control de Stock</span>
-          </a>
-          <div class="d-flex align-items-center text-white">
-            <div class="d-none d-sm-block text-end me-2 line-height-1">
-              <small class="d-block opacity-75">Hola,</small><span class="fw-bold">Admin</span>
-            </div>
-            <div class="bg-white text-brand rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 35px; height: 35px;">A</div>
+        <div class="container-fluid">
+          
+          <div class="d-flex align-items-center" 
+               style="cursor: pointer;" 
+               @click="vistaActual = 'dashboard'; cargarDashboard()">
+               
+              <img src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w900" alt="CESTA Logo" class="logo-img me-2"> <span class="fw-bold text-white fs-5">CESTA Control de Stock</span>
           </div>
+
         </div>
       </nav>
 
       <div class="container-fluid">
         <div class="row">         
+          <div class="col-md-2 sidebar p-3 d-none d-md-block shadow-sm z-2 d-flex flex-column justify-content-between" style="min-height: 100vh;">
+            <div>
+                <a class="nav-link-desktop mb-2" :class="{active: vistaActual === 'dashboard'}" @click="vistaActual = 'dashboard'; cargarDashboard()">
+                    <i class="bi bi-house-door me-2"></i> Inicio
+                </a>
 
-            <div class="col-md-2 sidebar p-3 d-none d-md-block shadow-sm z-2">
-                <small class="text-muted text-uppercase fw-bold ps-2 mb-2 d-block" style="font-size: 0.7rem;">Facturación</small>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones')"><i class="bi bi-truck-flatbed me-2"></i> Notas de Remisión</a>                
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt me-2"></i> Ventas / Caja</a>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus me-2"></i> Compras / Stock</a>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'gastos'}" @click="cambiarVista('gastos')"><i class="bi bi-cash-stack me-2"></i> Gastos Operativos</a>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias')"><i class="bi bi-arrow-left-right me-2"></i> Transferencias</a>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'cobranzas'}" @click="cargarCobranzas()"><i class="bi bi-wallet2 me-2"></i> Cobranzas</a>
-                <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Gestión</small>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')"><i class="bi bi-box-seam me-2"></i> Inventario</a>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes')"><i class="bi bi-people me-2"></i> Clientes</a>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'proveedores'}" @click="cambiarVista('proveedores')"><i class="bi bi-truck me-2"></i> Proveedores</a>              
-                <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Sistema</small>
-                <a class="nav-link-desktop" :class="{active: vistaActual === 'config'}" @click="cambiarVista('config')"><i class="bi bi-gear me-2"></i> Configuración</a>
+                <small v-if="tengoAlgunPermiso(['remisiones','ventas','compras','gastos','transferencias','cobranzas'])" 
+                       class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-2 d-block" style="font-size: 0.7rem;">
+                    Operaciones
+                </small>
+                
+                <a v-if="tengoPermiso('remisiones')" class="nav-link-desktop" :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones')">
+                    <i class="bi bi-truck-flatbed me-2"></i> Notas de Remisión
+                </a>
+                
+                <a v-if="tengoPermiso('ventas')" class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
+                    <i class="bi bi-receipt me-2"></i> Ventas / Caja
+                </a>
+                
+                <a v-if="tengoPermiso('compras')" class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
+                    <i class="bi bi-cart-plus me-2"></i> Compras / Stock
+                </a>
+                
+                <a v-if="tengoPermiso('gastos')" class="nav-link-desktop" :class="{active: vistaActual === 'gastos'}" @click="cambiarVista('gastos')">
+                    <i class="bi bi-cash-stack me-2"></i> Gastos Operativos
+                </a>
+                
+                <a v-if="tengoPermiso('transferencias')" class="nav-link-desktop" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias')">
+                    <i class="bi bi-arrow-left-right me-2"></i> Transferencias
+                </a>
+                
+                <a v-if="tengoPermiso('cobranzas')" class="nav-link-desktop" :class="{active: vistaActual === 'cobranzas'}" @click="cargarCobranzas()">
+                    <i class="bi bi-wallet2 me-2"></i> Cobranzas
+                </a>
+
+                <small v-if="tengoAlgunPermiso(['productos','clientes','proveedores'])" 
+                       class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">
+                    Gestión
+                </small>
+                
+                <a v-if="tengoPermiso('productos')" class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')">
+                    <i class="bi bi-box-seam me-2"></i> Inventario
+                </a>
+                
+                <a v-if="tengoPermiso('clientes')" class="nav-link-desktop" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes')">
+                    <i class="bi bi-people me-2"></i> Clientes
+                </a>
+                
+                <a v-if="tengoPermiso('proveedores')" class="nav-link-desktop" :class="{active: vistaActual === 'proveedores'}" @click="cambiarVista('proveedores')">
+                    <i class="bi bi-truck me-2"></i> Proveedores
+                </a>
+
+                <small v-if="tengoAlgunPermiso(['reportes','usuarios','config'])" 
+                       class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">
+                    Sistema
+                </small>
+                
+                <a v-if="tengoPermiso('reportes')" class="nav-link-desktop" :class="{active: vistaActual === 'reportes'}" @click="cambiarVista('reportes')">
+                    <i class="bi bi-file-earmark-bar-graph me-2"></i> Reportes
+                </a>
+                
+                <a v-if="tengoPermiso('usuarios')" class="nav-link-desktop" :class="{active: vistaActual === 'usuarios'}" @click="cambiarVista('usuarios')">
+                    <i class="bi bi-person-badge me-2"></i> Usuarios
+                </a>
+                
+                <a v-if="tengoPermiso('config')" class="nav-link-desktop" :class="{active: vistaActual === 'config'}" @click="cambiarVista('config')">
+                    <i class="bi bi-gear me-2"></i> Configuración
+                </a>
             </div>
+
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex align-items-center justify-content-between px-2 mb-2">
+                    
+                    <div class="d-flex align-items-center overflow-hidden" 
+                         style="cursor: pointer;" 
+                         @click="vistaActual = 'perfil'; cargarPerfil()" 
+                         title="Editar mi perfil">
+                        
+                        <div class="user-icon-brand text-white rounded-circle d-flex align-items-center justify-content-center me-2 overflow-hidden" 
+                             style="width: 32px; height: 32px; min-width: 32px;">
+                            
+                            <img v-if="usuarioLogueado && usuarioLogueado.avatar" 
+                                 :src="usuarioLogueado.avatar" 
+                                 style="width: 100%; height: 100%; object-fit: cover;">
+                            
+                            <i v-else class="bi bi-person-fill"></i>
+                        </div>
+                        
+                        <div class="small fw-bold text-truncate" v-if="usuarioLogueado">
+                            {{ usuarioLogueado.nombre }}
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-sm btn-outline-danger border-0" @click="logout" title="Cerrar Sesión">
+                        <i class="bi bi-box-arrow-right fs-6"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
 
             <div class="col-md-10 p-4 bg-light min-vh-100 main-content">
                 
@@ -378,6 +559,95 @@
                                 </table>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div v-if="vistaActual === 'perfil'">
+                    <div class="row justify-content-center g-4">
+                        
+                        <div class="col-md-6">
+                            <h5 class="fw-bold mb-3 text-secondary">
+                                <i class="bi bi-person-badge me-2"></i>Información Personal
+                            </h5>
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <form @submit.prevent="guardarDatosPersonales">
+                                        
+                                        <div class="text-center mb-4">
+                                            <div class="d-inline-block position-relative">
+                                                <img v-if="perfilForm.avatar" :src="perfilForm.avatar" class="rounded-circle border border-3 border-white shadow" style="width: 100px; height: 100px; object-fit: cover;">
+                                                <div v-else class="bg-brand text-white rounded-circle d-flex align-items-center justify-content-center shadow" style="width: 100px; height: 100px;">
+                                                    <i class="bi bi-person-fill display-4"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-4 text-center">
+                                            <label class="form-label small fw-bold text-muted mb-2">Cambiar Avatar</label>
+                                            <div class="d-flex flex-wrap gap-2 justify-content-center bg-light p-2 rounded">
+                                                <div class="rounded-circle d-flex align-items-center justify-content-center border bg-white" @click="perfilForm.avatar = ''" style="width: 35px; height: 35px; cursor: pointer;">
+                                                    <i class="bi bi-person-x text-muted"></i>
+                                                </div>
+                                                <img v-for="img in avataresDisponibles" :src="img" class="rounded-circle border bg-white" @click="perfilForm.avatar = img" style="width: 35px; height: 35px; cursor: pointer;">
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Nombre Completo</label>
+                                            <input type="text" class="form-control" v-model="perfilForm.nombre" required>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-brand w-100 fw-bold">Guardar Cambios</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-5">
+                            <h5 class="fw-bold mb-3 text-secondary">
+                                <i class="bi bi-shield-lock me-2"></i>Seguridad
+                            </h5>
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <p class="small text-muted mb-4">
+                                        Para tu seguridad, debes ingresar tu contraseña actual para establecer una nueva.
+                                    </p>
+                                    
+                                    <form @submit.prevent="cambiarPassword">
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Contraseña Actual</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-light border-end-0"><i class="bi bi-key"></i></span>
+                                                <input type="password" class="form-control border-start-0 ps-0 bg-light" v-model="passForm.actual" required placeholder="">
+                                            </div>
+                                        </div>
+
+                                        <hr class="my-4">
+
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Nueva Contraseña</label>
+                                            <input type="password" class="form-control" v-model="passForm.nueva" required minlength="4">
+                                        </div>
+
+                                        <div class="mb-4">
+                                            <label class="form-label small fw-bold">Confirmar Nueva</label>
+                                            <input type="password" class="form-control" v-model="passForm.confirmacion" required>
+                                            <div class="form-text text-danger small" v-if="passForm.nueva !== passForm.confirmacion && passForm.confirmacion">
+                                                Las contraseñas no coinciden.
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-brand w-100 fw-bold" 
+                                                :disabled="!passForm.actual || !passForm.nueva || passForm.nueva !== passForm.confirmacion">
+                                            Actualizar Contraseña
+                                        </button>
+
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -634,6 +904,188 @@
                               </table>
                           </div>
                       </div>
+                    </div>
+                </div>
+
+                <div v-if="vistaActual === 'usuarios'">
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <div>
+                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-person-badge text-brand me-2"></i>Gestión de Usuarios</h3>
+                            <small class="text-muted">Administra el acceso y permisos del personal</small>
+                        </div>
+                        <button class="btn btn-brand shadow-sm" @click="prepararNuevoUsuario">
+                            <i class="bi bi-plus-lg me-2"></i>Nuevo Usuario
+                        </button>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-md-7 col-lg-8">
+                            <div class="row g-3">
+                                <div class="col-md-6" v-for="u in listaUsuarios" :key="u.id_usuario">
+                                    <div class="card border-0 shadow-sm h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center mb-3">
+
+                                                <div class="d-flex align-items-center mb-3">
+                                                <img v-if="u.avatar" :src="u.avatar" class="rounded-circle me-3 border" style="width: 48px; height: 48px; object-fit: cover;">
+                                                
+                                                <div v-else class="bg-brand bg-opacity-10 text-brand rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                                                    <i class="bi bi-person-fill fs-4"></i>
+                                                </div>
+                                                </div>
+                                                <div>
+                                                    <h5 class="fw-bold mb-0 text-dark">{{ u.nombre }}</h5>
+                                                    <small class="text-muted">{{ u.email }}</small>
+                                                </div>
+                                                <div class="ms-auto">
+                                                    <span class="badge" :class="u.activo === 'SI' ? 'bg-success' : 'bg-danger'">{{ u.activo }}</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <span class="badge bg-light text-dark border me-1">{{ u.rol }}</span>
+                                                <small class="text-muted d-block mt-2" v-if="u.rol !== 'ADMIN'">
+                                                    Permisos: {{ parsearPermisos(u.modulos).length }} módulos
+                                                </small>
+                                                <small class="text-muted d-block mt-2" v-else>
+                                                    <i class="bi bi-shield-lock-fill text-warning"></i> Acceso Total
+                                                </small>
+                                            </div>
+
+                                            <div class="d-flex gap-2 border-top pt-3">
+                                                <button class="btn btn-sm btn-light border flex-fill" @click="editarUsuario(u)">
+                                                    <i class="bi bi-pencil me-1"></i> Editar
+                                                </button>
+                                                <button class="btn btn-sm btn-light border text-danger flex-fill" @click="eliminarUsuario(u)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-5 col-lg-4">
+                            <div class="card border-0 shadow-sm sticky-top" style="top: 80px; border-top: 4px solid var(--color-primary);">
+                                <div class="card-header bg-white fw-bold py-3">
+                                    <i class="bi" :class="usuarioForm.id_usuario ? 'bi-pencil-square' : 'bi-person-plus'"></i> 
+                                    {{ usuarioForm.id_usuario ? 'Editar Usuario' : 'Crear Usuario' }}
+                                </div>
+                                <div class="card-body">
+                                    <form @submit.prevent="guardarUsuario">
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Nombre Completo</label>
+                                            <input type="text" class="form-control" v-model="usuarioForm.nombre" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Usuario / Email</label>
+                                            <input type="text" class="form-control" v-model="usuarioForm.email" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Contraseña</label>
+                                            <input type="text" class="form-control" v-model="usuarioForm.password" required>
+                                        </div>
+                                        
+                                        <div class="row mb-3">
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold">Rol</label>
+                                                <select class="form-select" v-model="usuarioForm.rol">
+                                                    <option value="OPERADOR">Operador</option>
+                                                    <option value="ADMIN">Admin</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold">Activo</label>
+                                                <select class="form-select" v-model="usuarioForm.activo">
+                                                    <option>SI</option>
+                                                    <option>NO</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                          <div class="mb-4" v-if="usuarioForm.rol === 'OPERADOR'">
+                                            <label class="form-label small fw-bold mb-2">Permisos de Acceso</label>
+                                            <div class="bg-light p-3 rounded border">
+                                                <div class="row">
+                                                    
+                                                    <div class="col-6">
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="remisiones" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Notas de Remisión</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="ventas" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Ventas / Caja</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="compras" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Compras / Stock</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="gastos" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Gastos Operativos</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="transferencias" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Transferencias</label>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-6">
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="cobranzas" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Cobranzas</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="productos" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Inventario</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="clientes" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Clientes</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="proveedores" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Proveedores</label>
+                                                        </div>
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" value="reportes" v-model="usuarioForm.permisos">
+                                                            <label class="form-check-label small">Reportes</label>
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-4">
+                                            <label class="form-label small fw-bold mb-2">Selecciona un Avatar</label>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <div class="rounded-circle d-flex align-items-center justify-content-center border" 
+                                                     :class="usuarioForm.avatar === '' ? 'border-primary border-3' : ''"
+                                                     style="width: 50px; height: 50px; cursor: pointer; background: #eee;"
+                                                     @click="usuarioForm.avatar = ''">
+                                                    <i class="bi bi-person-fill text-muted fs-4"></i>
+                                                </div>
+
+                                                <img v-for="img in avataresDisponibles" 
+                                                     :src="img" 
+                                                     class="rounded-circle border bg-white"
+                                                     :class="usuarioForm.avatar === img ? 'border-primary border-3 shadow' : ''"
+                                                     style="width: 50px; height: 50px; cursor: pointer; object-fit: cover;"
+                                                     @click="usuarioForm.avatar = img">
+                                            </div>
+                                        </div>
+
+                                        <div class="d-grid gap-2">
+                                            <button type="submit" class="btn btn-brand fw-bold">Guardar Cambios</button>
+                                            <button type="button" class="btn btn-light border" v-if="usuarioForm.id_usuario" @click="prepararNuevoUsuario">Cancelar Edición</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1373,66 +1825,155 @@
         </div>
       </div>
       
-      <nav class="fixed-bottom bottom-nav d-md-none z-3">
+      <nav class="fixed-bottom bottom-nav d-md-none z-3" v-if="usuarioLogueado">
           <div class="d-flex justify-content-around">
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
+              
+              <a class="nav-item-mobile" :class="{active: vistaActual === 'dashboard'}" @click="vistaActual = 'dashboard'; cargarDashboard()">
+                  <i class="bi bi-house-door"></i><span>Inicio</span>
+              </a>
+
+              <a v-if="tengoPermiso('ventas')" class="nav-item-mobile" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
                   <i class="bi bi-receipt"></i><span>Ventas</span>
               </a>
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
+
+              <a v-if="tengoPermiso('compras')" class="nav-item-mobile" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
                   <i class="bi bi-cart-plus"></i><span>Compras</span>
               </a>
-              <a class="nav-item-mobile" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')">
+
+              <a v-if="tengoPermiso('productos')" class="nav-item-mobile" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')">
                   <i class="bi bi-box-seam"></i><span>Stock</span>
               </a>
+
               <a class="nav-item-mobile" data-bs-toggle="offcanvas" href="#menuMovil">
-                  <i class="bi bi-list"></i><span>Menú</span>
+                  
+                  <img v-if="usuarioLogueado.avatar" 
+                       :src="usuarioLogueado.avatar" 
+                       class="rounded-circle mb-1 border border-1"
+                       style="width: 26px; height: 26px; object-fit: cover;">
+                  
+                  <i v-else class="bi bi-list"></i>
+                  
+                  <span>Menú</span>
               </a>
+
           </div>
       </nav>
-
-      <div class="offcanvas offcanvas-end" tabindex="-1" id="menuMovil">
+      <div class="offcanvas offcanvas-end" tabindex="-1" id="menuMovil" style="width: 280px;">
+          
           <div class="offcanvas-header bg-brand text-white">
               <h5 class="offcanvas-title fw-bold">
                   <i class="bi bi-grid-fill me-2"></i>Menú Cesta
               </h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
           </div>
-          <div class="offcanvas-body">
-              <div class="d-grid gap-2">
-                  <small class="text-muted text-uppercase fw-bold mt-2">Facturación</small>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('remisiones'); cerrarMenuMovil()">
-                      <i class="bi bi-truck-flatbed me-3 text-brand"></i> Notas de Remisión
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('ventas'); cerrarMenuMovil()">
-                      <i class="bi bi-receipt me-3 text-brand"></i> Ventas / Caja
-                  </button>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('compras'); cerrarMenuMovil()">
-                      <i class="bi bi-cart-plus me-3 text-brand"></i> Compras / Stock
-                  </button>
-                <button class="btn btn-light text-start border py-3" @click="cambiarVista('gastos'); cerrarMenuMovil()">
-                    <i class="bi bi-cash-stack me-3 text-brand"></i> Gastos Operativos
-                </button>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('transferencias'); cerrarMenuMovil()">
-                      <i class="bi bi-arrow-left-right me-3 text-brand"></i> Transferencias
-                  </button>
-                  <button class="btn btn-light text-start border py-3" @click="cargarCobranzas(); cerrarMenuMovil()">
-                      <i class="bi bi-wallet2 me-3 text-brand"></i> Cobranzas
-                  </button>
-                  <small class="text-muted text-uppercase fw-bold mt-3">Gestión</small>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('productos'); cerrarMenuMovil()">
-                      <i class="bi bi-box-seam me-3 text-brand"></i> Inventario
-                  </button>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('clientes'); cerrarMenuMovil()">
-                      <i class="bi bi-people me-3 text-brand"></i> Clientes
-                  </button>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('proveedores'); cerrarMenuMovil()">
-                      <i class="bi bi-truck me-3 text-brand"></i> Proveedores
-                  </button>
 
-                  <small class="text-muted text-uppercase fw-bold mt-3">Sistema</small>
-                  <button class="btn btn-light text-start border py-3" @click="cambiarVista('config'); cerrarMenuMovil()">
-                      <i class="bi bi-gear me-3 text-brand"></i> Configuración
-                  </button>
-              </div>
+          <div class="offcanvas-body p-0 d-flex flex-column">
+            
+            <div class="py-2">
+                <button class="nav-mobile-btn" 
+                        :class="{active: vistaActual === 'dashboard'}" 
+                        @click="vistaActual = 'dashboard'; cargarDashboard(); cerrarMenuMovil()">
+                    <i class="bi bi-house-door"></i> Inicio
+                </button>
+
+                <small v-if="tengoAlgunPermiso(['remisiones','ventas','compras','gastos','transferencias','cobranzas'])" 
+                       class="text-muted text-uppercase fw-bold ps-3 mt-3 mb-1 d-block" style="font-size: 0.7rem;">
+                    Operaciones
+                </small>
+
+                <button v-if="tengoPermiso('remisiones')" class="nav-mobile-btn" :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones'); cerrarMenuMovil()">
+                    <i class="bi bi-truck-flatbed"></i> Notas de Remisión
+                </button>
+
+                <button v-if="tengoPermiso('ventas')" class="nav-mobile-btn" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas'); cerrarMenuMovil()">
+                    <i class="bi bi-receipt"></i> Ventas / Caja
+                </button>
+                
+                <button v-if="tengoPermiso('compras')" class="nav-mobile-btn" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras'); cerrarMenuMovil()">
+                    <i class="bi bi-cart-plus"></i> Compras / Stock
+                </button>
+
+                <button v-if="tengoPermiso('gastos')" class="nav-mobile-btn" :class="{active: vistaActual === 'gastos'}" @click="cambiarVista('gastos'); cerrarMenuMovil()">
+                    <i class="bi bi-cash-stack"></i> Gastos Operativos
+                </button>
+
+                <button v-if="tengoPermiso('transferencias')" class="nav-mobile-btn" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias'); cerrarMenuMovil()">
+                    <i class="bi bi-arrow-left-right"></i> Transferencias
+                </button>
+                
+                <button v-if="tengoPermiso('cobranzas')" class="nav-mobile-btn" :class="{active: vistaActual === 'cobranzas'}" @click="cargarCobranzas(); cerrarMenuMovil()">
+                    <i class="bi bi-wallet2"></i> Cobranzas
+                </button>
+
+                <small v-if="tengoAlgunPermiso(['productos','clientes','proveedores'])" 
+                       class="text-muted text-uppercase fw-bold ps-3 mt-3 mb-1 d-block" style="font-size: 0.7rem;">
+                    Gestión
+                </small>
+                
+                <button v-if="tengoPermiso('productos')" class="nav-mobile-btn" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos'); cerrarMenuMovil()">
+                    <i class="bi bi-box-seam"></i> Inventario
+                </button>
+                
+                <button v-if="tengoPermiso('clientes')" class="nav-mobile-btn" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes'); cerrarMenuMovil()">
+                    <i class="bi bi-people"></i> Clientes
+                </button>
+
+                <button v-if="tengoPermiso('proveedores')" class="nav-mobile-btn" :class="{active: vistaActual === 'proveedores'}" @click="cambiarVista('proveedores'); cerrarMenuMovil()">
+                    <i class="bi bi-truck"></i> Proveedores
+                </button>
+
+                <small v-if="tengoAlgunPermiso(['reportes','usuarios','config'])" 
+                       class="text-muted text-uppercase fw-bold ps-3 mt-3 mb-1 d-block" style="font-size: 0.7rem;">
+                    Sistema
+                </small>
+
+                <button v-if="tengoPermiso('reportes')" class="nav-mobile-btn" :class="{active: vistaActual === 'reportes'}" @click="cambiarVista('reportes'); cerrarMenuMovil()">
+                    <i class="bi bi-file-earmark-bar-graph"></i> Reportes
+                </button>
+
+                <button v-if="tengoPermiso('usuarios')" class="nav-mobile-btn" :class="{active: vistaActual === 'usuarios'}" @click="cambiarVista('usuarios'); cerrarMenuMovil()">
+                    <i class="bi bi-person-badge"></i> Usuarios
+                </button>
+
+                <button v-if="tengoPermiso('config')" class="nav-mobile-btn" :class="{active: vistaActual === 'config'}" @click="cambiarVista('config'); cerrarMenuMovil()">
+                    <i class="bi bi-gear"></i> Configuración
+                </button>
+            </div>
+
+            <div class="mt-auto"></div>
+
+            <div class="border-top p-3 bg-light">
+                <div class="d-flex align-items-center justify-content-between">
+                    
+                    <div class="d-flex align-items-center" 
+                         @click="vistaActual = 'perfil'; cargarPerfil(); cerrarMenuMovil()">
+                        
+                        <div class="user-icon-brand text-white rounded-circle d-flex align-items-center justify-content-center me-2 overflow-hidden" 
+                             style="width: 38px; height: 38px; min-width: 38px;">
+                            
+                            <img v-if="usuarioLogueado && usuarioLogueado.avatar" 
+                                 :src="usuarioLogueado.avatar" 
+                                 style="width: 100%; height: 100%; object-fit: cover;">
+                            
+                            <i v-else class="bi bi-person-fill fs-5"></i>
+                        </div>
+
+                        <div class="lh-1">
+                            <div class="fw-bold text-dark small" v-if="usuarioLogueado">
+                                {{ usuarioLogueado.nombre }}
+                            </div>
+                            <small class="text-muted" style="font-size: 0.7rem;" v-if="usuarioLogueado">
+                                {{ usuarioLogueado.rol }}
+                            </small>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-outline-danger btn-sm border-0" @click="logout(); cerrarMenuMovil()">
+                        <i class="bi bi-box-arrow-right fs-4"></i>
+                    </button>
+                </div>
+            </div>
+
           </div>
       </div>
 
@@ -1672,8 +2213,40 @@
       createApp({
         data() {
           return {
-            cargando: false, vistaActual: 'remisiones', subVistaVentas:'nueva', subVistaCompras:'nueva',
+                       
+            cargando: false, subVistaVentas:'nueva', subVistaCompras:'nueva',
             productos: [], proveedores: [], clientes: [], listaDepositos: [], listaConfigCampos: [], listaCategorias: [], listaUnidades: [],
+            
+            usuarioLogueado: null,
+            permisos: [],
+            loginData: { usuario: '', password: '' },
+            vistaActual: 'dashboard',
+
+            perfilForm: {
+                id_usuario: '',
+                nombre: '',
+                avatar: ''
+            },
+            passForm: {
+                actual: '',
+                nueva: '',
+                confirmacion: ''
+            },
+
+            avataresDisponibles: [
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob',
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Callie',
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Leo',
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Zoe',
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=Jack'
+            ],
+
+            usuarioForm: {
+                // ... otros campos ...
+                avatar: '', // <--- CAMPO PARA GUARDAR LA URL
+            },
             
             formDeposito: { nombre:'', direccion:'', responsable:'', activo:'Si' },
             formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false },
@@ -1689,6 +2262,17 @@
 
             configRemisionActual: '', // Remision
             busquedaRemision: '',
+
+            listaUsuarios: [],
+            usuarioForm: {
+                id_usuario: '',
+                nombre: '',
+                email: '',
+                password: '',
+                rol: 'OPERADOR',
+                permisos: [],
+                activo: 'SI'
+            },
 
             historialCobranzas: [], // 
             busquedaCobranza: '',   // 
@@ -1881,17 +2465,223 @@
         methods: {
             formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
             cambiarVista(v) { 
-                // Si la vista es la misma, no hacemos nada para no ensuciar el historial
+                // 1. Si la vista es la misma, salimos
                 if(this.vistaActual === v) return;
 
+                // 2. Cambiamos la vista y subimos el scroll
                 this.vistaActual = v; 
                 window.scrollTo(0,0);
                 
-                // --- AGREGAR AL HISTORIAL (NUEVO) ---
-                // Esto crea un punto de retorno para el botón "Atrás"
+                // 3. Guardamos en el historial (Tu código actual)
                 window.history.pushState({ vista: v }, null, '');
+
+                // 4. --- CARGA DE DATOS ESPECÍFICA (LO NUEVO) ---
+                // Si la vista a la que vamos es 'usuarios', cargamos la lista
+                if (v === 'usuarios') {
+                    this.cargarUsuarios();
+                }
             },
 
+            cargarPerfil() {
+                const copia = JSON.parse(JSON.stringify(this.usuarioLogueado));
+                this.perfilForm = {
+                    id_usuario: copia.id_usuario,
+                    nombre: copia.nombre,
+                    avatar: copia.avatar || ''
+                };
+                // Limpiamos el formulario de password por seguridad
+                this.passForm = { actual: '', nueva: '', confirmacion: '' };
+            },
+
+            guardarDatosPersonales() {
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        this.usuarioLogueado = res.usuarioActualizado;
+                        alert("✅ Datos personales actualizados.");
+                    })
+                    .actualizarDatosPersonales(this.perfilForm);
+            },
+
+            cambiarPassword() {
+                if (this.passForm.nueva !== this.passForm.confirmacion) {
+                    alert("Las nuevas contraseñas no coinciden.");
+                    return;
+                }
+
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        alert("🔒 Contraseña actualizada correctamente. Por favor inicia sesión nuevamente.");
+                        this.logout(); // Cerramos sesión para obligar a usar la nueva pass
+                    })
+                    .withFailureHandler(error => {
+                        this.cargando = false;
+                        alert("❌ Error: " + error); // Aquí saldrá si la pass actual es incorrecta
+                    })
+                    .cambiarPassword(this.usuarioLogueado.id_usuario, this.passForm.actual, this.passForm.nueva);
+            },
+
+            guardarMiPerfil() {
+                if(!confirm("¿Confirmar cambios en tu perfil?")) return;
+
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        // Actualizamos la sesión en vivo con los nuevos datos
+                        this.usuarioLogueado = res.usuarioActualizado;
+                        alert("✅ Perfil actualizado correctamente");
+                        this.vistaActual = 'dashboard';
+                    })
+                    .withFailureHandler(error => {
+                        this.cargando = false;
+                        alert("❌ Error: " + error);
+                    })
+                    .actualizarMiPerfil(this.perfilForm);
+            },
+
+            editarUsuario(u) {
+                this.usuarioForm = {
+                    // ... otros campos ...
+                    rol: u.rol,
+                    permisos: this.parsearPermisos(u.modulos),
+                    activo: u.activo,
+                    avatar: u.avatar || '' // <--- CARGAR AVATAR
+                };
+            },
+
+            // Función auxiliar para ocultar títulos de sección vacíos
+            tengoAlgunPermiso(listaPermisos) {
+                // Recorre la lista y si tiene permiso AL MENOS para uno, devuelve TRUE
+                return listaPermisos.some(permiso => this.tengoPermiso(permiso));
+            },
+
+            iniciarSesion() {
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        this.usuarioLogueado = res;
+                        // Parsear permisos
+                        try {
+                            this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos);
+                        } catch(e) { this.permisos = []; }
+
+                        // Cargar datos iniciales del sistema una vez logueado
+                        this.cargarDatosIniciales();
+                        this.cargarDashboard();
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("❌ Error: " + e);
+                    })
+                    .loginUsuario(this.loginData.usuario, this.loginData.password);
+            },
+
+            cargarUsuarios() {
+                if (!this.tengoPermiso('usuarios')) return;
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        this.listaUsuarios = res;
+                    })
+                    .obtenerUsuarios();
+            },
+
+            prepararNuevoUsuario() {
+                this.usuarioForm = {
+                    id_usuario: '',
+                    nombre: '',
+                    email: '',
+                    password: '',
+                    rol: 'OPERADOR',
+                    permisos: [], // Array vacío para checkboxes
+                    activo: 'SI'
+                };
+            },
+
+            editarUsuario(u) {
+                // Clonamos el objeto para no editar la lista directamente antes de guardar
+                this.usuarioForm = {
+                    id_usuario: u.id_usuario,
+                    nombre: u.nombre,
+                    email: u.email,
+                    password: u.password,
+                    rol: u.rol,
+                    permisos: this.parsearPermisos(u.modulos), // Convertir string JSON a Array
+                    activo: u.activo
+                };
+            },
+
+            guardarUsuario() {
+                this.cargando = true;
+                // Si es admin, forzamos permiso 'todo'
+                if(this.usuarioForm.rol === 'ADMIN') {
+                    this.usuarioForm.permisos = ['todo'];
+                }
+                
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        alert("Usuario guardado correctamente.");
+                        this.cargarUsuarios();
+                        this.prepararNuevoUsuario();
+                    })
+                    .guardarUsuario(this.usuarioForm);
+            },
+
+            eliminarUsuario(u) {
+                if (!confirm("¿Eliminar al usuario " + u.nombre + "?")) return;
+                if (u.rol === 'ADMIN' && u.id_usuario === '1') {
+                    alert("No puedes eliminar al Admin principal.");
+                    return;
+                }
+                
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        this.cargarUsuarios();
+                    })
+                    .eliminarUsuario(u.id_usuario);
+            },
+
+            parsearPermisos(jsonStr) {
+                try {
+                    return JSON.parse(jsonStr) || [];
+                } catch(e) { return []; }
+            },
+
+            tengoPermiso(modulo) {
+                if (!this.usuarioLogueado) return false;
+                if (this.usuarioLogueado.rol === 'ADMIN') return true;
+                return this.permisos.includes(modulo);
+            },
+
+            // Función auxiliar para verificar permisos en el HTML
+            tengoPermiso(modulo) {
+                if (!this.usuarioLogueado) return false;
+                if (this.usuarioLogueado.rol === 'ADMIN') return true;
+                return this.permisos.includes(modulo);
+            },
+
+            logout() {
+                // 1. Preguntar confirmación nativa del navegador
+                if (!confirm("¿Estás seguro que deseas cerrar sesión?")) {
+                    return; // Si dice "Cancelar", detenemos la función aquí.
+                }
+
+                // 2. Si dice "Aceptar", procedemos a borrar los datos
+                this.usuarioLogueado = null;
+                this.loginData = { usuario: '', password: '' };
+                
+                // 3. Opcional: Volver a la vista inicial (aunque ya no se verá por el login)
+                this.vistaActual = 'dashboard';
+            },
             obtenerNombreDia(fechaStr) {
             const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             return dias[new Date(fechaStr).getDay()];

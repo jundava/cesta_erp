@@ -2925,3 +2925,150 @@ function eliminarGasto(idGasto) {
   }
 }
 
+function loginUsuario(usuario, password) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('USUARIOS');
+  const data = sh.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    // Col 2: email/usuario, Col 3: password
+    if (String(data[i][2]) === usuario && String(data[i][3]) === password) {
+      if (data[i][6] === "NO") throw "Usuario inactivo.";
+      
+      return {
+        success: true,
+        id_usuario: data[i][0],
+        nombre: data[i][1],
+        rol: data[i][4],
+        modulos: data[i][5], // Esto es un string JSON ej: "['ventas','dashboard']"
+        avatar: data[i][7] || ''
+      };
+    }
+  }
+  throw "Usuario o contraseña incorrectos.";
+}
+
+// ==========================================
+// GESTIÓN DE USUARIOS
+// ==========================================
+
+function obtenerUsuarios() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USUARIOS');
+  if (!sh) return [];
+  const data = sh.getDataRange().getValues();
+  const usuarios = [];
+  
+  // Empezamos de 1 para saltar encabezado
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) {
+      usuarios.push({
+        id_usuario: data[i][0],
+        nombre: data[i][1],
+        email: data[i][2],
+        password: data[i][3],
+        rol: data[i][4],
+        modulos: data[i][5], // String JSON
+        activo: data[i][6],
+        avatar: data[i][7] || ''
+      });
+    }
+  }
+  return usuarios;
+}
+
+function guardarUsuario(usuario) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USUARIOS');
+  const id = usuario.id_usuario || new Date().getTime().toString();
+  
+  // Convertir array de permisos a String JSON
+  const modulosStr = JSON.stringify(usuario.permisos || []);
+  
+  if (usuario.id_usuario) {
+    // EDITAR
+    const data = sh.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(usuario.id_usuario)) {
+        sh.getRange(i + 1, 2).setValue(usuario.nombre);
+        sh.getRange(i + 1, 3).setValue(usuario.email);
+        sh.getRange(i + 1, 4).setValue(usuario.password);
+        sh.getRange(i + 1, 5).setValue(usuario.rol);
+        sh.getRange(i + 1, 6).setValue(modulosStr);
+        sh.getRange(i + 1, 7).setValue(usuario.activo);
+        sh.getRange(i + 1, 8).setValue(usuario.avatar);
+        return { success: true };
+      }
+    }
+  } else {
+    // NUEVO
+    sh.appendRow([id, usuario.nombre, usuario.email, usuario.password, usuario.rol, modulosStr, usuario.activo, usuario.avatar]);
+  }
+  return { success: true };
+}
+
+function eliminarUsuario(idUsuario) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USUARIOS');
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(idUsuario)) {
+      sh.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  throw "Usuario no encontrado";
+}
+
+// A. ACTUALIZAR SOLO NOMBRE Y AVATAR
+function actualizarDatosPersonales(datos) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('USUARIOS');
+  const data = sh.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(datos.id_usuario)) {
+      
+      // Actualizamos solo Nombre (Col 2) y Avatar (Col 8)
+      sh.getRange(i + 1, 2).setValue(datos.nombre);
+      sh.getRange(i + 1, 8).setValue(datos.avatar);
+      
+      return {
+        success: true,
+        usuarioActualizado: {
+          id_usuario: datos.id_usuario,
+          nombre: datos.nombre,
+          email: data[i][2],
+          password: data[i][3], // Mantenemos la pass actual
+          rol: data[i][4],
+          modulos: data[i][5],
+          activo: data[i][6],
+          avatar: datos.avatar
+        }
+      };
+    }
+  }
+  throw "Usuario no encontrado.";
+}
+
+// B. CAMBIAR CONTRASEÑA (Requiere validación)
+function cambiarPassword(idUsuario, passActual, passNueva) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('USUARIOS');
+  const data = sh.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(idUsuario)) {
+      
+      // VERIFICACIÓN DE SEGURIDAD
+      const passEnBD = String(data[i][3]);
+      if (passEnBD !== String(passActual)) {
+        throw "La contraseña actual es incorrecta.";
+      }
+      
+      // Si es correcta, guardamos la nueva
+      sh.getRange(i + 1, 4).setValue(passNueva);
+      
+      return { success: true };
+    }
+  }
+  throw "Usuario no encontrado.";
+}
+
