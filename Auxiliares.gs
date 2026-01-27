@@ -11,8 +11,10 @@ const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
  * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes.
  */
 function setupDatabase() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID actual
-  
+  // ✅ Usamos getActiveSpreadsheet() para asegurar que trabaje sobre el archivo abierto
+  const ss = SpreadsheetApp.getActiveSpreadsheet(); 
+  // const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // (Opcional si quieres forzar ID)
+
   // Definición de todas las tablas del sistema
   const estructura = [
     {
@@ -87,7 +89,7 @@ function setupDatabase() {
       nombre: "COBRANZAS",
       cols: ["id_cobro", "fecha", "id_cliente", "monto", "metodo_pago", "observacion", "id_venta_asociada"]
     },
-    // --- MÓDULO REMISIONES (NUEVO) ---
+    // --- MÓDULO REMISIONES ---
     {
       nombre: "REMISIONES_CABECERA",
       cols: ["id_remision", "fecha", "numero_comprobante", "id_cliente", "id_deposito", "conductor", "chapa_vehiculo", "estado", "url_pdf", "total_valorizado"]
@@ -95,6 +97,11 @@ function setupDatabase() {
     {
       nombre: "REMISIONES_DETALLE",
       cols: ["id_detalle", "id_remision", "id_producto", "cantidad", "precio_unitario"]
+    },
+    // --- MÓDULO GASTOS (NUEVO) ---
+    {
+      nombre: "GASTOS",
+      cols: ["id_gasto", "fecha", "categoria", "descripcion", "monto", "metodo_pago"]
     }
   ];
 
@@ -118,27 +125,28 @@ function setupDatabase() {
   });
 
   // --- DATOS INICIALES NECESARIOS ---
-  // Aseguramos que existan configuraciones básicas para que el sistema no arranque vacío
   const sheetConfig = ss.getSheetByName('CONFIG_GENERAL');
-  const dataConfig = sheetConfig.getDataRange().getValues();
-  
-  const configsRequeridas = [
-    ['ULTIMO_NRO_FACTURA', '001-001-0000000'],
-    ['ULTIMO_NRO_REMISION', '001-001-0000000'],
-    ['DEPOSITO_DEFAULT', '1'] // Asumimos ID 1 para central si no hay nada
-  ];
+  if (sheetConfig) {
+      const dataConfig = sheetConfig.getDataRange().getValues();
+      
+      const configsRequeridas = [
+        ['ULTIMO_NRO_FACTURA', '001-001-0000000'],
+        ['ULTIMO_NRO_REMISION', '001-001-0000000'],
+        ['DEPOSITO_DEFAULT', '1']
+      ];
 
-  configsRequeridas.forEach(req => {
-    let existe = false;
-    for(let i=0; i<dataConfig.length; i++) {
-      if(dataConfig[i][0] == req[0]) {
-        existe = true; 
-        break; 
-      }
-    }
-    if(!existe) {
-      sheetConfig.appendRow(req);
-      console.log(`⚙️ Configuración inicial creada: ${req[0]}`);
-    }
-  });
+      configsRequeridas.forEach(req => {
+        let existe = false;
+        for(let i=0; i<dataConfig.length; i++) {
+          if(String(dataConfig[i][0]) == String(req[0])) {
+            existe = true; 
+            break; 
+          }
+        }
+        if(!existe) {
+          sheetConfig.appendRow(req);
+          console.log(`⚙️ Configuración inicial creada: ${req[0]}`);
+        }
+      });
+  }
 }

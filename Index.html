@@ -167,6 +167,7 @@
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones')"><i class="bi bi-truck-flatbed me-2"></i> Notas de Remisión</a>                
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')"><i class="bi bi-receipt me-2"></i> Ventas / Caja</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')"><i class="bi bi-cart-plus me-2"></i> Compras / Stock</a>
+                <a class="nav-link-desktop" :class="{active: vistaActual === 'gastos'}" @click="cambiarVista('gastos')"><i class="bi bi-cash-stack me-2"></i> Gastos Operativos</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'transferencias'}" @click="cambiarVista('transferencias')"><i class="bi bi-arrow-left-right me-2"></i> Transferencias</a>
                 <a class="nav-link-desktop" :class="{active: vistaActual === 'cobranzas'}" @click="cargarCobranzas()"><i class="bi bi-wallet2 me-2"></i> Cobranzas</a>
                 <small class="text-muted text-uppercase fw-bold ps-2 mb-2 mt-3 d-block" style="font-size: 0.7rem;">Gestión</small>
@@ -459,7 +460,7 @@
                                 </tbody>
                             </table>
                             <div class="card-footer bg-white text-end p-3">
-                                <button class="btn btn-brand fw-bold px-4" @click="guardarTransfFinal">CONFIRMAR TRANSFERENCIA</button>
+                                <button class="btn btn-brand fw-bold px-4" @click="guardarTransfFinal">Confirmar Transferencia</button>
                             </div>
                         </div>
                     </div>
@@ -638,108 +639,117 @@
 
                 <div v-if="vistaActual === 'cobranzas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-brand"></i> Cuentas por Cobrar</h3>
-                        <button v-if="subVistaCobranzas === 'nuevo'" class="btn btn-outline-secondary" @click="subVistaCobranzas='listado'">Volver</button>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-brand"></i> Gestión de Cobros</h3>
+                        
+                        <div class="btn-group shadow-sm">
+                            <button class="btn" :class="subVistaCobranzas === 'listado' || subVistaCobranzas === 'nuevo' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
+                                    @click="cargarCobranzas()">
+                                <i class="bi bi-list-task me-1"></i> Pendientes
+                            </button>
+                            <button class="btn" :class="subVistaCobranzas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
+                                    @click="cargarHistorialCobranzas()">
+                                <i class="bi bi-clock-history me-1"></i> Historial
+                            </button>
+                        </div>
                     </div>
+
                     <div v-if="subVistaCobranzas === 'listado'">
                         <div class="card border-0 shadow-sm">
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light"><tr><th>Cliente</th><th class="text-end">Deuda Total</th><th class="text-end">Acción</th></tr></thead>
-                                      <tbody>
-                                          <template v-for="c in clientesDeudores" :key="c.id_cliente">
-                                              
-                                              <tr class="table-light" :class="{'border-bottom-0': c.mostrar_detalle}" style="cursor: pointer;" @click="c.mostrar_detalle = !c.mostrar_detalle">
-                                                  <td>
-                                                      <div class="d-flex align-items-center">
-                                                          <i class="bi me-2 text-primary" :class="c.mostrar_detalle ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
-                                                          <div>
-                                                              <div class="fw-bold">{{ c.nombre }}</div>
-                                                              <small class="text-muted">{{ c.facturas_pendientes.length }} facturas pendientes</small>
-                                                          </div>
-                                                      </div>
-                                                  </td>
-                                                  <td class="text-end fw-bold text-danger fs-5">{{ formatoMoneda(c.total_deuda) }}</td>
-                                                  <td class="text-end">
-                                                      <span class="text-muted small">Ver detalle <i class="bi bi-arrow-down"></i></span>
-                                                  </td>
-                                              </tr>
-
-                                              <tr v-if="c.mostrar_detalle">
-                                                  <td colspan="3" class="p-0 bg-white border-bottom">
-                                                      <div class="p-3 bg-light bg-opacity-50">
-                                                          <table class="table table-sm table-bordered mb-0 bg-white shadow-sm align-middle">
-                                                              <thead class="text-muted small bg-light">
-                                                                  <tr>
-                                                                      <th>Fecha</th>
-                                                                      <th>Nro. Factura</th>
-                                                                      <th class="text-end">Importe Orig.</th>
-                                                                      <th class="text-end text-danger">Saldo</th>
-                                                                      <th class="text-center" style="width: 100px;">Acción</th> </tr>
-                                                              </thead>
-                                                              <tbody>
-                                                                  <tr v-for="f in c.facturas_pendientes" :key="f.id_venta">
-                                                                      <td class="small">{{ new Date(f.fecha).toLocaleDateString() }}</td>
-                                                                      <td class="fw-bold text-dark">{{ f.numero }}</td>
-                                                                      <td class="text-end text-muted small">{{ formatoMoneda(f.total_original) }}</td>
-                                                                      <td class="text-end fw-bold text-danger">{{ formatoMoneda(f.saldo) }}</td>
-                                                                      <td class="text-center">
-                                                                          <button class="btn btn-sm btn-outline-success fw-bold" @click="abrirCobro(f, c)">
-                                                                              Pagar
-                                                                          </button>
-                                                                      </td>
-                                                                  </tr>
-                                                              </tbody>
-                                                          </table>
-                                                      </div>
-                                                  </td>
-                                              </tr>
-                                          </template>
-                                          </tbody>
+                                    <tbody>
+                                        <template v-for="c in clientesDeudores" :key="c.id_cliente">
+                                            <tr class="table-light" :class="{'border-bottom-0': c.mostrar_detalle}" style="cursor: pointer;" @click="c.mostrar_detalle = !c.mostrar_detalle">
+                                                <td><div class="d-flex align-items-center"><i class="bi me-2 text-primary" :class="c.mostrar_detalle ? 'bi-chevron-down' : 'bi-chevron-right'"></i><div><div class="fw-bold">{{ c.nombre }}</div><small class="text-muted">{{ c.facturas_pendientes.length }} facturas pendientes</small></div></div></td>
+                                                <td class="text-end fw-bold text-danger fs-5">{{ formatoMoneda(c.total_deuda) }}</td>
+                                                <td class="text-end"><span class="text-muted small">Ver detalle <i class="bi bi-arrow-down"></i></span></td>
+                                            </tr>
+                                            <tr v-if="c.mostrar_detalle">
+                                                <td colspan="3" class="p-0 bg-white border-bottom">
+                                                    <div class="p-3 bg-light bg-opacity-50">
+                                                        <table class="table table-sm table-bordered mb-0 bg-white shadow-sm align-middle">
+                                                            <thead class="text-muted small bg-light"><tr><th>Fecha</th><th>Nro. Factura</th><th class="text-end">Importe Orig.</th><th class="text-end text-danger">Saldo</th><th class="text-center" style="width: 100px;">Acción</th></tr></thead>
+                                                            <tbody>
+                                                                <tr v-for="f in c.facturas_pendientes" :key="f.id_venta">
+                                                                    <td class="small">{{ new Date(f.fecha).toLocaleDateString() }}</td><td class="fw-bold text-dark">{{ f.numero }}</td><td class="text-end text-muted small">{{ formatoMoneda(f.total_original) }}</td><td class="text-end fw-bold text-danger">{{ formatoMoneda(f.saldo) }}</td>
+                                                                    <td class="text-center"><button class="btn btn-sm btn-outline-success fw-bold" @click="abrirCobro(f, c)">Pagar</button></td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <tr v-if="clientesDeudores.length === 0"><td colspan="3" class="text-center p-5 text-muted"><i class="bi bi-check-circle fs-1 d-block mb-2 text-success"></i>🎉 ¡Todo al día! No hay deudas pendientes.</td></tr>
+                                    </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
 
                     <div v-if="subVistaCobranzas === 'nuevo'">
+                        <button class="btn btn-sm btn-outline-secondary mb-3" @click="subVistaCobranzas='listado'"><i class="bi bi-arrow-left"></i> Volver</button>
                         <div class="card border-0 shadow-sm" style="max-width: 500px; margin: 0 auto;">
                             <div class="card-header bg-success text-white fw-bold">Registrar Cobro</div>
                             <div class="card-body">
-                    <div class="alert alert-warning">
-                      <div class="d-flex justify-content-between align-items-center">
-                          <span>Factura: <strong>{{ formCobro.nro_factura_visual }}</strong></span>
-                          <span class="fw-bold fs-5">Saldo: {{ formatoMoneda(formCobro.deuda_total) }}</span>
-                      </div>
-                    </div>
-                                
+                                <div class="alert alert-warning">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Factura: <strong>{{ formCobro.nro_factura_visual }}</strong></span>
+                                        <span class="fw-bold fs-5">Saldo: {{ formatoMoneda(formCobro.deuda_total) }}</span>
+                                    </div>
+                                </div>
                                 <form @submit.prevent="guardarCobro">
-                                    <div class="mb-3">
-                                        <label class="form-label">Cliente</label>
-                                        <input type="text" class="form-control" :value="formCobro.nombre" disabled>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label fw-bold">Monto a Pagar</label>
-                                        <input type="number" class="form-control form-control-lg text-end fw-bold text-success" v-model.number="formCobro.monto" required min="1">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Método de Pago</label>
-                                        <select class="form-select" v-model="formCobro.metodo">
-                                            <option>Efectivo</option>
-                                            <option>Transferencia</option>
-                                            <option>Cheque</option>
-                                        </select>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Observación</label>
-                                        <input type="text" class="form-control" v-model="formCobro.observacion" placeholder="Nro de comprobante, banco...">
-                                    </div>
-                                    <div class="d-grid">
-                                        <button type="submit" class="btn btn-success btn-lg fw-bold">CONFIRMAR PAGO</button>
-                                    </div>
+                                    <div class="mb-3"><label class="form-label">Cliente</label><input type="text" class="form-control" :value="formCobro.nombre" disabled></div>
+                                    <div class="mb-3"><label class="form-label fw-bold">Monto a Pagar</label><input type="number" class="form-control form-control-lg text-end fw-bold text-success" v-model.number="formCobro.monto" required min="1"></div>
+                                    <div class="mb-3"><label class="form-label">Método de Pago</label><select class="form-select" v-model="formCobro.metodo"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>Tarjeta</option></select></div>
+                                    <div class="mb-3"><label class="form-label">Observación</label><input type="text" class="form-control" v-model="formCobro.observacion" placeholder="Nro de comprobante, banco..."></div>
+                                    <div class="d-grid"><button type="submit" class="btn btn-success btn-lg fw-bold">Confirmar Pago</button></div>
                                 </form>
                             </div>
                         </div>
                     </div>
+
+                    <div v-if="subVistaCobranzas === 'historial'">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="input-group shadow-sm">
+                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" class="form-control border-start-0 ps-0" v-model="busquedaCobranza" placeholder="Buscar por cliente, método u observación...">
+                                    <button v-if="busquedaCobranza" class="btn btn-outline-secondary" @click="busquedaCobranza = ''"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Fecha</th>
+                                            <th>Cliente</th>
+                                            <th>Método</th>
+                                            <th>Ref/Obs</th>
+                                            <th class="text-end pe-3">Monto Cobrado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="h in cobranzasFiltradas" :key="h.id_cobro">
+                                            <td class="ps-3 small text-muted">{{ new Date(h.fecha).toLocaleDateString() }} {{ new Date(h.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</td>
+                                            <td class="fw-bold">{{ h.nombre_cliente }}</td>
+                                            <td><span class="badge bg-light text-dark border">{{ h.metodo }}</span></td>
+                                            <td class="small text-muted fst-italic text-truncate" style="max-width: 150px;">{{ h.observacion || '-' }}</td>
+                                            <td class="text-end pe-3 fw-bold text-success">+ {{ formatoMoneda(h.monto) }}</td>
+                                        </tr>
+                                        <tr v-if="cobranzasFiltradas.length === 0">
+                                            <td colspan="5" class="text-center py-4 text-muted">No se encontraron registros.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div v-if="vistaActual === 'compras'">
@@ -1013,6 +1023,69 @@
                         </div>
                     </div>
 
+                    <div class="card shadow-sm border-0 mb-4 border-top border-4 border-primary">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="fw-bold m-0"><i class="bi bi-tools me-2 text-primary"></i>Mantenimiento de Inventario</h6>
+                        </div>
+                        <div class="card-body bg-light bg-opacity-25">
+                            <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i> Utiliza esta herramienta para correcciones manuales de stock (roturas, mermas, obsequios o producción interna).</p>
+                            
+                            <form @submit.prevent="guardarAjuste">
+                                <div class="row g-3 align-items-end">
+                                    
+                                    <div class="col-md-12 mb-2 text-center">
+                                        <div class="btn-group bg-white shadow-sm" role="group">
+                                            <input type="radio" class="btn-check" name="tipoAjusteCfg" id="adjEntradaCfg" value="ENTRADA" v-model="formAjuste.tipo">
+                                            <label class="btn btn-outline-success btn-sm fw-bold px-4" for="adjEntradaCfg">
+                                                <i class="bi bi-plus-lg"></i> Entrada / Fabricación
+                                            </label>
+
+                                            <input type="radio" class="btn-check" name="tipoAjusteCfg" id="adjSalidaCfg" value="SALIDA" v-model="formAjuste.tipo">
+                                            <label class="btn btn-outline-danger btn-sm fw-bold px-4" for="adjSalidaCfg">
+                                                <i class="bi bi-dash-lg"></i> Salida / Merma
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted">Depósito</label>
+                                        <select class="form-select form-select-sm bg-white" v-model="formAjuste.id_deposito" required>
+                                            <option value="" disabled>Seleccionar...</option>
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-muted">Producto</label>
+                                        <select class="form-select form-select-sm bg-white" v-model="formAjuste.id_producto" required>
+                                            <option value="" disabled>Buscar...</option>
+                                            <option v-for="p in productos" :value="p.id_producto">
+                                                {{ p.nombre }} (Global: {{ p.stock_actual }})
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-2">
+                                        <label class="form-label small fw-bold text-muted">Cantidad</label>
+                                        <input type="number" class="form-control form-control-sm text-center fw-bold" v-model.number="formAjuste.cantidad" min="0.01" step="0.01" required>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted">Motivo</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control" v-model="formAjuste.motivo" placeholder="Ej: Rotura, Ajuste..." required>
+                                            <button type="submit" class="btn fw-bold shadow-sm" 
+                                                :class="formAjuste.tipo === 'ENTRADA' ? 'btn-success' : 'btn-danger'">
+                                                Aplicar Ajuste
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
                     <div class="card shadow-sm border-0 border-top border-4 border-secondary">
                         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                             <h6 class="fw-bold m-0"><i class="bi bi-input-cursor-text me-2"></i>Campos Personalizados</h6>
@@ -1051,27 +1124,250 @@
                     </div>
                 </div>
 
-                <div class="modal fade" id="modalCategoria" tabindex="-1">
-                  <div class="modal-dialog modal-dialog-centered modal-sm">
-                      <div class="modal-content">
-                          <div class="modal-header bg-warning">
-                              <h5 class="modal-title fw-bold text-dark">{{ formCategoria.id_categoria ? 'Editar' : 'Nueva' }} Categoría</h5>
-                              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                          </div>
-                          <div class="modal-body">
-                              <form @submit.prevent="guardarCategoria">
-                                  <div class="mb-3">
-                                      <label class="form-label fw-bold small">Nombre</label>
-                                      <input type="text" class="form-control" v-model="formCategoria.nombre" required placeholder="Ej: Bebidas, Limpieza...">
-                                  </div>
-                                  <div class="d-grid">
-                                      <button type="submit" class="btn btn-dark fw-bold">Guardar</button>
-                                  </div>
-                              </form>
-                          </div>
-                      </div>
-                  </div>
+                <div v-if="vistaActual === 'ajustes'">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="bg-warning text-dark rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <i class="bi bi-arrow-down-up fs-4"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold text-dark mb-0">Ajustes de Stock</h3>
+                            <small class="text-muted">Entradas por fabricación, mermas o correcciones.</small>
+                        </div>
+                    </div>
+
+                    <div class="row justify-content-center">
+                        <div class="col-md-8 col-lg-6">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body p-4">
+                                    
+                                    <form @submit.prevent="guardarAjuste">
+                                        
+                                        <div class="mb-4 text-center">
+                                            <label class="form-label d-block fw-bold mb-2">Tipo de Ajuste</label>
+                                            <div class="btn-group w-100" role="group">
+                                                <input type="radio" class="btn-check" name="tipoAjuste" id="tipoEntrada" value="ENTRADA" v-model="formAjuste.tipo">
+                                                <label class="btn btn-outline-success fw-bold py-2" for="tipoEntrada">
+                                                    <i class="bi bi-plus-circle me-2"></i> ENTRADA / FABRICACIÓN
+                                                </label>
+
+                                                <input type="radio" class="btn-check" name="tipoAjuste" id="tipoSalida" value="SALIDA" v-model="formAjuste.tipo">
+                                                <label class="btn btn-outline-danger fw-bold py-2" for="tipoSalida">
+                                                    <i class="bi bi-dash-circle me-2"></i> SALIDA / MERMA
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold small">Depósito Afectado</label>
+                                            <select class="form-select" v-model="formAjuste.id_deposito" required>
+                                                <option value="" disabled>Seleccionar...</option>
+                                                <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold small">Producto</label>
+                                            <select class="form-select" v-model="formAjuste.id_producto" required>
+                                                <option value="" disabled>Buscar producto...</option>
+                                                <option v-for="p in productos" :value="p.id_producto">
+                                                    {{ p.nombre }} (Stock Global: {{ p.stock_actual }})
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div class="row g-3 mb-4">
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold small">Cantidad</label>
+                                                <input type="number" class="form-control fw-bold fs-5 text-center" v-model.number="formAjuste.cantidad" min="0.01" step="0.01" required>
+                                            </div>
+                                            <div class="col-md-8">
+                                                <label class="form-label fw-bold small">Motivo / Observación</label>
+                                                <input type="text" class="form-control" v-model="formAjuste.motivo" required placeholder="Ej: Rotura, Producción del día, Regalo...">
+                                            </div>
+                                        </div>
+
+                                        <div class="d-grid">
+                                            <button type="submit" class="btn btn-lg fw-bold shadow-sm" 
+                                                :class="formAjuste.tipo === 'ENTRADA' ? 'btn-success' : 'btn-danger'">
+                                                <i class="bi bi-save me-2"></i> 
+                                                Confirmar {{ formAjuste.tipo }}
+                                            </button>
+                                        </div>
+
+                                    </form>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <div v-if="vistaActual === 'gastos'">
+                    
+                    <div class="d-flex align-items-center mb-4">
+                        <div>
+                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cash-stack text-brand"></i> Registro de Gastos</h3>
+                            <small class="text-muted">Control de egresos operativos y administrativos</small>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        
+                        <div class="col-md-4">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-header bg-white fw-bold py-3 border-bottom">
+                                    <i class="bi bi-plus-circle me-2 text-secondary"></i>Nuevo Gasto
+                                </div>
+                                <div class="card-body bg-light bg-opacity-10">
+                                    <form @submit.prevent="guardarGasto">
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold text-secondary">Fecha</label>
+                                            <input type="date" class="form-control" v-model="formGasto.fecha" required>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold text-secondary">Categoría</label>
+                                            <select class="form-select" v-model="formGasto.categoria" required>
+                                                <option value="" disabled>Seleccionar...</option>
+                                                <option>Alquiler</option>
+                                                <option>Servicios Básicos (Luz/Agua)</option>
+                                                <option>Salarios / Personal</option>
+                                                <option>Mantenimiento / Reparaciones</option>
+                                                <option>Insumos de Limpieza</option>
+                                                <option>Impuestos / Tasas</option>
+                                                <option>Marketing / Publicidad</option>
+                                                <option>Transporte / Combustible</option>
+                                                <option>Varios</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold text-secondary">Descripción</label>
+                                            <textarea class="form-control" v-model="formGasto.descripcion" rows="2" placeholder="Detalle del gasto..." required></textarea>
+                                        </div>
+
+                                        <div class="row g-2 mb-4">
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold text-secondary">Monto</label>
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control fw-bold text-dark" v-model.number="formGasto.monto" min="1" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold text-secondary">Método</label>
+                                                <select class="form-select" v-model="formGasto.metodo">
+                                                    <option>Efectivo</option>
+                                                    <option>Transferencia</option>
+                                                    <option>Cheque</option>
+                                                    <option>Caja Chica</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-grid">
+                                          <button type="submit" class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i> Confirmar Egreso</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-8">
+                            <div class="card border-0 shadow-sm h-100">
+                                
+                                <div class="card-header bg-white py-3 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <span class="fw-bold text-dark"><i class="bi bi-clock-history me-2 text-secondary"></i>Historial</span>
+                                    </div>
+                                    
+                                    <div class="row g-2 align-items-center bg-light p-2 rounded mx-0">
+                                        <div class="col-4">
+                                            <select class="form-select form-select-sm border-0 bg-transparent fw-bold" v-model="filtroGastoMes">
+                                                <option v-for="(m, i) in mesesNombre" :value="i">{{ m }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-3">
+                                            <select class="form-select form-select-sm border-0 bg-transparent fw-bold" v-model="filtroGastoAnio">
+                                                <option v-for="a in aniosDisponibles" :value="a">{{ a }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-2">
+                                            <button class="btn btn-sm btn-light border" @click="cargarGastos" title="Recargar"><i class="bi bi-arrow-clockwise"></i></button>
+                                        </div>
+                                        <div class="col-3 text-end border-start">
+                                            <small class="text-muted d-block" style="font-size: 0.7rem;">TOTAL PERIODO</small>
+                                            <span class="fw-bold text-dark fs-5">{{ formatoMoneda(totalGastosFiltrados) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th class="ps-3 text-secondary small text-uppercase" style="font-weight: 600;">Fecha</th>
+                                                <th class="text-secondary small text-uppercase" style="font-weight: 600;">Detalle</th>
+                                                <th class="text-secondary small text-uppercase" style="font-weight: 600;">Método</th>
+                                                <th class="text-end pe-3 text-secondary small text-uppercase" style="font-weight: 600;">Importe</th>
+                                                <th class="text-end pe-3" style="width: 50px;"></th> </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="g in gastosFiltrados" :key="g.id_gasto">
+                                                <td class="ps-3 text-muted small" style="width: 80px;">
+                                                    <div class="fw-bold text-dark">{{ new Date(g.fecha).getDate() }}</div>
+                                                    <div class="text-uppercase" style="font-size: 0.7rem;">{{ obtenerNombreDia(g.fecha) }}</div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-bold text-dark" style="font-size: 0.95rem;">{{ g.categoria }}</div>
+                                                    <div class="small text-muted text-truncate" style="max-width: 200px;">{{ g.descripcion }}</div>
+                                                </td>
+                                                <td><span class="badge bg-light text-dark border fw-normal">{{ g.metodo }}</span></td>
+                                                <td class="text-end pe-3">
+                                                    <span class="fw-bold text-dark">{{ formatoMoneda(g.monto) }}</span>
+                                                </td>
+                                                <td class="text-end pe-3">
+                                                    <button class="btn btn-sm btn-light text-danger border-0 hover-danger" @click="eliminarGasto(g)" title="Eliminar Gasto">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="gastosFiltrados.length === 0">
+                                                <td colspan="5" class="text-center py-5">
+                                                    <div class="text-muted opacity-50 mb-2"><i class="bi bi-inbox fs-1"></i></div>
+                                                    <span class="text-muted small">Sin movimientos en este periodo</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+              <div class="modal fade" id="modalCategoria" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning">
+                            <h5 class="modal-title fw-bold text-dark">{{ formCategoria.id_categoria ? 'Editar' : 'Nueva' }} Categoría</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form @submit.prevent="guardarCategoria">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small">Nombre</label>
+                                    <input type="text" class="form-control" v-model="formCategoria.nombre" required placeholder="Ej: Bebidas, Limpieza...">
+                                </div>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-dark fw-bold">Guardar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+              </div>
 
             </div>
         </div>
@@ -1112,6 +1408,9 @@
                   <button class="btn btn-light text-start border py-3" @click="cambiarVista('compras'); cerrarMenuMovil()">
                       <i class="bi bi-cart-plus me-3 text-brand"></i> Compras / Stock
                   </button>
+                <button class="btn btn-light text-start border py-3" @click="cambiarVista('gastos'); cerrarMenuMovil()">
+                    <i class="bi bi-cash-stack me-3 text-brand"></i> Gastos Operativos
+                </button>
                   <button class="btn btn-light text-start border py-3" @click="cambiarVista('transferencias'); cerrarMenuMovil()">
                       <i class="bi bi-arrow-left-right me-3 text-brand"></i> Transferencias
                   </button>
@@ -1380,8 +1679,20 @@
             formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false },
             configFacturaActual: '',
 
+            formAjuste: { tipo: 'ENTRADA', id_producto: '', id_deposito: '', cantidad: 1, motivo: '' },
+
+            formGasto: { fecha: new Date().toISOString().split('T')[0], categoria: '', descripcion: '', monto: 0, metodo: 'Efectivo' },
+            listaGastos: [],
+            filtroGastoMes: new Date().getMonth(), // Mes actual (0-11)
+            filtroGastoAnio: new Date().getFullYear(), // Año actual
+            mesesNombre: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+
             configRemisionActual: '', // Remision
             busquedaRemision: '',
+
+            historialCobranzas: [], // 
+            busquedaCobranza: '',   // 
+            subVistaCobranzas: 'listado',            
             
             subVistaRemision: 'nueva',
             historialRemisiones: [],
@@ -1427,7 +1738,6 @@
                 deuda_total: 0, // Esto ahora será "Saldo Factura" visualmente
                 nro_factura_visual: '' // Para mostrar en el modal
             },
-            subVistaCobranzas: 'listado',
             formProducto: { 
                 nombre:'', sku:'', precio_venta_base:0, 
                 impuesto_iva: 10, metodo_iva: 'INCLUIDO', // <--- AGREGAR ESTO
@@ -1460,49 +1770,85 @@
                 }, 0);
             },
             totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); },
-
-        ventasFiltradas() {
-                // 1. Blindaje contra errores (Airbag)
-                if (!this.historialVentas || !Array.isArray(this.historialVentas)) {
-                    return [];
-                }
-
-                // 2. Si no escriben nada, devolvemos todo
-                if (!this.busquedaVenta) {
-                    return this.historialVentas;
-                }
+            cobranzasFiltradas() {
+                if (!this.historialCobranzas) return [];
+                if (!this.busquedaCobranza) return this.historialCobranzas;
                 
-                // 3. Filtrado (Cliente o Factura)
-                const texto = this.busquedaVenta.toLowerCase().trim();
-                
-                return this.historialVentas.filter(item => {
+                const texto = this.busquedaCobranza.toLowerCase().trim();
+                return this.historialCobranzas.filter(item => {
                     const cliente = String(item.nombre_cliente || '').toLowerCase();
-                    const factura = String(item.factura || '').toLowerCase();
+                    const obs = String(item.observacion || '').toLowerCase();
+                    const metodo = String(item.metodo || '').toLowerCase();
                     
-                    return cliente.includes(texto) || factura.includes(texto);
+                    return cliente.includes(texto) || obs.includes(texto) || metodo.includes(texto);
                 });
             },
-        
-        remisionesFiltradas() {
-            // 1. Si no existe la lista, devolvemos array vacío (evita el error undefined)
-            if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) {
-                return [];
-            }
+          aniosDisponibles() {
+              const actual = new Date().getFullYear();
+              const anios = [];
+              for(let i = 2023; i <= actual + 1; i++) anios.push(i);
+              return anios.reverse(); // El más reciente primero
+          },
 
-            // 2. Si no hay búsqueda, devolvemos todo
-            if (!this.busquedaRemision) {
-                return this.historialRemisiones;
+          // Filtra la lista completa según los selectores
+          gastosFiltrados() {
+              if (!this.listaGastos) return [];
+              return this.listaGastos.filter(g => {
+                  // Convertimos la fecha del gasto (string ISO) a objeto Date
+                  // Agregamos "T12:00:00" si viene solo fecha para evitar problemas de zona horaria
+                  const fechaG = new Date(g.fecha);
+                  return fechaG.getMonth() === this.filtroGastoMes && 
+                        fechaG.getFullYear() === this.filtroGastoAnio;
+              });
+          },
+
+          // Suma el total de lo que se ve en pantalla
+          totalGastosFiltrados() {
+              return this.gastosFiltrados.reduce((sum, item) => sum + item.monto, 0);
+          },
+
+          ventasFiltradas() {
+              // 1. Blindaje contra errores (Airbag)
+              if (!this.historialVentas || !Array.isArray(this.historialVentas)) {
+                  return [];
+              }
+
+              // 2. Si no escriben nada, devolvemos todo
+              if (!this.busquedaVenta) {
+                  return this.historialVentas;
+              }
+              
+              // 3. Filtrado (Cliente o Factura)
+              const texto = this.busquedaVenta.toLowerCase().trim();
+              
+              return this.historialVentas.filter(item => {
+                  const cliente = String(item.nombre_cliente || '').toLowerCase();
+                  const factura = String(item.factura || '').toLowerCase();
+                  
+                  return cliente.includes(texto) || factura.includes(texto);
+              });
+           },
+        
+          remisionesFiltradas() {
+              // 1. Si no existe la lista, devolvemos array vacío (evita el error undefined)
+              if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) {
+                  return [];
+              }
+
+              // 2. Si no hay búsqueda, devolvemos todo
+              if (!this.busquedaRemision) {
+                  return this.historialRemisiones;
+              }
+              
+              // 3. Filtrado seguro
+              const texto = this.busquedaRemision.toLowerCase().trim();
+              return this.historialRemisiones.filter(item => {
+                  // Forzamos conversión a string por si viene un número o null
+                  const n = String(item.numero || '').toLowerCase();
+                  const c = String(item.cliente || '').toLowerCase();
+                  return n.includes(texto) || c.includes(texto);
+              });
             }
-            
-            // 3. Filtrado seguro
-            const texto = this.busquedaRemision.toLowerCase().trim();
-            return this.historialRemisiones.filter(item => {
-                // Forzamos conversión a string por si viene un número o null
-                const n = String(item.numero || '').toLowerCase();
-                const c = String(item.cliente || '').toLowerCase();
-                return n.includes(texto) || c.includes(texto);
-            });
-          }
       },
         mounted() {
             // Inicializar componentes de Bootstrap
@@ -1545,12 +1891,117 @@
                 // Esto crea un punto de retorno para el botón "Atrás"
                 window.history.pushState({ vista: v }, null, '');
             },
+
+            obtenerNombreDia(fechaStr) {
+            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            return dias[new Date(fechaStr).getDay()];
+            },
+
+            guardarGasto() {
+                if (this.formGasto.monto <= 0) return alert("El monto debe ser mayor a 0.");
+                this.cargando = true;
+
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        alert("✅ Gasto registrado.");
+
+                        // Reset del formulario
+                        this.formGasto = { 
+                            fecha: new Date().toISOString().split('T')[0], 
+                            categoria: '', 
+                            descripcion: '', 
+                            monto: 0, 
+                            metodo: 'Efectivo' 
+                        };
+
+                        // Recargar lista
+                        this.cargarGastos();
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error: " + e);
+                    })
+                    .guardarGasto(this.formGasto);
+            },
+
+            cargarGastos() {
+                // Solo cargar si la vista es gastos (opcional para optimizar)
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        this.listaGastos = res || [];
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        console.error(e);
+                    })
+                    .obtenerGastos();
+            },
+
+            eliminarGasto(item) {
+                if (!confirm("¿Estás seguro de eliminar este gasto?\n\nCategoría: " + item.categoria + "\nMonto: " + this.formatoMoneda(item.monto))) return;
+
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false;
+                        // Eliminamos visualmente sin recargar todo (más rápido)
+                        this.listaGastos = this.listaGastos.filter(g => g.id_gasto !== item.id_gasto);
+                        alert("🗑️ Gasto eliminado correctamente.");
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error al eliminar: " + e);
+                    })
+                    .eliminarGasto(item.id_gasto);
+            },
+
+            guardarAjuste() {
+              if (!this.formAjuste.id_producto || !this.formAjuste.id_deposito) return alert("Completa todos los datos.");
+              if (this.formAjuste.cantidad <= 0) return alert("Cantidad inválida.");
+
+              if (!confirm(`¿Confirmar ${this.formAjuste.tipo} de ${this.formAjuste.cantidad} unidades?`)) return;
+
+              this.cargando = true;
+              google.script.run
+                  .withSuccessHandler(() => {
+                      this.cargando = false;
+                      alert("✅ Ajuste de stock registrado correctamente.");
+                      this.formAjuste.cantidad = 1; 
+                      this.formAjuste.motivo = '';
+                      // Recargar datos para ver el stock actualizado
+                      this.cargarDatosIniciales();
+                  })
+                  .withFailureHandler(e => {
+                      this.cargando = false;
+                      alert("❌ Error: " + e);
+                  })
+                  .guardarAjusteStock(this.formAjuste);
+            },
             
-            // Nueva función para cerrar el menú móvil al hacer clic en una opción
             cerrarMenuMovil() {
                 const menuEl = document.getElementById('menuMovil');
                 const menuBS = bootstrap.Offcanvas.getOrCreateInstance(menuEl);
                 if (menuBS) menuBS.hide();
+            },
+
+            cargarHistorialCobranzas() {
+                this.subVistaCobranzas = 'historial';
+                this.cargando = true;
+                this.historialCobranzas = [];
+                
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        this.historialCobranzas = res || [];
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        alert("Error: " + e);
+                    })
+                    .obtenerHistorialCobranzas();
             },
 
             abrirModalCategoria(item) {
@@ -1787,6 +2238,7 @@
 
             cargarCobranzas() {
                 this.vistaActual = 'cobranzas';
+                this.subVistaCobranzas = 'listado';
                 this.cargando = true;
                 this.clientesDeudores = [];
 

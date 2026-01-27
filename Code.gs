@@ -2693,3 +2693,235 @@ function eliminarCategoria(id) {
   lock.releaseLock();
   return { error: "Categoría no encontrada" };
 }
+
+function obtenerHistorialCobranzas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shCob = ss.getSheetByName('COBRANZAS');
+  const shCli = ss.getSheetByName('CLIENTES');
+  
+  if (!shCob || shCob.getLastRow() <= 1) return [];
+
+  // 1. Obtener Mapa de Clientes (ID -> Nombre)
+  const mapCli = {};
+  if (shCli) {
+    const dataCli = shCli.getDataRange().getValues();
+    for(let i=1; i<dataCli.length; i++) {
+      if(dataCli[i][0]) mapCli[String(dataCli[i][0])] = dataCli[i][1];
+    }
+  }
+
+  // 2. Obtener Cobros
+  const data = shCob.getDataRange().getValues();
+  const resultado = [];
+
+  // Estructura Hoja COBRANZAS:
+  // [0:id, 1:fecha, 2:id_cliente, 3:monto, 4:metodo, 5:obs, 6:id_venta]
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0]) { // Si tiene ID
+      let fechaFmt = row[1];
+      try { if (row[1] instanceof Date) fechaFmt = row[1].toISOString(); } catch(e){}
+
+      resultado.push({
+        id_cobro: row[0],
+        fecha: fechaFmt,
+        nombre_cliente: mapCli[String(row[2])] || 'Cliente Desconocido',
+        monto: Number(row[3]),
+        metodo: row[4],
+        observacion: row[5],
+        id_venta: row[6] // Por si queremos vincularlo a futuro
+      });
+    }
+  }
+
+  // Devolver invertido para ver lo más reciente primero
+  return resultado.reverse();
+}
+
+// ==========================================
+// AJUSTES DE INVENTARIO (Entrada/Salida)
+// ==========================================
+
+function guardarAjusteStock(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const shExist = ss.getSheetByName('STOCK_EXISTENCIAS');
+  const shProd = ss.getSheetByName('PRODUCTOS');
+
+  // 1. Validaciones
+  const cantidad = Number(datos.cantidad);
+  if (cantidad <= 0) throw "La cantidad debe ser mayor a 0.";
+  
+  // Determinar signo y tipo
+  // Si es SALIDA, multiplicamos por -1. Si es ENTRADA, queda positivo.
+  const multiplicador = datos.tipo === 'SALIDA' ? -1 : 1;
+  const cantFinal = cantidad * multiplicador;
+  const tipoMovimiento = datos.tipo === 'SALIDA' ? 'AJUSTE_SALIDA' : 'AJUSTE_ENTRADA'; // O 'FABRICACION'
+
+  // Buscar Producto para validar (y actualizar global)
+  const dataProd = shProd.getDataRange().getValues();
+  let filaProd = -1;
+  let stockGlobalActual = 0;
+
+  for (let i = 1; i < dataProd.length; i++) {
+    if (String(dataProd[i][0]) == String(datos.id_producto)) {
+      filaProd = i + 1;
+      stockGlobalActual = Number(dataProd[i][12] || 0); // Columna M (13)
+      break;
+    }
+  }
+
+  if (filaProd === -1) throw "Producto no encontrado.";
+
+  // 2. ACTUALIZAR STOCK POR DEPÓSITO (STOCK_EXISTENCIAS)
+  const dataExist = shExist.getDataRange().getValues();
+  let encontradoLocal = false;
+  let filaExist = -1;
+  let stockLocalActual = 0;
+
+  for (let k = 1; k < dataExist.length; k++) {
+    // Coincidencia: Producto Y Depósito
+    if (String(dataExist[k][1]) == String(datos.id_producto) && 
+        String(dataExist[k][2]) == String(datos.id_deposito)) {
+      filaExist = k + 1;
+      stockLocalActual = Number(dataExist[k][3] || 0);
+      encontradoLocal = true;
+      break;
+    }
+  }
+
+  // Validación Crítica para Salidas: No dejar en negativo
+  if (datos.tipo === 'SALIDA' && stockLocalActual < cantidad) {
+    throw `Stock insuficiente en este depósito.\nActual: ${stockLocalActual}\nIntentas restar: ${cantidad}`;
+  }
+
+  // A. Guardar en STOCK_EXISTENCIAS
+  if (encontradoLocal) {
+    // Actualizar existente
+    shExist.getRange(filaExist, 4).setValue(stockLocalActual + cantFinal);
+    shExist.getRange(filaExist, 5).setValue(new Date());
+  } else {
+    if (datos.tipo === 'SALIDA') throw "No existe stock de este producto en el depósito seleccionado.";
+    // Crear nuevo registro (solo para entradas)
+    shExist.appendRow([
+      Utilities.getUuid(),
+      datos.id_producto,
+      datos.id_deposito,
+      cantFinal, // Será positivo
+      new Date()
+    ]);
+  }
+
+  // B. Guardar en PRODUCTOS (Global)
+  shProd.getRange(filaProd, 13).setValue(stockGlobalActual + cantFinal);
+
+  // C. Guardar en MOVIMIENTOS_STOCK (Historial)
+  shMov.appendRow([
+    Utilities.getUuid(),
+    new Date(),
+    tipoMovimiento, // AJUSTE_SALIDA o AJUSTE_ENTRADA
+    datos.id_producto,
+    datos.id_deposito,
+    cantFinal,
+    datos.motivo || "Ajuste manual" // Guardamos el motivo como referencia ID o texto
+  ]);
+
+  lock.releaseLock();
+  return { success: true };
+}
+
+// ==========================================
+// MÓDULO DE GASTOS
+// ==========================================
+
+function guardarGasto(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('GASTOS');
+  
+  if (!sh) throw "No se encontró la hoja GASTOS.";
+
+  const id = Utilities.getUuid();
+  const fecha = new Date(datos.fecha);
+  // Ajuste horario para que no se guarde con hora anterior
+  fecha.setHours(12,0,0,0);
+
+  sh.appendRow([
+    id,
+    fecha,
+    datos.categoria,
+    datos.descripcion,
+    Number(datos.monto),
+    datos.metodo
+  ]);
+
+  lock.releaseLock();
+  return { success: true };
+}
+
+function obtenerGastos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('GASTOS');
+  if (!sh || sh.getLastRow() <= 1) return [];
+
+  const data = sh.getDataRange().getValues();
+  const lista = [];
+
+  // Recorremos desde la fila 1 (datos)
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[0]) {
+      let fechaFmt = row[1];
+      try { if (row[1] instanceof Date) fechaFmt = row[1].toISOString(); } catch(e){}
+      
+      lista.push({
+        id_gasto: row[0],
+        fecha: fechaFmt,
+        categoria: row[2],
+        descripcion: row[3],
+        monto: Number(row[4]),
+        metodo: row[5]
+      });
+    }
+  }
+  // Retornar invertido para ver lo más nuevo arriba
+  return lista.reverse();
+}
+
+function eliminarGasto(idGasto) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('GASTOS');
+  
+  if (!sh) throw "No se encontró la hoja GASTOS.";
+
+  const data = sh.getDataRange().getValues();
+  let filaEncontrada = -1;
+
+  // Buscar el ID en la columna A (índice 0)
+  // Empezamos en 1 para saltar encabezados
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(idGasto)) {
+      filaEncontrada = i + 1; // +1 porque el array empieza en 0 y la hoja en 1
+      break;
+    }
+  }
+
+  if (filaEncontrada > 0) {
+    sh.deleteRow(filaEncontrada);
+    lock.releaseLock();
+    return { success: true };
+  } else {
+    lock.releaseLock();
+    throw "Gasto no encontrado o ya eliminado.";
+  }
+}
+
