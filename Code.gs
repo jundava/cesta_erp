@@ -3203,3 +3203,419 @@ function obtenerDatosDashboard() {
   };
 }
 
+function generarReporte1(peticion) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tipo = peticion.tipo;
+  
+  // Fechas
+  const fInicio = new Date(peticion.fechaInicio);
+  fInicio.setHours(0,0,0);
+  const fFin = new Date(peticion.fechaFin);
+  fFin.setHours(23,59,59);
+
+  let cabeceras = []; 
+  let filas = [];     
+  let totales = { suma: 0, conteo: 0 };
+  
+  const fmtFecha = (d) => Utilities.formatDate(new Date(d), Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+  // ======================================================
+  // 1. CARGA PREVIA DE NOMBRES (Diccionario ID -> Nombre)
+  // ======================================================
+  let mapaNombres = {}; // Ej: { "id-123": "Juan Perez", "id-456": "Proveedor SA" }
+
+  // Cargar Clientes
+  const shCli = ss.getSheetByName('CLIENTES');
+  if(shCli) {
+      const dataCli = shCli.getDataRange().getValues();
+      for(let i=1; i<dataCli.length; i++) {
+          mapaNombres[dataCli[i][0]] = dataCli[i][1]; // ID -> Razón Social
+      }
+  }
+
+  // Cargar Proveedores
+  const shProv = ss.getSheetByName('PROVEEDORES');
+  if(shProv) {
+      const dataProv = shProv.getDataRange().getValues();
+      for(let i=1; i<dataProv.length; i++) {
+          mapaNombres[dataProv[i][0]] = dataProv[i][1]; // ID -> Razón Social
+      }
+  }
+
+  // Cargar Depósitos (Opcional, por si quieres mostrar nombres de depósitos)
+  const shDep = ss.getSheetByName('DEPOSITOS');
+  if(shDep) {
+      const dataDep = shDep.getDataRange().getValues();
+      for(let i=1; i<dataDep.length; i++) {
+          mapaNombres[dataDep[i][0]] = dataDep[i][1]; 
+      }
+  }
+
+  // ======================================================
+  // 2. PROCESAMIENTO
+  // ======================================================
+
+  switch (tipo) {
+    case 'ventas':
+      cabeceras = ["Nro Factura", "Fecha", "Cliente", "Estado", "Total"];
+      // Pasamos el índice 3 (ID Cliente) para que sea traducido
+      procesarMovimientos('VENTAS_CABECERA', [1, 2, 3, 6, 5], 2, 5, [3]); 
+      break;
+
+    case 'compras':
+      cabeceras = ["ID Compra", "Fecha", "Proveedor", "Estado", "Total"];
+      // Pasamos el índice 2 (ID Proveedor) para traducir
+      procesarMovimientos('COMPRAS_CABECERA', [0, 1, 2, 5, 4], 1, 4, [2]); 
+      break;
+
+    case 'gastos':
+      cabeceras = ["Fecha", "Descripción", "Monto", "Categoría"];
+      procesarMovimientos('GASTOS', [1, 3, 4, 2], 1, 4, []); 
+      break;
+      
+    case 'cobranzas':
+      cabeceras = ["ID Recibo", "Fecha", "Cliente", "Monto", "Forma Pago"];
+      procesarMovimientos('COBRANZAS', [0, 1, 2, 3, 4], 1, 3, [2]); // Traducir Cliente (idx 2)
+      break;
+
+    case 'transferencias':
+      cabeceras = ["ID", "Fecha", "Origen", "Destino", "Responsable"];
+      // Traducir Origen (2) y Destino (3) si son IDs de depósitos
+      procesarMovimientos('TRANSFERENCIAS_CABECERA', [0, 1, 2, 3, 4], 1, null, [2, 3]); 
+      break;
+    
+    case 'ajustes':
+      cabeceras = ["ID", "Fecha", "Motivo", "Depósito"];
+      procesarMovimientos('MOVIMIENTOS_STOCK', [0, 1, 2, 4], 1, null, [4]); // Traducir Depósito
+      break;
+
+    case 'remisiones':
+      cabeceras = ["Nro Remisión", "Fecha", "Cliente", "Chofer", "Destino"];
+      procesarMovimientos('REMISIONES_CABECERA', [2, 1, 3, 5, 4], 1, null, [3]); // Traducir Cliente
+      break;
+
+    // ... (El resto de cases stock/maestros quedan igual) ...
+    case 'stock_deposito':
+    case 'productos_categoria':
+      cabeceras = ["SKU", "Producto", "Categoría", "Depósito", "Stock Actual", "Costo Prom."];
+      generarReporteStock();
+      break;
+    case 'clientes':
+      cabeceras = ["ID", "Nombre / Razón Social", "RUC/CI", "Teléfono", "Dirección"];
+      procesarMaestro('CLIENTES', [0, 1, 2, 4, 5]);
+      break;
+    case 'proveedores':
+      cabeceras = ["ID", "Empresa", "RUC", "Contacto", "Datos Adic."];
+      procesarMaestro('PROVEEDORES', [0, 1, 2, 3, 4]);
+      break;
+  }
+
+  // ======================================================
+  // 3. FUNCIONES AUXILIARES
+  // ======================================================
+
+  // Ahora acepta un nuevo parámetro: indicesAtraducir (Array de números)
+  function procesarMovimientos(nombreHoja, indicesCols, idxFecha, idxMonto, indicesAtraducir = []) {
+    const sh = ss.getSheetByName(nombreHoja);
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      let valorCelda = data[i][idxFecha];
+      let fechaRow = new Date(valorCelda);
+      
+      if (!isNaN(fechaRow) && fechaRow >= fInicio && fechaRow <= fFin) {
+        
+        // Mapeamos la fila
+        let filaLimpia = indicesCols.map(idx => {
+            let valorOriginal = data[i][idx];
+            
+            // 1. Si es fecha, formatear
+            if (idx === idxFecha) return fmtFecha(valorOriginal);
+            
+            // 2. Si es una columna que necesita traducción (ej: ID Cliente)
+            if (indicesAtraducir.includes(idx)) {
+                return mapaNombres[valorOriginal] || valorOriginal; // Devuelve Nombre o el ID si no encuentra
+            }
+
+            return valorOriginal;
+        });
+
+        filas.push(filaLimpia);
+        totales.conteo++;
+        if (idxMonto !== null) {
+            totales.suma += parseFloat(data[i][idxMonto]) || 0;
+        }
+      }
+    }
+  }
+
+  // ... (Tus otras funciones procesarMaestro y generarReporteStock van aquí sin cambios) ...
+  function procesarMaestro(nombreHoja, indicesCols) {
+    const sh = ss.getSheetByName(nombreHoja);
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if(data[i][0] !== "") { 
+        filas.push(indicesCols.map(idx => data[i][idx]));
+        totales.conteo++;
+      }
+    }
+  }
+
+  function generarReporteStock() {
+      const shProd = ss.getSheetByName('PRODUCTOS'); 
+      const shExist = ss.getSheetByName('STOCK_EXISTENCIAS'); 
+      if(!shProd || !shExist) return;
+
+      const dataProd = shProd.getDataRange().getValues();
+      const dataExist = shExist.getDataRange().getValues();
+      
+      let infoProd = {};
+      for(let i=1; i<dataProd.length; i++){
+          let idProd = dataProd[i][0];
+          infoProd[idProd] = { 
+              sku: dataProd[i][1], nombre: dataProd[i][2], 
+              cat: dataProd[i][3], costo: dataProd[i][6] 
+          };
+      }
+
+      for(let j=1; j<dataExist.length; j++){
+          let idProd = dataExist[j][1];
+          let idDep = dataExist[j][2]; // ID Deposito
+          let nombreDep = mapaNombres[idDep] || 'General'; // <--- AQUI TAMBIEN TRADUCIMOS
+          let cantidad = parseFloat(dataExist[j][3]) || 0;
+          
+          let p = infoProd[idProd] || { sku: '-', nombre: 'Desconocido', cat: '-', costo: 0 };
+          
+          filas.push([p.sku, p.nombre, p.cat, nombreDep, cantidad, p.costo]);
+          totales.conteo++;
+          totales.suma += (cantidad * (parseFloat(p.costo)||0)); 
+      }
+  }
+
+  return { cabeceras: cabeceras, filas: filas, totales: totales };
+}
+
+function generarReporte(peticion) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tipo = peticion.tipo;
+  
+  // Fechas: Ajustamos para incluir todo el día final
+  const fInicio = new Date(peticion.fechaInicio);
+  fInicio.setHours(0,0,0);
+  const fFin = new Date(peticion.fechaFin);
+  fFin.setHours(23,59,59);
+
+  let cabeceras = []; 
+  let filas = [];     
+  let totales = { suma: 0, conteo: 0 };
+  
+  const fmtFecha = (d) => Utilities.formatDate(new Date(d), Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+  // ======================================================
+  // 1. CARGA PREVIA DE NOMBRES (Diccionario ID -> Nombre)
+  // ======================================================
+  let mapaNombres = {}; // Ej: { "id-123": "Juan Perez", "1": "Limpieza" }
+
+  // A. Cargar Clientes
+  const shCli = ss.getSheetByName('CLIENTES');
+  if(shCli) {
+      const dataCli = shCli.getDataRange().getValues();
+      for(let i=1; i<dataCli.length; i++) {
+          mapaNombres[dataCli[i][0]] = dataCli[i][1]; // ID -> Razón Social
+      }
+  }
+
+  // B. Cargar Proveedores
+  const shProv = ss.getSheetByName('PROVEEDORES');
+  if(shProv) {
+      const dataProv = shProv.getDataRange().getValues();
+      for(let i=1; i<dataProv.length; i++) {
+          mapaNombres[dataProv[i][0]] = dataProv[i][1]; 
+      }
+  }
+
+  // C. Cargar Depósitos
+  const shDep = ss.getSheetByName('DEPOSITOS');
+  if(shDep) {
+      const dataDep = shDep.getDataRange().getValues();
+      for(let i=1; i<dataDep.length; i++) {
+          mapaNombres[dataDep[i][0]] = dataDep[i][1]; 
+      }
+  }
+
+  // D. Cargar Categorías (NUEVO PARA CORREGIR EL REPORTE)
+  const shCat = ss.getSheetByName('CATEGORIAS');
+  if(shCat) {
+      const dataCat = shCat.getDataRange().getValues();
+      for(let i=1; i<dataCat.length; i++) {
+          // Asume Col 0 = ID (ej: 1), Col 1 = Nombre (ej: Genérica)
+          mapaNombres[dataCat[i][0]] = dataCat[i][1]; 
+      }
+  }
+
+  // ======================================================
+  // 2. PROCESAMIENTO
+  // ======================================================
+
+  switch (tipo) {
+    
+    case 'ventas':
+      cabeceras = ["Nro Factura", "Fecha", "Cliente", "Estado", "Total"];
+      // Traducimos Cliente (índice 3 en VENTAS_CABECERA)
+      procesarMovimientos('VENTAS_CABECERA', [1, 2, 3, 6, 5], 2, 5, [3]); 
+      break;
+
+    case 'compras':
+      cabeceras = ["ID Compra", "Fecha", "Proveedor", "Estado", "Total"];
+      // Traducimos Proveedor (índice 2 en COMPRAS_CABECERA)
+      procesarMovimientos('COMPRAS_CABECERA', [0, 1, 2, 5, 4], 1, 4, [2]); 
+      break;
+
+    case 'gastos':
+      cabeceras = ["Fecha", "Descripción", "Monto", "Categoría"];
+      // GASTOS: 0:id, 1:fecha, 2:categoria, 3:descripcion, 4:monto
+      // Traducimos Categoría (índice 2)
+      procesarMovimientos('GASTOS', [1, 3, 4, 2], 1, 4, [2]); 
+      break;
+      
+    case 'cobranzas':
+      cabeceras = ["ID Recibo", "Fecha", "Cliente", "Monto", "Forma Pago"];
+      // Traducimos Cliente (índice 2 en COBRANZAS)
+      procesarMovimientos('COBRANZAS', [0, 1, 2, 3, 4], 1, 3, [2]); 
+      break;
+
+    case 'transferencias':
+      cabeceras = ["ID", "Fecha", "Origen", "Destino", "Responsable"];
+      // Traducimos Origen (2) y Destino (3)
+      procesarMovimientos('TRANSFERENCIAS_CABECERA', [0, 1, 2, 3, 4], 1, null, [2, 3]); 
+      break;
+    
+    case 'ajustes':
+      cabeceras = ["ID", "Fecha", "Motivo", "Depósito"];
+      // Traducimos Depósito (4)
+      procesarMovimientos('MOVIMIENTOS_STOCK', [0, 1, 2, 4], 1, null, [4]);
+      break;
+
+    case 'remisiones':
+      cabeceras = ["Nro Remisión", "Fecha", "Cliente", "Chofer", "Destino"];
+      // Traducimos Cliente (3) y Destino (4 si fuera depósito, en este caso es ID Deposito)
+      procesarMovimientos('REMISIONES_CABECERA', [2, 1, 3, 5, 4], 1, null, [3, 4]);
+      break;
+
+    // --- REPORTES DE STOCK Y MAESTROS ---
+    case 'stock_deposito':
+    case 'productos_categoria':
+      cabeceras = ["SKU", "Producto", "Categoría", "Depósito", "Stock Actual", "Costo Prom."];
+      generarReporteStock();
+      break;
+
+    case 'clientes':
+      cabeceras = ["ID", "Nombre / Razón Social", "RUC/CI", "Teléfono", "Dirección"];
+      procesarMaestro('CLIENTES', [0, 1, 2, 4, 5]);
+      break;
+
+    case 'proveedores':
+      cabeceras = ["ID", "Empresa", "RUC", "Contacto", "Datos Adic."];
+      procesarMaestro('PROVEEDORES', [0, 1, 2, 3, 4]);
+      break;
+  }
+
+  // ======================================================
+  // 3. FUNCIONES AUXILIARES
+  // ======================================================
+
+  function procesarMovimientos(nombreHoja, indicesCols, idxFecha, idxMonto, indicesAtraducir = []) {
+    const sh = ss.getSheetByName(nombreHoja);
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      let valorCelda = data[i][idxFecha];
+      let fechaRow = new Date(valorCelda);
+      
+      if (!isNaN(fechaRow) && fechaRow >= fInicio && fechaRow <= fFin) {
+        
+        let filaLimpia = indicesCols.map(idx => {
+            let valorOriginal = data[i][idx];
+            
+            // 1. Formato Fecha
+            if (idx === idxFecha) return fmtFecha(valorOriginal);
+            
+            // 2. Traducción de IDs (Cliente, Proveedor, Categoría, Depósito)
+            if (indicesAtraducir.includes(idx)) {
+                return mapaNombres[valorOriginal] || valorOriginal; 
+            }
+
+            return valorOriginal;
+        });
+
+        filas.push(filaLimpia);
+        totales.conteo++;
+        if (idxMonto !== null) {
+            totales.suma += parseFloat(data[i][idxMonto]) || 0;
+        }
+      }
+    }
+  }
+
+  function procesarMaestro(nombreHoja, indicesCols) {
+    const sh = ss.getSheetByName(nombreHoja);
+    if (!sh) return;
+    const data = sh.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if(data[i][0] !== "") { 
+        filas.push(indicesCols.map(idx => data[i][idx]));
+        totales.conteo++;
+      }
+    }
+  }
+
+  function generarReporteStock() {
+      const shProd = ss.getSheetByName('PRODUCTOS'); 
+      const shExist = ss.getSheetByName('STOCK_EXISTENCIAS'); 
+      if(!shProd || !shExist) return;
+
+      const dataProd = shProd.getDataRange().getValues();
+      const dataExist = shExist.getDataRange().getValues();
+      
+      // 1. Mapa de Productos con Categoría Traducida
+      let infoProd = {};
+      for(let i=1; i<dataProd.length; i++){
+          let idProd = dataProd[i][0];
+          let idCat = dataProd[i][3]; // Columna Categoría en Productos
+          
+          // AQUÍ SE USA EL DICCIONARIO PARA OBTENER EL NOMBRE REAL DE LA CATEGORÍA
+          let nombreCategoria = mapaNombres[idCat] || 'Sin Categoría'; 
+
+          infoProd[idProd] = { 
+              sku: dataProd[i][1], 
+              nombre: dataProd[i][2], 
+              cat: nombreCategoria, 
+              costo: dataProd[i][6] 
+          };
+      }
+
+      // 2. Recorrer Existencias
+      for(let j=1; j<dataExist.length; j++){
+          let idProd = dataExist[j][1];
+          let idDep = dataExist[j][2];
+          
+          // AQUÍ SE TRADUCE EL NOMBRE DEL DEPÓSITO
+          let nombreDep = mapaNombres[idDep] || 'General'; 
+          
+          let cantidad = parseFloat(dataExist[j][3]) || 0;
+          let p = infoProd[idProd] || { sku: '-', nombre: 'Desconocido', cat: '-', costo: 0 };
+          
+          // Aplicar filtro si es por categoría (Opcional: puedes filtrar aquí si el usuario eligió una sola categoría)
+          
+          filas.push([p.sku, p.nombre, p.cat, nombreDep, cantidad, p.costo]);
+          totales.conteo++;
+          totales.suma += (cantidad * (parseFloat(p.costo)||0)); 
+      }
+  }
+
+  return { cabeceras: cabeceras, filas: filas, totales: totales };
+}
+

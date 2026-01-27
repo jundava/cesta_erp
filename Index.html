@@ -9,7 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-    <style>
+<style>
       /* =========================================
          🎨 PALETA DE COLORES CESTA
       ========================================= */
@@ -154,7 +154,53 @@
           color: var(--color-primary); /* Icono naranja */
       }
 
-    </style>
+      /* =======================================================
+         🖨️ ESTILOS CRÍTICOS DE IMPRESIÓN (SOLUCIÓN DEFINITIVA)
+      ======================================================= */
+      
+      /* 1. REGLA CLAVE: Ocultar el footer SIEMPRE en pantalla normal */
+      .report-footer {
+          display: none !important;
+      }
+
+      /* 2. Reglas que solo aplican al imprimir/PDF */
+      @media print {
+          /* Ocultar todo lo que no sea el reporte */
+          .sidebar, .navbar, .btn, .card-header button, .form-control, .form-select, label, .d-print-none {
+              display: none !important;
+          }
+          
+          /* Expandir el contenido al 100% del papel */
+          main, .container-fluid, .card, .card-body {
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              box-shadow: none !important;
+              border: none !important;
+              background-color: white !important;
+          }
+
+          /* Footer de Reporte: FORZAR APARICIÓN AL IMPRIMIR */
+          .report-footer {
+              display: block !important; /* <--- Esto revive el footer */
+              position: fixed;
+              bottom: 0;
+              left: 0;
+              width: 100%;
+              text-align: center;
+              padding: 10px;
+              background: white;
+              border-top: 1px solid #ddd;
+              z-index: 9999;
+          }
+          
+          /* Ajuste de Tabla para papel */
+          table { font-size: 10pt; width: 100%; }
+          th { background-color: #f8f9fa !important; color: black !important; -webkit-print-color-adjust: exact; }
+      }
+
+</style>
 </head>
 <body>
     <div id="app" class="d-flex h-100 flex-column">
@@ -650,6 +696,118 @@
 
                     </div>
                 </div>
+
+                <div v-if="vistaActual === 'reportes'">
+    
+                  <div class="d-flex justify-content-between align-items-center mb-4">
+                      <h3 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-bar-graph me-2 text-brand"></i>Reportes</h3>
+                  </div>
+
+                  <div class="card border-0 shadow-sm mb-4 d-print-none">
+                      <div class="card-body bg-light rounded">
+                          <form @submit.prevent="cargarReporte" class="row g-3 align-items-end">
+                              
+                              <div class="col-md-4">
+                                  <label class="form-label small fw-bold">Seleccionar Reporte</label>
+                                  <select class="form-select" v-model="reporteForm.tipo" required>
+                                      <optgroup label="Movimientos">
+                                          <option value="ventas">Ventas</option>
+                                          <option value="compras">Compras</option>
+                                          <option value="gastos">Gastos</option>
+                                          <option value="cobranzas">Cobranzas</option>
+                                          <option value="transferencias">Transferencias</option>
+                                          <option value="ajustes">Ajustes de Inventario</option>
+                                          <option value="remisiones">Notas de Remisión</option>
+                                      </optgroup>
+                                      <optgroup label="Inventario y Stock">
+                                          <option value="stock_deposito">Stock por Depósito</option>
+                                          <option value="productos_categoria">Productos por Categoría</option>
+                                      </optgroup>
+                                      <optgroup label="Listados Maestros">
+                                          <option value="clientes">Listado de Clientes</option>
+                                          <option value="proveedores">Listado de Proveedores</option>
+                                      </optgroup>
+                                  </select>
+                              </div>
+
+                              <div class="col-md-3" v-if="usaFiltroFecha">
+                                  <label class="form-label small fw-bold">Desde</label>
+                                  <input type="date" class="form-control" v-model="reporteForm.fechaInicio" required>
+                              </div>
+
+                              <div class="col-md-3" v-if="usaFiltroFecha">
+                                  <label class="form-label small fw-bold">Hasta</label>
+                                  <input type="date" class="form-control" v-model="reporteForm.fechaFin" required>
+                              </div>
+
+                              <div class="col-md-2">
+                                  <button type="submit" class="btn btn-brand w-100 fw-bold" :disabled="cargando">
+                                      <i class="bi bi-search me-2"></i>Ver
+                                  </button>
+                              </div>
+                          </form>
+                      </div>
+                  </div>
+
+                  <div v-if="reporteData.filas.length > 0">
+                      
+                      <div class="mb-3 text-center">
+                          <h4 class="fw-bold text-uppercase mb-1">Reporte de {{ reporteForm.tipo.replace('_', ' ') }}</h4>
+                          <p class="text-muted small mb-0" v-if="usaFiltroFecha">
+                              Del {{ formatoFecha(reporteForm.fechaInicio) }} al {{ formatoFecha(reporteForm.fechaFin) }}
+                          </p>
+                          <p class="text-muted small mb-0" v-else>Generado el {{ formatoFecha(new Date()) }}</p>
+                      </div>
+
+                      <div class="d-flex justify-content-end gap-2 mb-3 d-print-none">
+                          <button class="btn btn-outline-success btn-sm" @click="exportarCSV">
+                              <i class="bi bi-filetype-csv me-2"></i>Descargar CSV
+                          </button>
+                          <button class="btn btn-outline-danger btn-sm" onclick="window.print()">
+                              <i class="bi bi-file-pdf me-2"></i>Imprimir / PDF
+                          </button>
+                      </div>
+
+                      <div class="table-responsive bg-white border rounded">
+                          <table class="table table-striped table-hover mb-0" id="tablaReporte">
+                              <thead class="bg-dark text-white">
+                                  <tr>
+                                      <th v-for="(col, index) in reporteData.cabeceras" :key="index" class="text-nowrap small">
+                                          {{ col }}
+                                      </th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <tr v-for="(fila, i) in reporteData.filas" :key="i">
+                                      <td v-for="(celda, j) in fila" :key="j" class="small">
+                                          {{ esDinero(celda, j) ? formatoMoneda(celda) : celda }}
+                                      </td>
+                                  </tr>
+                              </tbody>
+                              <tfoot v-if="reporteData.totales.suma > 0" class="bg-light fw-bold border-top">
+                                  <tr>
+                                      <td :colspan="reporteData.cabeceras.length - 1" class="text-end">TOTAL:</td>
+                                      <td>{{ formatoMoneda(reporteData.totales.suma) }}</td>
+                                  </tr>
+                              </tfoot>
+                          </table>
+                      </div>
+
+                      <div class="report-footer">
+                          <div class="d-flex align-items-center justify-content-center opacity-50">
+                              <h5 class="fw-bold text-brand m-0 me-2"><i class="bi bi-basket2-fill"></i> CESTA ERP</h5>
+                              <small>Sistema de Gestión Integral</small>
+                          </div>
+                          <div class="small mt-2">Página 1 de 1 - Reporte generado por {{ usuarioLogueado.nombre }}</div>
+                      </div>
+
+                  </div>
+
+                  <div v-else-if="reporteBuscado && !cargando" class="text-center py-5">
+                      <i class="bi bi-clipboard-x text-muted display-1"></i>
+                      <p class="text-muted mt-3">No hay datos disponibles para este reporte.</p>
+                  </div>
+              </div>
 
                 <div v-if="vistaActual === 'dashboard'">
                     
@@ -2408,6 +2566,18 @@
                 }
             },
 
+            reporteForm: {
+                tipo: 'ventas',
+                fechaInicio: new Date().toISOString().slice(0, 10),
+                fechaFin: new Date().toISOString().slice(0, 10)
+            },
+            reporteData: {
+                cabeceras: [],
+                filas: [],
+                totales: { suma: 0, conteo: 0 }
+            },
+            reporteBuscado: false,
+
             avataresDisponibles: [
                 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
                 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
@@ -2528,6 +2698,12 @@
                     return acc + montoIVA;
                 }, 0);
             },
+
+            usaFiltroFecha() {
+                const sinFecha = ['stock_deposito', 'productos_categoria', 'clientes', 'proveedores'];
+                return !sinFecha.includes(this.reporteForm.tipo);
+            },
+
             totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); },
             cobranzasFiltradas() {
                 if (!this.historialCobranzas) return [];
@@ -2655,6 +2831,66 @@
                 if (v === 'usuarios') {
                     this.cargarUsuarios();
                 }
+            },
+
+            // Método auxiliar para detectar si una celda debe verse como dinero
+            esDinero(valor, index) {
+                // Lógica simple: si es numérico y la cabecera dice 'Total', 'Monto', 'Costo' o 'Precio'
+                const cabecera = this.reporteData.cabeceras[index].toLowerCase();
+                return typeof valor === 'number' && 
+                      (cabecera.includes('total') || cabecera.includes('monto') || cabecera.includes('costo') || cabecera.includes('precio'));
+            },
+
+            formatoFecha(f) {
+                if(!f) return '';
+                return new Date(f).toLocaleDateString('es-ES'); // O 'es-PY'
+            },
+
+            // --- FUNCIÓN QUE FALTA PARA EL FORMULARIO ---
+              cargarReporte() {
+                  this.cargando = true;
+                  this.reporteData = { cabeceras: [], filas: [], totales: { suma: 0, conteo: 0 } }; // Limpiar anterior
+                  
+                  google.script.run
+                      .withSuccessHandler(res => {
+                          this.cargando = false;
+                          this.reporteBuscado = true;
+                          this.reporteData = res;
+                      })
+                      .withFailureHandler(error => {
+                          this.cargando = false;
+                          alert("Error al generar el reporte: " + error);
+                      })
+                      .generarReporte(JSON.parse(JSON.stringify(this.reporteForm))); 
+                      // Usamos JSON.parse/stringify para enviar una copia limpia del objeto
+              },
+
+            // --- FUNCIÓN PARA GENERAR Y DESCARGAR CSV ---
+            exportarCSV() {
+                if (this.reporteData.filas.length === 0) return;
+
+                // 1. Unir cabeceras
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // UTF-8 BOM para Excel
+                csvContent += this.reporteData.cabeceras.join(",") + "\n";
+
+                // 2. Unir filas
+                this.reporteData.filas.forEach(fila => {
+                    let filaString = fila.map(campo => {
+                        // Escapar comillas y manejar textos con comas
+                        let str = String(campo).replace(/"/g, '""'); 
+                        return `"${str}"`;
+                    }).join(",");
+                    csvContent += filaString + "\n";
+                });
+
+                // 3. Descargar
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `Reporte_${this.reporteForm.tipo}_${this.reporteForm.fechaInicio}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             },
 
             cargarDashboard() {
