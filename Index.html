@@ -9,8 +9,11 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
+      /* Ajuste para que las alertas no se vean gigantes */
+      .swal2-popup { font-size: 0.9rem !important; }
       /* =========================================
          🎨 PALETA DE COLORES CESTA
       ========================================= */
@@ -2541,6 +2544,20 @@
 
     <script>
       const { createApp } = Vue;
+
+      // --- CONFIGURACIÓN DE NOTIFICACIONES (TOAST) ---
+      const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
+      });
+
       createApp({
         data() {
           return {
@@ -2834,6 +2851,10 @@
             };
         },
         methods: {
+            // --- HELPER PARA NOTIFICACIONES ---
+            notificar(icono, titulo) {
+                Toast.fire({ icon: icono, title: titulo });
+            },
             formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
             cambiarVista(v) { 
                 // 1. Si la vista es la misma, salimos
@@ -2941,7 +2962,7 @@
                       })
                       .withFailureHandler(error => {
                           this.cargando = false;
-                          alert("Error al generar el reporte: " + error);
+                          this.notificar('error', "Error al generar el reporte: " + error);
                       })
                       .generarReporte(JSON.parse(JSON.stringify(this.reporteForm))); 
                       // Usamos JSON.parse/stringify para enviar una copia limpia del objeto
@@ -3030,27 +3051,25 @@
                     .withSuccessHandler(res => {
                         this.cargando = false;
                         this.usuarioLogueado = res.usuarioActualizado;
-                        alert("✅ Datos personales actualizados.");
+                        this.notificar('success', "Datos personales actualizados.");
                     })
                     .actualizarDatosPersonales(this.perfilForm);
             },
 
             cambiarPassword() {
                 if (this.passForm.nueva !== this.passForm.confirmacion) {
-                    alert("Las nuevas contraseñas no coinciden.");
-                    return;
+                    return this.notificar('warning', "Las contraseñas no coinciden.");
                 }
-
                 this.cargando = true;
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        alert("🔒 Contraseña actualizada correctamente. Por favor inicia sesión nuevamente.");
-                        this.logout(); // Cerramos sesión para obligar a usar la nueva pass
+                        this.notificar('success', "Contraseña actualizada. Inicia sesión de nuevo.");
+                        this.logout(); 
                     })
                     .withFailureHandler(error => {
                         this.cargando = false;
-                        alert("❌ Error: " + error); // Aquí saldrá si la pass actual es incorrecta
+                        this.notificar('error', error); 
                     })
                     .cambiarPassword(this.usuarioLogueado.id_usuario, this.passForm.actual, this.passForm.nueva);
             },
@@ -3064,12 +3083,12 @@
                         this.cargando = false;
                         // Actualizamos la sesión en vivo con los nuevos datos
                         this.usuarioLogueado = res.usuarioActualizado;
-                        alert("✅ Perfil actualizado correctamente");
+                        this.notificar('success', "Perfil actualizado correctamente");
                         this.vistaActual = 'dashboard';
                     })
                     .withFailureHandler(error => {
                         this.cargando = false;
-                        alert("❌ Error: " + error);
+                        this.notificar('error', "Error: " + error);
                     })
                     .actualizarMiPerfil(this.perfilForm);
             },
@@ -3092,22 +3111,17 @@
 
             iniciarSesion() {
                 this.cargando = true;
-                google.script.run
-                    .withSuccessHandler(res => {
+                google.script.run.withSuccessHandler(res => {
                         this.cargando = false;
                         this.usuarioLogueado = res;
-                        // Parsear permisos
-                        try {
-                            this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos);
-                        } catch(e) { this.permisos = []; }
-
-                        // Cargar datos iniciales del sistema una vez logueado
+                        try { this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos); } catch(e) { this.permisos = []; }
                         this.cargarDatosIniciales();
                         this.cargarDashboard();
+                        this.notificar('success', `Bienvenido, ${res.nombre}`);
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("❌ Error: " + e);
+                        this.notificar('error', "Error: " + e);
                     })
                     .loginUsuario(this.loginData.usuario, this.loginData.password);
             },
@@ -3158,7 +3172,7 @@
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        alert("Usuario guardado correctamente.");
+                        this.notificar('success', "Usuario guardado correctamente.");
                         this.cargarUsuarios();
                         this.prepararNuevoUsuario();
                     })
@@ -3168,7 +3182,7 @@
             eliminarUsuario(u) {
                 if (!confirm("¿Eliminar al usuario " + u.nombre + "?")) return;
                 if (u.rol === 'ADMIN' && u.id_usuario === '1') {
-                    alert("No puedes eliminar al Admin principal.");
+                    this.notificar('error', "No puedes eliminar al Admin principal.");
                     return;
                 }
                 
@@ -3201,17 +3215,19 @@
             },
 
             logout() {
-                // 1. Preguntar confirmación nativa del navegador
-                if (!confirm("¿Estás seguro que deseas cerrar sesión?")) {
-                    return; // Si dice "Cancelar", detenemos la función aquí.
-                }
-
-                // 2. Si dice "Aceptar", procedemos a borrar los datos
-                this.usuarioLogueado = null;
-                this.loginData = { usuario: '', password: '' };
-                
-                // 3. Opcional: Volver a la vista inicial (aunque ya no se verá por el login)
-                this.vistaActual = 'dashboard';
+                Swal.fire({
+                    title: '¿Cerrar Sesión?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, salir',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.usuarioLogueado = null;
+                        this.loginData = { usuario: '', password: '' };
+                        this.vistaActual = 'dashboard';
+                    }
+                });
             },
             obtenerNombreDia(fechaStr) {
             const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -3219,13 +3235,13 @@
             },
 
             guardarGasto() {
-                if (this.formGasto.monto <= 0) return alert("El monto debe ser mayor a 0.");
+                if (this.formGasto.monto <= 0) return this.notificar('error', "El monto debe ser mayor a 0.");
                 this.cargando = true;
 
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        alert("✅ Gasto registrado.");
+                        this.notificar('success', "Gasto registrado.");
 
                         // Reset del formulario
                         this.formGasto = { 
@@ -3241,7 +3257,7 @@
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("Error: " + e);
+                        this.notificar('error', "Error: " + e);
                     })
                     .guardarGasto(this.formGasto);
             },
@@ -3261,45 +3277,60 @@
                     .obtenerGastos();
             },
 
-            eliminarGasto(item) {
-                if (!confirm("¿Estás seguro de eliminar este gasto?\n\nCategoría: " + item.categoria + "\nMonto: " + this.formatoMoneda(item.monto))) return;
-
-                this.cargando = true;
-                google.script.run
-                    .withSuccessHandler(() => {
-                        this.cargando = false;
-                        // Eliminamos visualmente sin recargar todo (más rápido)
-                        this.listaGastos = this.listaGastos.filter(g => g.id_gasto !== item.id_gasto);
-                        alert("🗑️ Gasto eliminado correctamente.");
-                    })
-                    .withFailureHandler(e => {
-                        this.cargando = false;
-                        alert("Error al eliminar: " + e);
-                    })
-                    .eliminarGasto(item.id_gasto);
+          eliminarGasto(item) {
+                Swal.fire({ 
+                    title: '¿Eliminar Gasto?', 
+                    text: `${item.categoria}: ${this.formatoMoneda(item.monto)}`, 
+                    icon: 'warning', 
+                    showCancelButton: true, 
+                    confirmButtonColor: '#d33', 
+                    confirmButtonText: 'Sí, eliminar' 
+                })
+                .then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true;
+                        google.script.run.withSuccessHandler(() => {
+                            this.cargando = false;
+                            this.listaGastos = this.listaGastos.filter(g => g.id_gasto !== item.id_gasto);
+                            this.notificar('success', "Gasto eliminado.");
+                        })
+                        .withFailureHandler(e => {
+                            this.cargando = false;
+                            this.notificar('error', "Error: " + e);
+                        })
+                        .eliminarGasto(item.id_gasto);
+                    }
+                });
             },
 
-            guardarAjuste() {
-              if (!this.formAjuste.id_producto || !this.formAjuste.id_deposito) return alert("Completa todos los datos.");
-              if (this.formAjuste.cantidad <= 0) return alert("Cantidad inválida.");
+          guardarAjuste() {
+              if (!this.formAjuste.id_producto || !this.formAjuste.id_deposito) return this.notificar('warning', "Completa todos los datos.");
+              if (this.formAjuste.cantidad <= 0) return this.notificar('warning', "Cantidad inválida.");
 
-              if (!confirm(`¿Confirmar ${this.formAjuste.tipo} de ${this.formAjuste.cantidad} unidades?`)) return;
-
-              this.cargando = true;
-              google.script.run
-                  .withSuccessHandler(() => {
-                      this.cargando = false;
-                      alert("✅ Ajuste de stock registrado correctamente.");
-                      this.formAjuste.cantidad = 1; 
-                      this.formAjuste.motivo = '';
-                      // Recargar datos para ver el stock actualizado
-                      this.cargarDatosIniciales();
-                  })
-                  .withFailureHandler(e => {
-                      this.cargando = false;
-                      alert("❌ Error: " + e);
-                  })
-                  .guardarAjusteStock(this.formAjuste);
+              Swal.fire({ 
+                  title: '¿Confirmar Ajuste?', 
+                  text: `${this.formAjuste.tipo} de ${this.formAjuste.cantidad} unidades`, 
+                  icon: 'warning', 
+                  showCancelButton: true, 
+                  confirmButtonText: 'Sí, confirmar' 
+              })
+              .then((result) => {
+                  if(result.isConfirmed) {
+                      this.cargando = true;
+                      google.script.run.withSuccessHandler(() => {
+                          this.cargando = false;
+                          this.notificar('success', "Ajuste registrado.");
+                          this.formAjuste.cantidad = 1; 
+                          this.formAjuste.motivo = '';
+                          this.cargarDatosIniciales();
+                      })
+                      .withFailureHandler(e => {
+                          this.cargando = false;
+                          this.notificar('error', e);
+                      })
+                      .guardarAjusteStock(this.formAjuste);
+                  }
+              });
             },
             
             cerrarMenuMovil() {
@@ -3320,7 +3351,7 @@
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("Error: " + e);
+                        this.notificar('error', "Error: " + e);
                     })
                     .obtenerHistorialCobranzas();
             },
@@ -3330,38 +3361,46 @@
                 this.modalCat.show();
             },
 
-            guardarCategoria() {
-                if (!this.formCategoria.nombre) return alert("Escribe un nombre");
-                this.cargando = true;
+          guardarCategoria() {
+                if (!this.formCategoria.nombre) return this.notificar('warning', "Escribe un nombre para la categoría");
                 
-                google.script.run
-                    .withSuccessHandler(() => {
+                this.cargando = true;
+                google.script.run.withSuccessHandler(() => {
                         this.cargando = false;
                         this.modalCat.hide();
-                        this.cargarDatosIniciales(); // Recargar para ver los cambios y actualizar selectores de productos
-                        alert("✅ Categoría guardada");
+                        this.cargarDatosIniciales(); 
+                        this.notificar('success', "Categoría guardada correctamente");
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("Error: " + e);
+                        this.notificar('error', "Error: " + e);
                     })
                     .guardarCategoria(this.formCategoria);
             },
 
             eliminarCategoria(item) {
-                if (!confirm("¿Eliminar la categoría '" + item.nombre + "'?\n(Asegúrate que no tenga productos asociados)")) return;
-                
-                this.cargando = true;
-                google.script.run
-                    .withSuccessHandler(() => {
-                        this.cargando = false;
-                        this.cargarDatosIniciales();
-                    })
-                    .withFailureHandler(e => {
-                        this.cargando = false;
-                        alert("Error: " + e);
-                    })
-                    .eliminarCategoria(item.id_categoria);
+                Swal.fire({ 
+                    title: `¿Eliminar '${item.nombre}'?`, 
+                    text: "Verifica que no tenga productos asociados antes de borrar.", 
+                    icon: 'warning', 
+                    showCancelButton: true, 
+                    confirmButtonColor: '#d33', 
+                    confirmButtonText: 'Sí, eliminar' 
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true;
+                        google.script.run.withSuccessHandler(() => {
+                            this.cargando = false;
+                            this.cargarDatosIniciales();
+                            this.notificar('success', "Categoría eliminada");
+                        })
+                        .withFailureHandler(e => {
+                            this.cargando = false;
+                            this.notificar('error', "Error: " + e);
+                        })
+                        .eliminarCategoria(item.id_categoria);
+                    }
+                });
             },
 
             esObligatorio(v) { return v === true || v === 'TRUE'; },
@@ -3409,13 +3448,13 @@
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        alert("✅ Remisión anulada correctamente.\nEl stock ha sido devuelto.");
+                        this.notificar('success', "Remisión anulada correctamente.\nEl stock ha sido devuelto.");
                         this.cargarHistorialRemisiones(); // Refrescar lista
                         this.cargarDatosIniciales(); // Refrescar stock visual global
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("❌ Error al anular: " + e);
+                        this.notificar('success', "Error al anular: " + e);                        
                     })
                     .anularRemision(h.id_remision);
             },
@@ -3424,7 +3463,7 @@
                 this.cargando = true;
                 google.script.run.withSuccessHandler(() => {
                     this.cargando = false;
-                    alert("✅ Secuencia de remisión actualizada");
+                    this.notificar('success', "Secuencia de remisión actualizada");
                 }).guardarConfigRemision(this.configRemisionActual);
             },
 
@@ -3446,87 +3485,83 @@
                 }
             },
 
-            guardarRemisionFinal() {
+          guardarRemisionFinal() {
                 if(!this.formRemision.id_cliente || !this.formRemision.id_deposito || this.carritoRemision.length === 0) {
-                    return alert("Faltan datos.");
+                    return this.notificar('warning', "Faltan datos en la remisión.");
                 }
-
+                
                 this.cargando = true;
-                // Calculamos el nombre del cliente para el PDF
                 const cli = this.clientes.find(c => c.id_cliente == this.formRemision.id_cliente);
-
                 const paquete = { 
                     ...this.formRemision, 
-                    items: this.carritoRemision,
+                    items: this.carritoRemision, 
                     nombre_cliente: cli ? cli.razon_social : 'Cliente' 
                 };
 
-                google.script.run
-                    .withSuccessHandler(res => {
+                google.script.run.withSuccessHandler(res => {
                         this.cargando = false;
                         if(res.pdf_url) window.open(res.pdf_url, '_blank');
-                        alert("✅ Remisión " + res.numero + " generada correctamente.");
+                        this.notificar('success', `Remisión ${res.numero} generada`);
                         this.carritoRemision = [];
-                        // Actualizamos el número visualmente
                         this.cargarDatosIniciales(); 
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("Error: " + e);
+                        this.notificar('error', "Error al guardar remisión: " + e);
                     })
                     .guardarRemision(paquete);
             },
 
-            facturarDesdeRemision(h) {
-                // 1. Confirmación Inicial
-                if(!confirm("¿Convertir Remisión " + h.numero + " en Factura?")) return;
-
-                // 2. Preguntar Condición de Venta (Simple y efectivo)
-                let condicion = "CONTADO"; // Valor por defecto
-                const respuesta = prompt("Ingrese la Condición de Venta:\n\n1 = CONTADO\n2 = CRÉDITO", "1");
-                
-                if (respuesta === null) return; // Si el usuario cancela, salimos
-                if (respuesta === "2") condicion = "CREDITO";
-                
-                // Si escribe cualquier otra cosa, se queda en CONTADO por seguridad
-
-                this.cargando = true;
-
-                google.script.run.withSuccessHandler(itemsRemision => {
-                    if(!itemsRemision || itemsRemision.length === 0) {
-                        this.cargando = false;
-                        return alert("Error: No se pudieron recuperar los items de la remisión.");
+          facturarDesdeRemision(h) {
+                Swal.fire({
+                    title: `Facturar Remisión ${h.numero}`,
+                    text: "¿Deseas generar la factura ahora?",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, facturar',
+                    footer: 'Se usará la condición de venta que elijas a continuación.'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Reemplazo de PROMPT por SWAL con SELECT
+                        Swal.fire({
+                            title: 'Condición de Venta',
+                            input: 'select',
+                            inputOptions: { 'CONTADO': 'Contado', 'CREDITO': 'Crédito' },
+                            inputPlaceholder: 'Selecciona una opción',
+                            showCancelButton: true,
+                            inputValidator: (value) => { return new Promise((resolve) => { if (value) { resolve() } else { resolve('Debes seleccionar una opción') } }) }
+                        }).then((inputResult) => {
+                            if (inputResult.isConfirmed) {
+                                const condicion = inputResult.value;
+                                this.cargando = true;
+                                google.script.run.withSuccessHandler(itemsRemision => {
+                                    if(!itemsRemision || itemsRemision.length === 0) {
+                                        this.cargando = false;
+                                        return this.notificar('error', "No se pudieron recuperar los items.");
+                                    }
+                                    const paqueteVenta = {
+                                        id_cliente: h.id_cliente_raw, 
+                                        id_deposito: h.id_deposito_raw || this.depositoDefault || '1', 
+                                        fecha: new Date().toISOString().slice(0,10),
+                                        nro_factura: '', 
+                                        condicion: condicion,
+                                        items: itemsRemision, 
+                                        es_desde_remision: true,
+                                        id_remision_origen: h.id_remision
+                                    };
+                                    google.script.run.withSuccessHandler(res => {
+                                        google.script.run.withSuccessHandler(() => {
+                                            this.cargando = false;
+                                            this.notificar('success', `Factura ${condicion} generada.`);
+                                            this.cargarHistorialRemisiones(); 
+                                        }).facturarRemision({ id_remision: h.id_remision });
+                                        if(res.pdf_url) window.open(res.pdf_url, '_blank');
+                                    }).guardarVenta(paqueteVenta);
+                                }).obtenerDetalleRemisionParaFacturar(h.id_remision);
+                            }
+                        });
                     }
-
-                    // 3. Armar el paquete de Venta
-                    const paqueteVenta = {
-                        id_cliente: h.id_cliente_raw, // Cliente original
-                        
-                        // Usamos el depósito de la remisión (o el default si fallara)
-                        id_deposito: h.id_deposito_raw || this.depositoDefault || '1', 
-                        
-                        fecha: new Date().toISOString().slice(0,10),
-                        nro_factura: '', // Automático
-                        condicion: condicion, // 👈 LA ELEGIDA POR EL USUARIO
-                        items: itemsRemision, 
-                        es_desde_remision: true,
-                        id_remision_origen: h.id_remision
-                    };
-
-                    // 4. Procesar Venta
-                    google.script.run.withSuccessHandler(res => {
-                        // Marcar como facturado
-                        google.script.run.withSuccessHandler(() => {
-                            this.cargando = false;
-                            alert("✅ Factura (" + condicion + ") generada exitosamente.");
-                            this.cargarHistorialRemisiones(); 
-                        }).facturarRemision({ id_remision: h.id_remision });
-
-                        if(res.pdf_url) window.open(res.pdf_url, '_blank');
-
-                    }).guardarVenta(paqueteVenta);
-
-                }).obtenerDetalleRemisionParaFacturar(h.id_remision);
+                });
             },
 
             cargarHistorialRemisiones() {
@@ -3552,7 +3587,7 @@
                         console.error("Error backend:", e);
                         this.cargando = false;
                         this.historialRemisiones = []; // Evitamos que quede undefined
-                        alert("Error cargando historial: " + e);
+                        this.notificar('error', "Error cargando historial: " + e);
                     })
                     .obtenerHistorialRemisiones();
             },
@@ -3563,7 +3598,7 @@
                 this.cargando = true;
                 this.clientesDeudores = [];
 
-                //alert("PASO 1: El botón funciona. Llamando al servidor...");
+                //"PASO 1: El botón funciona. Llamando al servidor...");
 
                 google.script.run
                     .withSuccessHandler(respuesta => {
@@ -3578,19 +3613,19 @@
                             
                             // Si no hay datos, mostrar alerta con los logs para diagnosticar
                             if (!paquete.datos || paquete.datos.length === 0) {
-                                alert("⚠️ ALERTA DE DEBUG:\n" + paquete.logs.join("\n"));
+                                this.notificar('error', "ALERTA DE DEBUG:\n" + paquete.logs.join("\n"));
                             }
 
                             // 2. ASIGNAR DATOS
                             this.clientesDeudores = paquete.datos || [];
 
                         } catch (e) {
-                            alert("Error crítico leyendo respuesta: " + e.message);
+                            this.notificar('error', "Error crítico leyendo respuesta: " + e.message);
                         }
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("Error de conexión: " + e);
+                        this.notificar('error', "Error de conexión: " + e);
                     })
                     .obtenerClientesConDeuda();
             },
@@ -3608,55 +3643,58 @@
                 this.subVistaCobranzas = 'nuevo';
             },
             guardarCobro() {
-                if(this.formCobro.monto <= 0) return alert("Monto inválido");
+                if(this.formCobro.monto <= 0) return this.notificar('error', "Monto inválido");
                 
                 // Validación estricta del saldo
                 if(this.formCobro.monto > this.formCobro.deuda_total) {
-                    return alert("❌ Error: No puedes cobrar más del saldo pendiente de esta factura (" + this.formatoMoneda(this.formCobro.deuda_total) + ")");
+                    return this.notificar('error', "Error: No puedes cobrar más del saldo pendiente de esta factura (" + this.formatoMoneda(this.formCobro.deuda_total) + ")");
                 }
                 
                 this.cargando = true;
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        alert("✅ Pago aplicado a la factura " + this.formCobro.nro_factura_visual);
+                        this.notificar('error', "Pago aplicado a la factura " + this.formCobro.nro_factura_visual);
                         this.subVistaCobranzas = 'listado';
                         this.cargarCobranzas(); 
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        alert("Error: " + e);
+                        this.notificar('error', "Error: " + e);
                     })
                     .registrarCobro(this.formCobro);
             },
 
-              agregarAlCarritoTransf() {
-                  if(this.formTransf.origen === this.formTransf.destino) return alert("Origen y Destino iguales");
+            agregarAlCarritoTransf() {
+                  if(this.formTransf.origen === this.formTransf.destino) {
+                      return this.notificar('warning', "El depósito de Origen y Destino son iguales.");
+                  }
                   const p = this.productos.find(x => x.id_producto == this.lineaTransf.id_producto);
                   if(!p) return;
-                  
-                  // Validación básica visual (la real está en backend)
-                  // Nota: Para validar stock exacto del depósito origen aquí, necesitaríamos lógica compleja en frontend.
-                  // Por ahora validamos que exista el producto.
                   
                   this.carritoTransf.push({ ...this.lineaTransf, nombre: p.nombre, sku: p.sku });
                   this.lineaTransf = { id_producto: '', cantidad: 1 };
               },
               quitarCarritoTransf(i) { this.carritoTransf.splice(i,1); },
               limpiarTransf() { this.carritoTransf=[]; this.formTransf.observacion=''; },
-              guardarTransfFinal() {
-                  if(!this.formTransf.origen || !this.formTransf.destino || this.carritoTransf.length===0) return alert("Datos incompletos");
-                  this.cargando=true;
+            guardarTransfFinal() {
+                  if(!this.formTransf.origen || !this.formTransf.destino || this.carritoTransf.length === 0) {
+                      return this.notificar('warning', "Completa origen, destino y agrega productos.");
+                  }
+                  
+                  this.cargando = true;
                   const pkg = { ...this.formTransf, items: this.carritoTransf };
+                  
                   google.script.run.withSuccessHandler(res => {
-                      this.cargando=false;
+                      this.cargando = false;
                       if(res.pdf_url) window.open(res.pdf_url, '_blank');
-                      alert("Transferencia Exitosa");
+                      
+                      this.notificar('success', "Transferencia realizada con éxito");
                       this.limpiarTransf();
-                      this.cargarDatosIniciales(); // Recargar datos
+                      this.cargarDatosIniciales(); 
                   }).withFailureHandler(e => {
-                      this.cargando=false;
-                      alert("Error: " + e);
+                      this.cargando = false;
+                      this.notificar('error', "Error: " + e);
                   }).guardarTransferencia(pkg);
               },
               cargarHistorialTransf() {
@@ -3671,17 +3709,15 @@
             pedirDatos(hoja) { return new Promise(r => google.script.run.withSuccessHandler(r).getData(hoja)); },
 
             // Generar Ticket
-            imprimirTicket(h) {
+          imprimirTicket(h) {
                 this.cargando = true;
-                google.script.run
-                    .withSuccessHandler(url => {
+                google.script.run.withSuccessHandler(url => {
                         this.cargando = false;
-                        // Abrir en ventana pequeña para imprimir fácil
                         window.open(url, 'Ticket', 'width=400,height=600');
                     })
                     .withFailureHandler(err => {
                         this.cargando = false;
-                        alert("Error al generar ticket: " + err);
+                        this.notificar('error', "Error al generar ticket: " + err);
                     })
                     .generarUrlTicket(h.id_venta);
             },
@@ -3695,8 +3731,31 @@
             // CONFIG
             abrirModalDeposito(item) { this.formDeposito = item ? {...item} : { nombre:'', direccion:'', responsable:'', activo:'Si' }; this.modalDep.show(); },
             guardarDeposito() { this.cargando = true; google.script.run.withSuccessHandler(() => { this.cargando=false; this.modalDep.hide(); this.cargarDatosIniciales(); }).guardarDeposito(this.formDeposito); },
-            eliminarDeposito(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(res => { this.cargando=false; if(res.error) alert(res.error); else this.cargarDatosIniciales(); }).eliminarDeposito(item.id_deposito); },
-            
+
+          eliminarDeposito(item) { 
+                Swal.fire({ 
+                    title: '¿Eliminar Depósito?', 
+                    text: item.nombre,
+                    icon: 'warning', 
+                    showCancelButton: true, 
+                    confirmButtonColor: '#d33', 
+                    confirmButtonText: 'Sí, eliminar' 
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true; 
+                        google.script.run.withSuccessHandler(res => { 
+                            this.cargando = false; 
+                            if(res.error) {
+                                this.notificar('error', res.error);
+                            } else { 
+                                this.cargarDatosIniciales(); 
+                                this.notificar('success', 'Depósito eliminado'); 
+                            } 
+                        }).eliminarDeposito(item.id_deposito); 
+                    }
+                });
+            },
+
             abrirModalCampo(item) { 
                 this.formCampo = item ? {...item} : { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false }; 
                   if(this.formCampo.entidad_objetivo) {
@@ -3718,33 +3777,132 @@
             },
             eliminarCampo(item) { if(!confirm("¿Borrar campo?")) return; this.cargando=true; google.script.run.withSuccessHandler(() => { this.cargando=false; this.cargarDatosIniciales(); }).eliminarCampoConfig(item.id_campo); },
             
-            guardarConfigFactura() { this.cargando = true; google.script.run.withSuccessHandler(() => { this.cargando=false; alert("Numeración actualizada"); }).guardarConfigFactura(this.configFacturaActual); },
+          guardarConfigFactura() { 
+                this.cargando = true; 
+                google.script.run.withSuccessHandler(() => { 
+                    this.cargando = false; 
+                    this.notificar('success', "Numeración de facturación actualizada"); 
+                }).guardarConfigFactura(this.configFacturaActual); 
+            },
 
             guardarConfigDepositoDefault() {
                 this.cargando = true;
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        alert("✅ Depósito predeterminado guardado.");
+                        this.notificar('success', "Depósito predeterminado guardado.");
                         // Recargamos datos para asegurar que se aplique en todos lados
                         this.cargarDatosIniciales(); 
                     })
                     .withFailureHandler(err => {
                         this.cargando = false;
-                        alert("Error: " + err);
+                        this.notificar('error', "Error: " + err);
                     })
                     .guardarConfigGeneral('DEPOSITO_DEFAULT', this.depositoDefault);
             },
 
             // MODALES MAESTROS
             abrirModalCliente(item) { this.modoEdicion=!!item; this.formCliente = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }; if(!this.formCliente.datos_adicionales) this.formCliente.datos_adicionales={}; this.modalCli.show(); },
-            guardarCliente() { this.cargando=true; const f = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalCli.hide(); this.cargarDatosIniciales();})[f](this.formCliente); },
-            eliminarCliente(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.error) alert(r.error); else this.cargarDatosIniciales(); }).eliminarCliente(item.id_cliente); },
+          guardarCliente() { 
+                this.cargando = true; 
+                const f = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente'; 
+                
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false; 
+                        this.modalCli.hide(); 
+                        this.cargarDatosIniciales();
+                        // Agregamos la notificación que faltaba
+                        this.notificar('success', 'Cliente guardado correctamente');
+                    })
+                    .withFailureHandler(error => {
+                        this.cargando = false;
+                        this.notificar('error', "Error: " + error);
+                    })
+                    [f](this.formCliente); 
+            },
+          eliminarCliente(item) {
+                Swal.fire({
+                    title: '¿Eliminar Cliente?',
+                    text: `Se eliminará a ${item.razon_social}`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true;
+                        
+                        google.script.run
+                            .withSuccessHandler(r => {
+                                this.cargando = false;
+                                if (r.error) {
+                                    this.notificar('error', r.error);
+                                } else {
+                                    this.cargarDatosIniciales();
+                                    this.notificar('success', 'Cliente eliminado correctamente');
+                                }
+                            })
+                            .withFailureHandler(e => {
+                                this.cargando = false;
+                                this.notificar('error', "Error: " + e);
+                            })
+                            .eliminarCliente(item.id_cliente);
+                    }
+                });
+            },
 
             abrirModalProveedor(item) { this.modoEdicion=!!item; this.formProveedor = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', datos_adicionales:{} }; if(!this.formProveedor.datos_adicionales) this.formProveedor.datos_adicionales={}; this.modalProv.show(); },
-            guardarProveedor() { this.cargando=true; const f = this.modoEdicion ? 'actualizarProveedor' : 'guardarNuevoProveedor'; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.modalProv.hide(); this.cargarDatosIniciales();}).withUserObject(this)[f](this.formProveedor); },
-            eliminarProveedor(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else alert(r.error); }).eliminarProveedor(item.id_proveedor); },
-
+          guardarProveedor() { 
+                this.cargando = true; 
+                const f = this.modoEdicion ? 'actualizarProveedor' : 'guardarNuevoProveedor'; 
+                
+                google.script.run
+                    .withSuccessHandler(() => {
+                        this.cargando = false; 
+                        this.modalProv.hide(); 
+                        this.cargarDatosIniciales();
+                        // Agregamos la notificación que faltaba
+                        this.notificar('success', 'Proveedor guardado correctamente');
+                    })
+                    .withFailureHandler(error => {
+                        this.cargando = false;
+                        this.notificar('error', "Error: " + error);
+                    })
+                    .withUserObject(this)[f](this.formProveedor); 
+            },
+          eliminarProveedor(item) {
+                Swal.fire({
+                    title: `¿Eliminar Proveedor?`,
+                    text: `Se eliminará a ${item.razon_social}`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true;
+                        
+                        google.script.run
+                            .withSuccessHandler(r => {
+                                this.cargando = false;
+                                if (r.success) {
+                                    this.cargarDatosIniciales();
+                                    this.notificar('success', 'Proveedor eliminado correctamente');
+                                } else {
+                                    this.notificar('error', r.error);
+                                }
+                            })
+                            .withFailureHandler(e => {
+                                this.cargando = false;
+                                this.notificar('error', "Error: " + e);
+                            })
+                            .eliminarProveedor(item.id_proveedor);
+                    }
+                });
+            },
             manejarArchivo(e) { const f = e.target.files[0]; if(!f) return; this.archivoParaSubir = f; const r = new FileReader(); r.onload = (e) => { this.imagenPreview = e.target.result; }; r.readAsDataURL(f); },
             abrirModalProducto(item) {
                 this.modoEdicion = !!item;
@@ -3776,59 +3934,64 @@
                 this.modalProd.show();
             },
             async procesarGuardadoProducto() {
-                // Validación básica HTML5 (por si el navegador no la atrapa)
-                if (!this.formProducto.nombre || !this.formProducto.sku || !this.formProducto.precio_venta_base) {
-                    return alert("Por favor completa los campos obligatorios.");
-                }
+                  // 1. Validación de campos obligatorios con Toast de advertencia
+                  if (!this.formProducto.nombre || !this.formProducto.sku || !this.formProducto.precio_venta_base) {
+                      return this.notificar('warning', "Por favor completa los campos obligatorios.");
+                  }
 
-                this.cargando = true;
+                  this.cargando = true;
 
-                // Subida de imagen (si aplica)
-                if (this.archivoParaSubir) {
-                    try {
-                        this.formProducto.url_imagen = await new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = e => {
-                                google.script.run
-                                    .withSuccessHandler(url => resolve(url))
-                                    .withFailureHandler(err => reject(err))
-                                    .subirImagenDrive(e.target.result.split(',')[1], this.archivoParaSubir.name, this.archivoParaSubir.type);
-                            };
-                            reader.onerror = error => reject(error);
-                            reader.readAsDataURL(this.archivoParaSubir);
-                        });
-                    } catch (e) {
-                        this.cargando = false;
-                        return alert("Error subiendo imagen: " + e);
-                    }
-                }
+                  // 2. Lógica de subida de imagen (si el usuario seleccionó una)
+                  if (this.archivoParaSubir) {
+                      try {
+                          this.formProducto.url_imagen = await new Promise((resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onload = e => {
+                                  google.script.run
+                                      .withSuccessHandler(url => resolve(url))
+                                      .withFailureHandler(err => reject(err))
+                                      .subirImagenDrive(e.target.result.split(',')[1], this.archivoParaSubir.name, this.archivoParaSubir.type);
+                              };
+                              reader.onerror = error => reject(error);
+                              reader.readAsDataURL(this.archivoParaSubir);
+                          });
+                      } catch (e) {
+                          this.cargando = false;
+                          return this.notificar('error', "Error subiendo imagen: " + e);
+                      }
+                  }
 
-                const funcionBackend = this.modoEdicion ? 'actualizarProducto' : 'guardarNuevoProducto';
+                  // 3. Preparar datos para enviar al Backend
+                  const funcionBackend = this.modoEdicion ? 'actualizarProducto' : 'guardarNuevoProducto';
+                  
+                  // Limpiamos el objeto Vue para evitar errores de Proxy en Google Script
+                  const productoLimpio = JSON.parse(JSON.stringify(this.formProducto));
 
-                // 👇 1. TRUCO DE MAGIA: Convertimos el objeto Vue a un objeto puro de Javascript
-                // Esto elimina los "Proxies" que bloquean a Google Script
-                const productoLimpio = JSON.parse(JSON.stringify(this.formProducto));
+                  console.log("Enviando al servidor:", productoLimpio);
 
-                console.log("Enviando al servidor:", productoLimpio); // Míralo en la consola para asegurar
-
-                google.script.run
-                    .withSuccessHandler((res) => {
-                        this.cargando = false;
-                        if (res && res.error) {
-                            alert("Error del sistema: " + res.error);
-                        } else {
-                            this.modalProd.hide();
-                            this.cargarDatosIniciales();
-                            alert("✅ Producto guardado correctamente");
-                        }
-                    })
-                    .withFailureHandler(error => {
-                        this.cargando = false;
-                        alert("❌ Error CRÍTICO: " + error);
-                    })
-                    [funcionBackend](productoLimpio); // <--- Enviamos la copia limpia
-            },
-            eliminarProducto(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else alert(r.error); }).eliminarProducto(item.id_producto); },
+                  // 4. Llamada al servidor
+                  google.script.run
+                      .withSuccessHandler((res) => {
+                          this.cargando = false;
+                          
+                          if (res && res.error) {
+                              // Si el backend devuelve un error controlado
+                              this.notificar('error', "Error del sistema: " + res.error);
+                          } else {
+                              // Éxito total
+                              this.modalProd.hide();
+                              this.cargarDatosIniciales();
+                              this.notificar('success', "Producto guardado correctamente");
+                          }
+                      })
+                      .withFailureHandler(error => {
+                          // Error de red o script crítico
+                          this.cargando = false;
+                          this.notificar('error', "Error CRÍTICO: " + error);
+                      })
+                      [funcionBackend](productoLimpio);
+              },
+            eliminarProducto(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else this.notificar('error', r.error) }).eliminarProducto(item.id_producto); },
 
             // TRANSACCIONES
             alSeleccionarProductoVenta() { 
@@ -3848,7 +4011,7 @@
 
             agregarAlCarritoVenta() { 
                 const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); 
-                if(!p || this.lineaVenta.cantidad > p.stock_actual) return alert("Stock insuficiente"); 
+                if(!p || this.lineaVenta.cantidad > p.stock_actual) return this.notificar('warning', "Stock insuficiente"); 
                 
                 this.carritoVenta.push({
                     ...this.lineaVenta,
@@ -3863,39 +4026,35 @@
             limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
 
             guardarVentaFinal() {
-                if(!this.formVenta.id_cliente) return alert("Selecciona Cliente");
-                if(this.carritoVenta.length === 0) return alert("Carrito vacío");
+                if(!this.formVenta.id_cliente) return this.notificar('warning', "Selecciona Cliente");
+                if(this.carritoVenta.length === 0) return this.notificar('warning', "Carrito vacío");
                 
                 this.cargando = true;
                 const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
-                const paquete = { 
-                    id_cliente: this.formVenta.id_cliente, 
-                    id_deposito: this.formVenta.id_deposito, 
-                    fecha: this.formVenta.fecha, 
-                    nro_factura: this.formVenta.nro_factura, 
-                    condicion: this.formVenta.condicion,     
-                    total: total, 
-                    items: this.carritoVenta 
-                };
+                const paquete = { id_cliente: this.formVenta.id_cliente, id_deposito: this.formVenta.id_deposito, fecha: this.formVenta.fecha, nro_factura: this.formVenta.nro_factura, condicion: this.formVenta.condicion, total: total, items: this.carritoVenta };
                 
                 google.script.run.withSuccessHandler((res) => { 
                     this.cargando = false; 
-                    
-                    // Lógica para abrir PDF
                     if(res.pdf_url) {
-                        if(confirm("💰 Venta registrada.\n¿Deseas abrir la factura PDF ahora?")) {
-                            window.open(res.pdf_url, '_blank');
-                        }
+                        Swal.fire({ 
+                            title: '💰 Venta registrada', 
+                            text: "¿Deseas abrir la factura PDF ahora?", 
+                            icon: 'success', 
+                            showCancelButton: true, 
+                            confirmButtonText: 'Sí, ver factura', 
+                            cancelButtonText: 'Cerrar' 
+                        }).then((result) => {
+                            if (result.isConfirmed) window.open(res.pdf_url, '_blank');
+                        });
                     } else {
-                        alert("Venta registrada.");
+                        this.notificar('success', "Venta registrada.");
                     }
-
                     this.carritoVenta = []; 
                     this.cargarDatosIniciales(); 
                 })
                 .withFailureHandler(err => { 
                     this.cargando = false; 
-                    alert("Error: " + err); 
+                    this.notificar('error', err); 
                 })
                 .guardarVenta(paquete);
             },
@@ -3915,61 +4074,86 @@
                         }
                     })
                     .withFailureHandler(e => {
-                        alert("Error al cargar detalle: " + e);
+                        this.notificar('success', "Error al cargar detalle: " + e);
                         this.itemsDetalle = [];
                     })
                     .obtenerDetalleVenta(h.id_venta);
             },
             cargarHistorialVentas() { this.subVistaVentas='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialVentas=r||[]; this.cargando=false;}).obtenerHistorialVentas(); },
-            anularVenta(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorialVentas(); this.cargarDatosIniciales();}).anularVenta(h.id_venta); },
+            anularVenta(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.notificar('success', 'Anulada'); this.cargarHistorialVentas(); this.cargarDatosIniciales();}).anularVenta(h.id_venta); },
             agregarAlCarrito() { this.carritoCompra.push({...this.lineaTemp}); this.lineaTemp={id_producto:'', cantidad:'', costo:''}; },
             quitarDelCarrito(i) { this.carritoCompra.splice(i,1); },
             limpiarCarrito() { this.carritoCompra=[]; this.formCompra={id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: ''}; },
-
-            guardarCompraFinal() { 
-                if(!this.formCompra.id_proveedor || this.carritoCompra.length===0) return alert("Datos incompletos");
-                this.cargando=true; 
+      guardarCompraFinal() { 
+                if(!this.formCompra.id_proveedor || this.carritoCompra.length===0) {
+                    return this.notificar('warning', "Faltan datos del proveedor o productos.");
+                }
+                
+                this.cargando = true; 
                 const total = this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); 
                 const pkg = { ...this.formCompra, total, items: this.carritoCompra }; 
                 
                 google.script.run.withSuccessHandler((res)=>{
-                    this.cargando=false; 
+                    this.cargando = false; 
                     
-                    // Lógica PDF
                     if(res.pdf_url) {
-                        if(confirm("✅ Compra registrada.\n¿Ver Orden de Compra PDF?")) {
-                            window.open(res.pdf_url, '_blank');
-                        }
+                        Swal.fire({ 
+                            title: '✅ Compra registrada', 
+                            text: "¿Deseas ver la Orden de Compra PDF?", 
+                            icon: 'success', 
+                            showCancelButton: true, 
+                            confirmButtonText: 'Sí, ver', 
+                            cancelButtonText: 'Cerrar' 
+                        }).then((result) => {
+                            if (result.isConfirmed) window.open(res.pdf_url, '_blank');
+                        });
                     } else {
-                        alert("Compra registrada.");
+                        this.notificar('success', "Compra registrada correctamente.");
                     }
 
                     this.limpiarCarrito(); 
                     this.cargarDatosIniciales();
                 })
-                .withFailureHandler(e=>{
-                    this.cargando=false; 
-                    alert(e);
+                .withFailureHandler(e => {
+                    this.cargando = false; 
+                    this.notificar('error', "Error al guardar compra: " + e);
                 })
                 .guardarCompraCompleta(pkg); 
             },
+
             verDetalleCompra(h) {
-                console.log("🔍 Buscando compra:", h.id_compra);
                 this.itemsDetalle = []; 
                 this.modalDetalle.show(); 
                 
                 google.script.run
                     .withSuccessHandler(r => {
-                        console.log("📦 Datos recibidos:", r);
                         this.itemsDetalle = r || [];
                     })
                     .withFailureHandler(e => {
-                        alert("Error al cargar detalle: " + e);
+                        this.notificar('error', "Error al cargar detalle: " + e);
                     })
                     .obtenerDetalleCompra(h.id_compra);
             },
-            cargarHistorial() { this.subVistaCompras='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialCompras=r||[]; this.cargando=false;}).obtenerHistorialCompras(); },
-            anularCompra(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; alert("Anulada"); this.cargarHistorial(); this.cargarDatosIniciales();}).anularCompra(h.id_compra); }
+
+            anularCompra(h) { 
+                Swal.fire({ 
+                    title: '¿Anular Compra?', 
+                    icon: 'warning', 
+                    showCancelButton: true, 
+                    confirmButtonColor: '#d33', 
+                    confirmButtonText: 'Sí, anular' 
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true; 
+                        google.script.run.withSuccessHandler(() => {
+                            this.cargando = false; 
+                            this.notificar('success', "Anulada correctamente"); 
+                            this.cargarHistorial(); 
+                            this.cargarDatosIniciales();
+                        }).anularCompra(h.id_compra); 
+                    }
+                });
+            }
         }
       }).mount('#app');
     </script>
