@@ -425,43 +425,50 @@ function obtenerHistorialCompras() {
   const hoja = ss.getSheetByName('COMPRAS_CABECERA');
   const hojaProv = ss.getSheetByName('PROVEEDORES');
   
-  // Si no hay datos, devolver lista vacía
   if (!hoja || hoja.getLastRow() <= 1) return [];
 
   const datos = hoja.getDataRange().getValues();
   
-  // Mapa de Proveedores para mostrar nombres en vez de IDs
+  // Mapa de Proveedores
   const mapaProv = {};
   if(hojaProv && hojaProv.getLastRow() > 1) {
     const dP = hojaProv.getDataRange().getValues();
     for(let i=1; i<dP.length; i++) {
-      mapaProv[dP[i][0]] = dP[i][1]; // ID -> Razón Social
+      mapaProv[dP[i][0]] = dP[i][1]; 
     }
   }
 
   const historial = [];
-  // Recorremos desde la fila 1 (saltando cabecera)
+  
   for(let i=1; i < datos.length; i++) {
     const fila = datos[i];
-    if(fila[0]) { // Si tiene ID
-        // Formatear fecha para evitar errores en frontend
-        let fechaFormat = fila[1];
-        if (fila[1] instanceof Date) {
-           fechaFormat = fila[1].toISOString(); 
+    if(fila[0]) { 
+        // --- 1. CORRECCIÓN DE FECHA SEGURA ---
+        let fechaSafe = fila[1];
+        try {
+            // Si es objeto fecha, lo pasamos a ISO. Si es texto, lo dejamos tal cual.
+            if (typeof fila[1].toISOString === 'function') {
+                fechaSafe = fila[1].toISOString();
+            }
+        } catch(e) {
+            fechaSafe = new Date().toISOString(); // Fallback si la fecha está corrupta
         }
 
         historial.push({
-          id_compra: fila[0],                 // Col A: ID
-          fecha: fechaFormat,                 // Col B: Fecha
-          nombre_proveedor: mapaProv[fila[2]] || 'Proveedor Desconocido', // Col C: ID Prov
-          total: Number(fila[4]) || 0,        // Col E: Total
-          estado: fila[5],                    // Col F: Estado
-          url_pdf: fila[6] || ''              // Col G: URL PDF (Importante para el botón)
+          id_compra: fila[0],                 
+          fecha: fechaSafe,                   
+          nombre_proveedor: mapaProv[fila[2]] || 'Desconocido', 
+          
+          // --- 2. AGREGADO COMPROBANTE (Faltaba esto) ---
+          comprobante: fila[3] || 'S/N',      // Col D: Factura
+          
+          total: Number(fila[4]) || 0,        
+          estado: fila[5],                    
+          url_pdf: fila[6] || ''              
         });
     }
   }
   
-  // Devolver invertido para ver las más recientes primero
   return historial.reverse(); 
 }
 // ==========================================
@@ -1379,7 +1386,7 @@ function anularVenta(idVenta, nombreUsuario) {
   return { success: true };
 }
 
-function anularCompra(idCompra) {
+function anularCompra(idCompra, usuario) { 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado"; }
 
@@ -1388,29 +1395,65 @@ function anularCompra(idCompra) {
   const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
   const sheetProd = ss.getSheetByName('PRODUCTOS');
   const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+  const sheetProv = ss.getSheetByName('PROVEEDORES'); // <--- 1. Referencia a Proveedores
+
+  // --- 2. CREAR MAPA DE NOMBRES DE PROVEEDORES ---
+  // Esto nos permite buscar el nombre rápido usando el ID
+  const datosProv = sheetProv.getDataRange().getValues();
+  const mapaProveedores = {};
+  for(let p = 1; p < datosProv.length; p++) {
+     // Asumiendo Columna A (0) es ID y Columna B (1) es Razón Social
+     mapaProveedores[datosProv[p][0]] = datosProv[p][1]; 
+  }
+
+  // Variables para la bitácora
+  let proveedorLog = "Desconocido";
+  let totalLog = 0;
 
   // 1. Buscar Compra
   const datosCab = sheetCab.getDataRange().getValues();
   let filaCab = -1;
+  
   for (let i = 1; i < datosCab.length; i++) {
-    if (datosCab[i][0] == idCompra) {
-      if (datosCab[i][5] === 'ANULADO') { lock.releaseLock(); throw "Compra ya anulada."; }
+    if (String(datosCab[i][0]) === String(idCompra)) {
+      if (datosCab[i][5] === 'ANULADO') { 
+        lock.releaseLock(); 
+        throw "Compra ya anulada."; 
+      }
+      
       filaCab = i + 1;
+      
+      // --- 3. CAPTURAR DATOS PARA BITÁCORA ---
+      const idProv = datosCab[i][2]; // Obtenemos el ID (ej: P-001)
+      
+      // Buscamos el nombre en el mapa. Si no existe, usamos el ID como respaldo.
+      proveedorLog = mapaProveedores[idProv] || ("ID: " + idProv); 
+      
+      totalLog = datosCab[i][4];
+      
       break;
     }
   }
-  if (filaCab === -1) { lock.releaseLock(); throw "Compra no encontrada."; }
+  
+  if (filaCab === -1) { 
+    lock.releaseLock(); 
+    throw "Compra no encontrada."; 
+  }
 
-  // 2. Obtener items
+  // 3. Obtener items
   const datosDet = sheetDet.getDataRange().getValues();
   const itemsRevertir = [];
   for (let i = 1; i < datosDet.length; i++) {
-    if (datosDet[i][1] == idCompra) {
-      itemsRevertir.push({ id_prod: datosDet[i][2], cant: Number(datosDet[i][3]), costo: Number(datosDet[i][4]) });
+    if (String(datosDet[i][1]) === String(idCompra)) {
+      itemsRevertir.push({ 
+        id_prod: datosDet[i][2], 
+        cant: Number(datosDet[i][3]), 
+        costo: Number(datosDet[i][4]) 
+      });
     }
   }
 
-  // 3. Revertir Stock y Costo Promedio (Matemática Inversa)
+  // 4. Revertir Stock y Costo Promedio (Matemática Inversa)
   const datosProd = sheetProd.getDataRange().getValues();
   const mapaProd = {};
   for(let i=1; i<datosProd.length; i++) mapaProd[datosProd[i][0]] = i + 1;
@@ -1422,31 +1465,44 @@ function anularCompra(idCompra) {
       const stockActual = Number(sheetProd.getRange(filaProd, 13).getValue() || 0);
       const costoPromActual = Number(sheetProd.getRange(filaProd, 7).getValue() || 0);
       
-      // Nuevo Stock (Restamos lo comprado)
+      // Nuevo Stock
       const nuevoStock = stockActual - item.cant;
       
-      // Recálculo de Costo (Solo si queda stock, si queda 0 el costo es irrelevante/mantenemos último)
+      // Recálculo de Costo Inverso
       let nuevoCosto = costoPromActual;
       if (nuevoStock > 0) {
-        // Fórmula Inversa PMP: 
-        // (ValorTotalActual - ValorCompraAnulada) / NuevoStock
         const valorTotalActual = stockActual * costoPromActual;
         const valorCompraAnulada = item.cant * item.costo;
         nuevoCosto = (valorTotalActual - valorCompraAnulada) / nuevoStock;
-        if(nuevoCosto < 0) nuevoCosto = 0; // Seguridad por si hay inconsistencias previas
+        if(nuevoCosto < 0) nuevoCosto = 0;
       }
 
-      // Guardar
+      // Guardar cambios
       sheetProd.getRange(filaProd, 13).setValue(nuevoStock);
       sheetProd.getRange(filaProd, 7).setValue(nuevoCosto);
 
-      // Movimiento
-      sheetMov.appendRow([Utilities.getUuid(), new Date(), "ANULACION_COMPRA", item.id_prod, "DEP-CENTRAL", item.cant * -1, idCompra]);
+      // Registrar Movimiento (Salida por anulación)
+      sheetMov.appendRow([
+        Utilities.getUuid(), 
+        new Date(), 
+        "ANULACION_COMPRA", 
+        item.id_prod, 
+        "DEP-CENTRAL", 
+        item.cant * -1, 
+        idCompra
+      ]);
     }
   });
 
-  // 4. Marcar ANULADO (Columna F, índice 6)
+  // 5. Marcar Cabecera como ANULADO
   sheetCab.getRange(filaCab, 6).setValue('ANULADO');
+
+  // --- 6. REGISTRAR EN BITÁCORA ---
+  const quien = usuario || "Sistema";
+  // Ahora proveedorLog contiene el Nombre Real
+  const detalleBitacora = `Se anuló Compra ID: ${idCompra}. Proveedor: ${proveedorLog}. Valor: ${totalLog}`;
+  
+  registrarEvento(quien, "ANULAR COMPRA", detalleBitacora);
 
   lock.releaseLock();
   return { success: true };

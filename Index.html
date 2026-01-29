@@ -414,7 +414,7 @@
                 
                 <div v-if="vistaActual === 'ventas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Punto de Venta</h3>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas / Caja</h3>
                         <div class="btn-group shadow-sm">
                             <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
                             <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
@@ -997,8 +997,8 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-arrow-left-right text-brand"></i> Transferencias</h3>
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaTransf === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaTransf = 'nueva'">Nueva</button>
-                            <button class="btn" :class="subVistaTransf === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialTransf">Historial</button>
+                            <button class="btn" :class="subVistaTransf === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaTransf = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Transferencia</button>
+                            <button class="btn" :class="subVistaTransf === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialTransf"><i class="bi bi-clock-history"></i> Historial</button>
                         </div>
                     </div>
 
@@ -1102,8 +1102,8 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h3 class="fw-bold text-dark mb-0"><i class="bi bi-truck-flatbed text-brand"></i> Notas de Remisión</h3>
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaRemision === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaRemision = 'nueva'">Nueva</button>
-                            <button class="btn" :class="subVistaRemision === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialRemisiones">Historial</button>
+                            <button class="btn" :class="subVistaRemision === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaRemision = 'nueva'"><i class="bi bi-plus-lg"></i>Nueva Remisión</button>
+                            <button class="btn" :class="subVistaRemision === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialRemisiones"><i class="bi bi-clock-history"></i> Historial</button>
                         </div>
                     </div>
 
@@ -1252,7 +1252,7 @@
                 <div v-if="vistaActual === 'usuarios'">
                     <div class="d-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-person-badge text-brand me-2"></i>Gestión de Usuarios</h3>
+                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-person-badge text-brand me-2"></i>Usuarios</h3>
                             <small class="text-muted">Administra el acceso y permisos del personal</small>
                         </div>
                         <button class="btn btn-brand shadow-sm" @click="prepararNuevoUsuario">
@@ -1433,7 +1433,7 @@
 
                 <div v-if="vistaActual === 'cobranzas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-brand"></i> Gestión de Cobros</h3>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-brand"></i> Cobranzas</h3>
                         
                         <div class="btn-group shadow-sm">
                             <button class="btn" :class="subVistaCobranzas === 'listado' || subVistaCobranzas === 'nuevo' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
@@ -1547,9 +1547,143 @@
                 </div>
 
                 <div v-if="vistaActual === 'compras'">
-                    <div class="d-flex justify-content-between align-items-center mb-4"><h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras</h3><div class="btn-group shadow-sm"><button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaCompras = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva</button><button class="btn" :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorial"><i class="bi bi-clock-history"></i> Historial</button></div></div>
-                    <div v-if="subVistaCompras === 'nueva'"><div class="card border-0 shadow-sm mb-4 no-hover"><div class="card-body"><h6 class="text-muted text-uppercase fw-bold small mb-3">Datos del Comprobante</h6><div class="row g-3"><div class="col-md-4"><label class="form-label fw-bold">Proveedor</label><select class="form-select" v-model="formCompra.id_proveedor"><option value="" disabled>Seleccione proveedor...</option><option v-for="p in proveedores" :value="p.id_proveedor">{{ p.razon_social }}</option></select></div><div class="col-md-4"><label class="form-label fw-bold">Fecha Emisión</label><input type="date" class="form-control" v-model="formCompra.fecha"></div><div class="col-md-4"><label class="form-label fw-bold">Nº Factura / Remisión</label><input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456"></div></div></div></div><div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3"><div class="card-body bg-light"><h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6><form @submit.prevent="agregarAlCarrito"><div class="row g-2 align-items-end"><div class="col-md-5"><label class="form-label small">Producto</label><select class="form-select" v-model="lineaTemp.id_producto" required><option value="" disabled>Buscar producto...</option><option v-for="prod in productos" :value="prod.id_producto">{{ prod.sku }} - {{ prod.nombre }}</option></select></div><div class="col-md-2 col-6"><label class="form-label small">Cantidad</label><input type="number" class="form-control" v-model.number="lineaTemp.cantidad" min="1" required placeholder="0"></div><div class="col-md-3 col-6"><label class="form-label small">Costo (Gs)</label><input type="number" class="form-control" v-model.number="lineaTemp.costo" min="0" required placeholder="0"></div><div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i> Agregar</button></div></div></form></div></div><div class="card border-0 shadow-sm no-hover"><div class="table-responsive"><table class="table align-middle mb-0"><thead class="table-light"><tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Costo</th><th class="text-end">Subtotal</th><th style="width: 50px;"></th></tr></thead><tbody><tr v-for="(item, index) in carritoCompra" :key="index"><td><div class="fw-bold">{{ obtenerNombreProducto(item.id_producto) }}</div></td><td class="text-center">{{ item.cantidad }}</td><td class="text-end">{{ formatoMoneda(item.costo) }}</td><td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.costo) }}</td><td><button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)"><i class="bi bi-x-lg"></i></button></td></tr><tr v-if="carritoCompra.length === 0"><td colspan="5" class="text-center py-4 text-muted">Carrito vacío</td></tr></tbody><tfoot v-if="carritoCompra.length > 0"><tr class="bg-light"><td colspan="3" class="text-end fw-bold fs-5 pt-3">TOTAL:</td><td class="text-end fw-bold fs-4 text-brand pt-3">{{ formatoMoneda(totalCompra) }}</td><td></td></tr></tfoot></table></div><div class="card-footer bg-white p-3 text-end" v-if="carritoCompra.length > 0"><button class="btn btn-outline-secondary me-2" @click="limpiarCarrito">Cancelar</button><button class="btn btn-brand fw-bold px-4" @click="guardarCompraFinal"><i class="bi bi-check-lg me-1"></i> FINALIZAR</button></div></div></div>
-                    <div v-if="subVistaCompras === 'historial'"><div class="card border-0 shadow-sm"><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Proveedor</th><th class="text-end">Total</th><th class="text-center">Estado</th><th class="text-end pe-3">Acciones</th></tr></thead><tbody><tr v-for="h in historialCompras" :key="h.id_compra"><td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td><td class="fw-bold text-dark">{{ h.nombre_proveedor }}</td><td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td><td class="text-center"><span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span><span v-else class="badge bg-success bg-opacity-10 text-success border border-success">{{ h.estado }}</span></td><td class="text-end pe-3"> <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver Orden Compra"><i class="bi bi-file-earmark-pdf"></i></a> <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)"><i class="bi bi-eye"></i></button><button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)"><i class="bi bi-slash-circle"></i></button></td></tr></tbody></table></div></div></div></div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras / Stock</h3>
+                          <div class="btn-group shadow-sm">
+                              <button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaCompras = 'nueva'">
+                                  <i class="bi bi-plus-lg"></i> Nueva Compra
+                              </button>
+                              <button class="btn" :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialCompras">
+                                  <i class="bi bi-clock-history"></i> Historial
+                              </button>
+                          </div>
+                    </div>
+                    <div v-if="subVistaCompras === 'nueva'">
+                        <div class="card border-0 shadow-sm mb-4 no-hover">
+                            <div class="card-body">
+                                <h6 class="text-muted text-uppercase fw-bold small mb-3">Datos del Comprobante</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4"><label class="form-label fw-bold">Proveedor</label><select class="form-select"
+                                            v-model="formCompra.id_proveedor">
+                                            <option value="" disabled>Seleccione proveedor...</option>
+                                            <option v-for="p in proveedores" :value="p.id_proveedor">{{ p.razon_social }}</option>
+                                        </select></div>
+                                    <div class="col-md-4"><label class="form-label fw-bold">Fecha Emisión</label><input type="date"
+                                            class="form-control" v-model="formCompra.fecha"></div>
+                                    <div class="col-md-4"><label class="form-label fw-bold">Nº Factura / Remisión</label><input
+                                            type="text" class="form-control" v-model="formCompra.comprobante"
+                                            placeholder="Ej: 001-001-123456"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3">
+                            <div class="card-body bg-light">
+                                <h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6>
+                                <form @submit.prevent="agregarAlCarrito">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-5"><label class="form-label small">Producto</label><select
+                                                class="form-select" v-model="lineaTemp.id_producto" required>
+                                                <option value="" disabled>Buscar producto...</option>
+                                                <option v-for="prod in productos" :value="prod.id_producto">{{ prod.sku }} - {{
+                                                    prod.nombre }}</option>
+                                            </select></div>
+                                        <div class="col-md-2 col-6"><label class="form-label small">Cantidad</label><input type="number"
+                                                class="form-control" v-model.number="lineaTemp.cantidad" min="1" required
+                                                placeholder="0"></div>
+                                        <div class="col-md-3 col-6"><label class="form-label small">Costo (Gs)</label><input
+                                                type="number" class="form-control" v-model.number="lineaTemp.costo" min="0" required
+                                                placeholder="0"></div>
+                                        <div class="col-md-2 d-grid"><button type="submit" class="btn btn-brand fw-bold"><i
+                                                    class="bi bi-plus-lg"></i> Agregar</button></div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="card border-0 shadow-sm no-hover">
+                            <div class="table-responsive">
+                                <table class="table align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th class="text-center">Cant.</th>
+                                            <th class="text-end">Costo</th>
+                                            <th class="text-end">Subtotal</th>
+                                            <th style="width: 50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(item, index) in carritoCompra" :key="index">
+                                            <td>
+                                                <div class="fw-bold">{{ obtenerNombreProducto(item.id_producto) }}</div>
+                                            </td>
+                                            <td class="text-center">{{ item.cantidad }}</td>
+                                            <td class="text-end">{{ formatoMoneda(item.costo) }}</td>
+                                            <td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.costo) }}</td>
+                                            <td><button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)"><i
+                                                        class="bi bi-x-lg"></i></button></td>
+                                        </tr>
+                                        <tr v-if="carritoCompra.length === 0">
+                                            <td colspan="5" class="text-center py-4 text-muted">Carrito vacío</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot v-if="carritoCompra.length > 0">
+                                        <tr class="bg-light">
+                                            <td colspan="3" class="text-end fw-bold fs-5 pt-3">TOTAL:</td>
+                                            <td class="text-end fw-bold fs-4 text-brand pt-3">{{ formatoMoneda(totalCompra) }}</td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div class="card-footer bg-white p-3 text-end" v-if="carritoCompra.length > 0"><button
+                                    class="btn btn-outline-secondary me-2" @click="limpiarCarrito">Cancelar</button><button
+                                    class="btn btn-brand fw-bold px-4" @click="guardarCompraFinal"><i class="bi bi-check-lg me-1"></i>
+                                    FINALIZAR</button></div>
+                        </div>
+                    </div>
+                    <div v-if="subVistaCompras === 'historial'">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="ps-3">Fecha</th>
+                                                <th>Proveedor</th>
+                                                <th class="text-end">Total</th>
+                                                <th class="text-center">Estado</th>
+                                                <th class="text-end pe-3">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="h in historialCompras" :key="h.id_compra">
+                                                <td class="ps-3 text-muted small">
+                                                    {{ new Date(h.fecha).toLocaleDateString() }}
+                                                </td>
+                                                <td>
+                                                    <div class="fw-bold text-dark">{{ h.nombre_proveedor }}</div>
+                                                    <div class="small text-muted">{{ h.comprobante }}</div>
+                                                </td>
+                                                <td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td>
+                                                <td class="text-center">
+                                                    <span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span>
+                                                    <span v-else class="badge bg-success bg-opacity-10 text-success border border-success">{{ h.estado }}</span>
+                                                </td>
+                                                <td class="text-end pe-3">
+                                                    <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1"><i class="bi bi-file-earmark-pdf"></i></a>
+                                                    <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)"><i class="bi bi-eye"></i></button>
+                                                    <button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)"><i class="bi bi-slash-circle"></i></button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="historialCompras.length === 0">
+                                                <td colspan="5" class="text-center py-5 text-muted">No hay compras registradas.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div v-if="vistaActual === 'productos'">
@@ -1699,7 +1833,7 @@
                             <i class="bi bi-gear-fill fs-4"></i>
                         </div>
                         <div>
-                            <h3 class="fw-bold text-dark mb-0">Configuración del Sistema</h3>
+                            <h3 class="fw-bold text-dark mb-0">Configuración</h3>
                             <small class="text-muted">Ajustes generales y parámetros</small>
                         </div>
                     </div>
@@ -2000,7 +2134,7 @@
                     
                     <div class="d-flex align-items-center mb-4">
                         <div>
-                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cash-stack text-brand"></i> Registro de Gastos</h3>
+                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cash-stack text-brand"></i> Gastos Operativos</h3>
                             <small class="text-muted">Control de egresos operativos y administrativos</small>
                         </div>
                     </div>
@@ -2587,17 +2721,16 @@
         data() {
           return {
                        
-            cargando: false, subVistaVentas:'nueva', subVistaCompras:'nueva',
-            chartInstance: null,
+            cargando: false, 
+            subVistaVentas:'nueva', subVistaCompras:'nueva', chartInstance: null,
             productos: [], proveedores: [], clientes: [], listaDepositos: [], listaConfigCampos: [], listaCategorias: [], listaUnidades: [],
             
-            usuarioLogueado: null,
-            permisos: [],
-            loginData: { usuario: '', password: '' },
+            usuarioLogueado: null, permisos: [], loginData: { usuario: '', password: '' }, 
+            
             vistaActual: 'dashboard',
 
-            html5QrcodeScanner: null, // Instancia del escáner
-            modalScanner: null,       // Instancia del modal Bootstrap
+            html5QrcodeScanner: null, 
+            modalScanner: null,       
 
             perfilForm: {
                 id_usuario: '',
@@ -4295,7 +4428,42 @@
                     })
                     .obtenerDetalleVenta(h.id_venta);
             },
-            cargarHistorialVentas() { this.subVistaVentas='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialVentas=r||[]; this.cargando=false;}).obtenerHistorialVentas(); },
+
+            cargarHistorialVentas() {
+                this.subVistaVentas = 'historial';
+                this.cargando = true;
+                this.historialVentas = []; // Limpiar lista visualmente antes de cargar
+                
+                google.script.run
+                    .withSuccessHandler(r => {
+                        this.cargando = false;
+                        // Si r es null o undefined, usamos array vacío
+                        this.historialVentas = r || [];
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        this.notificar('error', "Error al cargar historial de ventas: " + e);
+                    })
+                    .obtenerHistorialVentas();
+            },
+
+            
+            cargarHistorialCompras() { 
+                this.subVistaCompras = 'historial'; 
+                this.cargando = true; 
+                this.historialCompras = []; // Limpiar antes de cargar para efecto visual
+                
+                google.script.run
+                    .withSuccessHandler(r => {
+                        this.historialCompras = r || []; 
+                        this.cargando = false;
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        this.notificar('error', "Error al cargar historial: " + e);
+                    })
+                    .obtenerHistorialCompras(); 
+            },
 
             anularVenta(h) { 
                   Swal.fire({ 
@@ -4330,7 +4498,7 @@
             agregarAlCarrito() { this.carritoCompra.push({...this.lineaTemp}); this.lineaTemp={id_producto:'', cantidad:'', costo:''}; },
             quitarDelCarrito(i) { this.carritoCompra.splice(i,1); },
             limpiarCarrito() { this.carritoCompra=[]; this.formCompra={id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: ''}; },
-      guardarCompraFinal() { 
+            guardarCompraFinal() { 
                 if(!this.formCompra.id_proveedor || this.carritoCompra.length===0) {
                     return this.notificar('warning', "Faltan datos del proveedor o productos.");
                 }
@@ -4398,14 +4566,14 @@
                             .withSuccessHandler(() => {
                                 this.cargando = false; 
                                 this.notificar('success', "Compra anulada correctamente"); 
-                                this.cargarHistorial(); 
+                                this.cargarHistorialCompras();   // ver JUN
                                 this.cargarDatosIniciales();
                             })
                             .withFailureHandler(e => {
                                 this.cargando = false;
                                 this.notificar('error', "Error: " + e);
                             })
-                            .anularCompra(h.id_compra);
+                            .anularCompra(h.id_compra, this.usuarioLogueado.nombre);
                     }
                 });
             }
