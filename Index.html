@@ -2453,94 +2453,168 @@
           </div>
       </div>
 
-      <div class="modal fade" id="modalDeposito" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-brand text-white"><h5 class="modal-title">Depósito</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><form @submit.prevent="guardarDeposito"><div class="mb-3"><label>Nombre</label><input type="text" class="form-control" v-model="formDeposito.nombre" required></div><div class="mb-3"><label>Dirección</label><input type="text" class="form-control" v-model="formDeposito.direccion"></div><div class="row"><div class="col-6"><label>Responsable</label><input type="text" class="form-control" v-model="formDeposito.responsable"></div><div class="col-6"><label>Activo</label><select class="form-select" v-model="formDeposito.activo"><option>Si</option><option>No</option></select></div></div><div class="d-grid mt-3"><button type="submit" class="btn btn-brand">Guardar</button></div></form></div></div></div></div>
-
-      <div class="modal fade" id="modalCampo" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-brand text-white"><h5 class="modal-title">Campo Personalizado</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><form @submit.prevent="guardarCampo"><div class="mb-3"><label>Entidad</label><select class="form-select" v-model="formCampo.entidad_objetivo" required><option value="producto">Producto</option><option value="cliente">Cliente</option><option value="proveedor">Proveedor</option></select></div><div class="row g-2 mb-3"><div class="col-6"><label>Key (interno)</label><input type="text" class="form-control" v-model="formCampo.key_interno" required></div><div class="col-6"><label>Etiqueta Visible</label><input type="text" class="form-control" v-model="formCampo.etiqueta_visible" required></div></div><div class="mb-3"><label>Tipo</label><select class="form-select" v-model="formCampo.tipo_dato"><option value="text">Texto</option><option value="number">Número</option><option value="date">Fecha</option><option value="select">Lista</option></select></div><div class="mb-3" v-if="formCampo.tipo_dato === 'select'"><label>Opciones (x,y,z)</label><input type="text" class="form-control" v-model="formCampo.opciones_lista"></div><div class="form-check mb-3"><input class="form-check-input" type="checkbox" v-model="formCampo.es_obligatorio"><label>Obligatorio</label></div><div class="d-grid"><button type="submit" class="btn btn-brand">Guardar</button></div></form></div></div></div></div>
-
-      <div class="modal fade" id="modalCliente" tabindex="-1" data-bs-backdrop="static">
-              <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
+      <div class="modal fade" id="modalDeposito" tabindex="-1">
+          <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
                   <div class="modal-header bg-brand text-white">
-                    <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Cliente</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                      <h5 class="modal-title">Depósito</h5><button type="button" class="btn-close btn-close-white"
+                          data-bs-dismiss="modal"></button>
                   </div>
-                  <div class="modal-body bg-light">
-                      <form @submit.prevent="guardarCliente">
-                          <div class="card border-0 shadow-sm mb-3">
-                              <div class="card-body">
-                                  <div class="mb-3">
-                                      <label class="form-label text-secondary small fw-bold">Razón Social</label>
-                                      <input type="text" class="form-control" v-model="formCliente.razon_social" required>
-                                  </div>
-                                  
-                                  <div class="mb-3">
-                                      <label class="form-label text-secondary small fw-bold">RUC</label>
-                                      <input type="text" class="form-control" v-model="formCliente.doc_identidad" required>
-                                  </div>
-
-                                  <div class="mb-3">
-                                      <label class="form-label text-secondary small fw-bold">Email</label>
-                                      <input type="email" class="form-control" v-model="formCliente.email">
-                                  </div>
-                                  
-                                  <div class="mb-3">
-                                      <label class="form-label text-secondary small fw-bold">Teléfono</label>
-                                      <input type="text" class="form-control" v-model="formCliente.telefono">
-                                  </div>
-                              </div>
+                  <div class="modal-body">
+                      <form @submit.prevent="guardarDeposito">
+                          <div class="mb-3"><label>Nombre</label><input type="text" class="form-control"
+                                  v-model="formDeposito.nombre" required></div>
+                          <div class="mb-3"><label>Dirección</label><input type="text" class="form-control"
+                                  v-model="formDeposito.direccion"></div>
+                          <div class="row">
+                              <div class="col-6"><label>Responsable</label><input type="text" class="form-control"
+                                      v-model="formDeposito.responsable"></div>
+                              <div class="col-6"><label>Activo</label><select class="form-select"
+                                      v-model="formDeposito.activo">
+                                      <option>Si</option>
+                                      <option>No</option>
+                                  </select></div>
                           </div>
-
-                          <div v-if="camposExtraCliente.length > 0" class="card border-0 shadow-sm mb-3">
-                              <div class="card-body">
-                                  <div v-for="campo in camposExtraCliente" :key="campo.id_campo" class="mb-3">
-                                      <label class="form-label text-secondary small fw-bold">{{ campo.etiqueta_visible }}</label>
-                                      
-                                      <select v-if="campo.tipo_dato === 'select'" class="form-select" v-model="formCliente.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                          <option value="">Seleccionar...</option>
-                                          <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
-                                      </select>
-                                      
-                                      <input v-else :type="campo.tipo_dato" class="form-control" v-model="formCliente.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                  </div>
-                              </div>
-                          </div>
-
-                          <button type="submit" class="btn btn-brand w-100 py-2 fw-bold">Guardar</button>
+                          <div class="d-grid mt-3"><button type="submit" class="btn btn-brand">Guardar</button></div>
                       </form>
                   </div>
-                </div>
               </div>
+          </div>
+      </div>
+
+      <div class="modal fade" id="modalCampo" tabindex="-1">
+          <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                  <div class="modal-header bg-brand text-white">
+                      <h5 class="modal-title">Campo Personalizado</h5><button type="button" class="btn-close btn-close-white"
+                          data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                      <form @submit.prevent="guardarCampo">
+                          <div class="mb-3"><label>Entidad</label><select class="form-select"
+                                  v-model="formCampo.entidad_objetivo" required>
+                                  <option value="producto">Producto</option>
+                                  <option value="cliente">Cliente</option>
+                                  <option value="proveedor">Proveedor</option>
+                              </select></div>
+                          <div class="row g-2 mb-3">
+                              <div class="col-6"><label>Key (interno)</label><input type="text" class="form-control"
+                                      v-model="formCampo.key_interno" required></div>
+                              <div class="col-6"><label>Etiqueta Visible</label><input type="text" class="form-control"
+                                      v-model="formCampo.etiqueta_visible" required></div>
+                          </div>
+                          <div class="mb-3"><label>Tipo</label><select class="form-select" v-model="formCampo.tipo_dato">
+                                  <option value="text">Texto</option>
+                                  <option value="number">Número</option>
+                                  <option value="date">Fecha</option>
+                                  <option value="select">Lista</option>
+                              </select></div>
+                          <div class="mb-3" v-if="formCampo.tipo_dato === 'select'"><label>Opciones (x,y,z)</label><input
+                                  type="text" class="form-control" v-model="formCampo.opciones_lista"></div>
+                          <div class="form-check mb-3"><input class="form-check-input" type="checkbox"
+                                  v-model="formCampo.es_obligatorio"><label>Obligatorio</label></div>
+                          <div class="d-grid"><button type="submit" class="btn btn-brand">Guardar</button></div>
+                      </form>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      <div class="modal fade" id="modalCliente" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-brand text-white">
+                    <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Cliente</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <form @submit.prevent="guardarCliente">
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary small fw-bold">Razón Social</label>
+                                    <input type="text" class="form-control" v-model="formCliente.razon_social" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary small fw-bold">RUC</label>
+                                    <input type="text" class="form-control" v-model="formCliente.doc_identidad" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary small fw-bold">Email</label>
+                                    <input type="email" class="form-control" v-model="formCliente.email">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary small fw-bold">Teléfono</label>
+                                    <input type="text" class="form-control" v-model="formCliente.telefono">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="camposExtraCliente.length > 0" class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <div v-for="campo in camposExtraCliente" :key="campo.id_campo" class="mb-3">
+                                    <label class="form-label text-secondary small fw-bold">{{ campo.etiqueta_visible
+                                        }}</label>
+
+                                    <select v-if="campo.tipo_dato === 'select'" class="form-select"
+                                        v-model="formCliente.datos_adicionales[campo.key_interno]"
+                                        :required="esObligatorio(campo.es_obligatorio)">
+                                        <option value="">Seleccionar...</option>
+                                        <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{
+                                            op.trim() }}</option>
+                                    </select>
+
+                                    <input v-else :type="campo.tipo_dato" class="form-control"
+                                        v-model="formCliente.datos_adicionales[campo.key_interno]"
+                                        :required="esObligatorio(campo.es_obligatorio)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-brand w-100 py-2 fw-bold">Guardar</button>
+                    </form>
+                </div>
             </div>
+        </div>
+    </div>
       
       <div class="modal fade" id="modalProducto" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                  <div class="modal-content">
-                    <div class="modal-header bg-brand text-white">
-                      <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Producto</h5>
-                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body bg-light">
-                        <form @submit.prevent="procesarGuardadoProducto">
-                            
-                            <div class="card border-0 shadow-sm mb-3">
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-5 d-flex flex-column align-items-center justify-content-center border-end">
-                                            <div class="mb-3 d-flex align-items-center justify-content-center bg-white border rounded" style="width: 100%; height: 180px; overflow: hidden;">
-                                                <img v-if="imagenPreview" :src="imagenPreview" class="img-fluid" style="object-fit: contain; max-height: 100%;">
-                                                <div v-else class="text-muted text-center">
-                                                    <i class="bi bi-image fs-1 opacity-25"></i><br>
-                                                    <small>Sin imagen</small>
-                                                </div>
-                                            </div>
-                                            <input type="file" class="form-control form-control-sm" accept="image/*" @change="manejarArchivo">
-                                        </div>
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-brand text-white">
+                    <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Producto</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <form @submit.prevent="procesarGuardadoProducto">
 
-                                        <div class="col-md-7">
-                                            <div class="mb-3">
-                                                <label class="form-label text-secondary small fw-bold">Nombre del Producto</label>
-                                                <input type="text" class="form-control" v-model="formProducto.nombre" required>
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div
+                                        class="col-md-5 d-flex flex-column align-items-center justify-content-center border-end">
+                                        <div class="mb-3 d-flex align-items-center justify-content-center bg-white border rounded"
+                                            style="width: 100%; height: 180px; overflow: hidden;">
+                                            <img v-if="imagenPreview" :src="imagenPreview" class="img-fluid"
+                                                style="object-fit: contain; max-height: 100%;">
+                                            <div v-else class="text-muted text-center">
+                                                <i class="bi bi-image fs-1 opacity-25"></i><br>
+                                                <small>Sin imagen</small>
                                             </div>
+                                        </div>
+                                        <input type="file" class="form-control form-control-sm" accept="image/*"
+                                            @change="manejarArchivo">
+                                    </div>
+
+                                    <div class="col-md-7">
+                                        <div class="mb-3">
+                                            <label class="form-label text-secondary small fw-bold">Nombre del
+                                                Producto</label>
+                                            <input type="text" class="form-control" v-model="formProducto.nombre" required>
+                                        </div>
                                         <div class="row g-2 mb-2">
                                             <div class="col-6">
                                                 <label class="form-label text-secondary small fw-bold">SKU / Código</label>
@@ -2548,14 +2622,16 @@
                                             </div>
                                             <div class="col-6">
                                                 <label class="form-label text-secondary small fw-bold">Precio Base</label>
-                                                <input type="number" class="form-control" v-model="formProducto.precio_venta_base" required>
+                                                <input type="number" class="form-control"
+                                                    v-model="formProducto.precio_venta_base" required>
                                             </div>
                                         </div>
 
                                         <div class="row g-2 mt-2 bg-light p-2 rounded border">
                                             <div class="col-6">
                                                 <label class="form-label small fw-bold text-dark">Tasa IVA %</label>
-                                                <select class="form-select form-select-sm" v-model="formProducto.impuesto_iva">
+                                                <select class="form-select form-select-sm"
+                                                    v-model="formProducto.impuesto_iva">
                                                     <option value="10">10%</option>
                                                     <option value="5">5%</option>
                                                     <option value="0">Exenta</option>
@@ -2563,123 +2639,132 @@
                                             </div>
                                             <div class="col-6">
                                                 <label class="form-label small fw-bold text-dark">Método</label>
-                                                <select class="form-select form-select-sm" v-model="formProducto.metodo_iva">
+                                                <select class="form-select form-select-sm"
+                                                    v-model="formProducto.metodo_iva">
                                                     <option value="INCLUIDO">IVA Incluido</option>
                                                     <option value="EXCLUIDO">IVA Excluido (+)</option>
                                                 </select>
                                             </div>
                                             <div class="col-12 text-end">
                                                 <small class="text-muted" v-if="formProducto.metodo_iva === 'EXCLUIDO'">
-                                                    Precio Final en Caja: <strong>{{ formatoMoneda(formProducto.precio_venta_base * (1 + (formProducto.impuesto_iva/100))) }}</strong>
+                                                    Precio Final en Caja: <strong>{{
+                                                        formatoMoneda(formProducto.precio_venta_base * (1 +
+                                                        (formProducto.impuesto_iva/100))) }}</strong>
                                                 </small>
                                                 <small class="text-muted" v-else>
                                                     El precio de lista ya incluye el impuesto.
                                                 </small>
                                             </div>
                                         </div>
-                                            </div>
-                                            <div class="row g-2 mt-2">
-                                                <div class="col-4">
-                                                    <label class="form-label text-secondary small fw-bold">Categoría</label>
-                                                    <select class="form-select" v-model="formProducto.id_categoria" required>
-                                                        <option v-for="c in listaCategorias" :value="c.id_categoria">{{c.nombre}}</option>
-                                                    </select>
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label text-secondary small fw-bold">Stock Mínimo</label>
-                                                    <input type="number" class="form-control" v-model="formProducto.stock_minimo">
-                                                </div>
-                                                <div class="col-4">
-                                                  <label class="form-label text-secondary small fw-bold">Unidad de Medida</label>
-                                                  <select class="form-select" v-model="formProducto.unidad_medida">
-                                                      <option value="Unidad">Unidad</option>
-                                                      <option value="Caja">Caja</option>
-                                                      <option value="Kg">Kg</option>
-                                                      <option value="Litro">Litro</option>
-                                                      <option value="Metro">Metro</option>
-                                                  </select>
-                                              </div>
-                                            </div>
-                                        </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div v-if="camposExtraProducto.length > 0" class="card border-0 shadow-sm mb-3">
-                                <div class="card-body">
-                                    <div class="row g-3">
-                                        <div class="col-md-4" v-for="campo in camposExtraProducto" :key="campo.id_campo">
-                                            <label class="form-label text-secondary small fw-bold mb-1">{{ campo.etiqueta_visible }}</label>
-                                            
-                                            <select v-if="campo.tipo_dato === 'select'" class="form-select" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                                <option value="">Seleccionar...</option>
-                                                <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
+                                    <div class="row g-2 mt-2">
+                                        <div class="col-4">
+                                            <label class="form-label text-secondary small fw-bold">Categoría</label>
+                                            <select class="form-select" v-model="formProducto.id_categoria" required>
+                                                <option v-for="c in listaCategorias" :value="c.id_categoria">{{c.nombre}}
+                                                </option>
                                             </select>
-                                            
-                                            <input v-else :type="campo.tipo_dato" class="form-control" v-model="formProducto.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label text-secondary small fw-bold">Stock Mínimo</label>
+                                            <input type="number" class="form-control" v-model="formProducto.stock_minimo">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label text-secondary small fw-bold">Unidad de Medida</label>
+                                            <select class="form-select" v-model="formProducto.unidad_medida">
+                                                <option value="Unidad">Unidad</option>
+                                                <option value="Caja">Caja</option>
+                                                <option value="Kg">Kg</option>
+                                                <option value="Litro">Litro</option>
+                                                <option value="Metro">Metro</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-brand w-100 py-2 fw-bold" @click="procesarGuardadoProducto"><i class="bi bi-save me-2"></i> Guardar </button>
-                        </form>
+                        </div>
+                </div>
+
+                <div v-if="camposExtraProducto.length > 0" class="card border-0 shadow-sm mb-3">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4" v-for="campo in camposExtraProducto" :key="campo.id_campo">
+                                <label class="form-label text-secondary small fw-bold mb-1">{{ campo.etiqueta_visible
+                                    }}</label>
+
+                                <select v-if="campo.tipo_dato === 'select'" class="form-select"
+                                    v-model="formProducto.datos_adicionales[campo.key_interno]"
+                                    :required="esObligatorio(campo.es_obligatorio)">
+                                    <option value="">Seleccionar...</option>
+                                    <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}
+                                    </option>
+                                </select>
+
+                                <input v-else :type="campo.tipo_dato" class="form-control"
+                                    v-model="formProducto.datos_adicionales[campo.key_interno]"
+                                    :required="esObligatorio(campo.es_obligatorio)">
+                            </div>
+                        </div>
                     </div>
-                  </div>
                 </div>
-            </div>
-      
-      <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
-            <div class="modal-dialog modal-dialog-centered">
-              <div class="modal-content">
-                <div class="modal-header bg-brand text-white">
-                  <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Proveedor</h5>
-                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body bg-light">
-                    <form @submit.prevent="guardarProveedor">
-                        <div class="card border-0 shadow-sm mb-3">
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" v-model="formProveedor.razon_social" required placeholder="Nombre de la empresa">
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Documento</label>
-                                        <input type="text" class="form-control" v-model="formProveedor.doc_identidad" required placeholder="RUC / CI">
-                                    </div>
-                                    <div class="col-6">
-                                        <label class="form-label fw-bold">Contacto</label>
-                                        <input type="text" class="form-control" v-model="formProveedor.contacto" placeholder="Teléfono / Email">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div v-if="camposExtraProveedor.length > 0" class="card border-0 shadow-sm mb-3">
-                            <div class="card-body">
-                                <div class="row g-2">
-                                    <div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
-                                        <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
-                                        <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                            <option value="">Seleccionar...</option>
-                                            <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
-                                        </select>
-                                        <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-brand fw-bold">Guardar</button>
-                        </div>
-                    </form>
-                </div>
-              </div>
+                <button type="button" class="btn btn-brand w-100 py-2 fw-bold" @click="procesarGuardadoProducto"><i
+                        class="bi bi-save me-2"></i> Guardar </button>
+                </form>
             </div>
         </div>
-    </div>    
+    </div>
+
+      <div class="modal fade" id="modalProveedor" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header bg-brand text-white">
+              <h5 class="modal-title">{{ modoEdicion ? 'Editar' : 'Nuevo' }} Proveedor</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <form @submit.prevent="guardarProveedor">
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" v-model="formProveedor.razon_social" required placeholder="Nombre de la empresa">
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold">Documento</label>
+                                    <input type="text" class="form-control" v-model="formProveedor.doc_identidad" required placeholder="RUC / CI">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold">Contacto</label>
+                                    <input type="text" class="form-control" v-model="formProveedor.contacto" placeholder="Teléfono / Email">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="camposExtraProveedor.length > 0" class="card border-0 shadow-sm mb-3">
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-12" v-for="campo in camposExtraProveedor" :key="campo.id_campo">
+                                    <label class="form-label small mb-1">{{ campo.etiqueta_visible }} <span v-if="esObligatorio(campo.es_obligatorio)" class="text-danger">*</span></label>
+                                    <select v-if="campo.tipo_dato === 'select'" class="form-select form-select-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                        <option value="">Seleccionar...</option>
+                                        <option v-for="op in campo.opciones_lista.split(',')" :value="op.trim()">{{ op.trim() }}</option>
+                                    </select>
+                                    <input v-else :type="campo.tipo_dato" class="form-control form-control-sm" v-model="formProveedor.datos_adicionales[campo.key_interno]" :required="esObligatorio(campo.es_obligatorio)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-brand fw-bold">Guardar</button>
+                    </div>
+                </form>
+            </div>
+          </div>
+        </div>
+    </div>
 
     <div class="modal fade" id="modalScanner" tabindex="-1" data-bs-backdrop="static">
           <div class="modal-dialog modal-dialog-centered">
@@ -4177,7 +4262,12 @@
                 });
             },
 
-            abrirModalProveedor(item) { this.modoEdicion=!!item; this.formProveedor = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', datos_adicionales:{} }; if(!this.formProveedor.datos_adicionales) this.formProveedor.datos_adicionales={}; this.modalProv.show(); },
+          abrirModalProveedor(item) { 
+            this.modoEdicion=!!item; 
+            this.formProveedor = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', datos_adicionales:{} }; 
+            if(!this.formProveedor.datos_adicionales) this.formProveedor.datos_adicionales={}; this.modalProv.show(); 
+          },
+
           guardarProveedor() { 
                 this.cargando = true; 
                 const f = this.modoEdicion ? 'actualizarProveedor' : 'guardarNuevoProveedor'; 
@@ -4187,7 +4277,6 @@
                         this.cargando = false; 
                         this.modalProv.hide(); 
                         this.cargarDatosIniciales();
-                        // Agregamos la notificación que faltaba
                         this.notificar('success', 'Proveedor guardado correctamente');
                     })
                     .withFailureHandler(error => {
@@ -4227,7 +4316,15 @@
                     }
                 });
             },
-            manejarArchivo(e) { const f = e.target.files[0]; if(!f) return; this.archivoParaSubir = f; const r = new FileReader(); r.onload = (e) => { this.imagenPreview = e.target.result; }; r.readAsDataURL(f); },
+            manejarArchivo(e) { 
+              const f = e.target.files[0]; 
+              if(!f) return; 
+              this.archivoParaSubir = f; 
+              const r = new FileReader(); 
+              r.onload = (e) => { this.imagenPreview = e.target.result;}; 
+              r.readAsDataURL(f); 
+            },
+
             abrirModalProducto(item) {
                 this.modoEdicion = !!item;
                 this.archivoParaSubir = null;
