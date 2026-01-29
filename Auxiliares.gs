@@ -1,19 +1,6 @@
-/**
- * Script de Inicialización de Base de Datos para "Cesta"
- * Apunta a una hoja específica mediante su ID.
- */
-
-// ID de tu Hoja de Cálculo
-const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
-
-/**
- * INICIALIZACIÓN DE LA BASE DE DATOS
- * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes.
- */
+/*** INICIALIZACIÓN DE LA BASE DE DATOS * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes. */
 function setupDatabase() {
-  // ✅ Usamos getActiveSpreadsheet() para asegurar que trabaje sobre el archivo abierto
-  const ss = SpreadsheetApp.getActiveSpreadsheet(); 
-  // const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // (Opcional si quieres forzar ID)
+  const ss = SpreadsheetApp.openById(SS_ID); //const ss = SpreadsheetApp.getActiveSpreadsheet(); 
 
   // Definición de todas las tablas del sistema
   const estructura = [
@@ -158,3 +145,61 @@ function setupDatabase() {
   }
 }
 
+function TEST_DIAGNOSTICO_F5() {
+  // 1. PEGA AQUÍ EL TOKEN QUE COPIASTE DEL NAVEGADOR
+  const tokenPrueba = "4c5e690d-3fd3-450a-b56b-49e8fd55040d"; 
+
+  Logger.log("--- INICIANDO TEST DE PERSISTENCIA ---");
+  
+  // A. Buscar el token en la hoja SESIONES
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shSes = ss.getSheetByName('SESIONES');
+  const dataSes = shSes.getDataRange().getValues();
+  
+  let idUsuario = null;
+  
+  for (let i = 1; i < dataSes.length; i++) {
+    if (String(dataSes[i][0]) === String(tokenPrueba)) { // Columna A = Token
+      idUsuario = dataSes[i][1]; // Columna B = ID Usuario
+      Logger.log("✅ Token encontrado en fila " + (i+1));
+      Logger.log("   ID de Usuario vinculado: " + idUsuario);
+      break;
+    }
+  }
+  
+  if (!idUsuario) {
+    Logger.log("❌ ERROR: El token no existe en la hoja SESIONES.");
+    return;
+  }
+  
+  // B. Buscar al usuario en la hoja USUARIOS (Aquí suele fallar por las columnas)
+  const shUs = ss.getSheetByName('USUARIOS');
+  const dataUs = shUs.getDataRange().getValues();
+  let usuarioEncontrado = false;
+  
+  for (let i = 1; i < dataUs.length; i++) {
+    if (String(dataUs[i][0]) === String(idUsuario)) { // Columna A = ID
+      usuarioEncontrado = true;
+      Logger.log("✅ Usuario encontrado en fila " + (i+1));
+      Logger.log("   Nombre: " + dataUs[i][1]);
+      
+      // VERIFICACIÓN CRÍTICA DE COLUMNAS
+      const estadoActivo = dataUs[i][6]; // Columna G (Índice 6)
+      Logger.log("   Estado (Col G / Index 6): " + estadoActivo);
+      
+      if (String(estadoActivo).toUpperCase() === 'SI') {
+        Logger.log("🟢 RESULTADO: Login debería funcionar. El usuario está ACTIVO.");
+      } else {
+        Logger.log("🔴 RESULTADO: Login falla. El estado no es 'SI'.");
+        Logger.log("   (Revisa si estás leyendo la columna correcta)");
+      }
+      break;
+    }
+  }
+  
+  if (!usuarioEncontrado) {
+    Logger.log("❌ ERROR: El ID de usuario " + idUsuario + " no existe en la hoja USUARIOS.");
+  }
+  
+  Logger.log("--- FIN DEL TEST ---");
+}

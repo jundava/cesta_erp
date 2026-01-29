@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Helvetica, sans-serif; padding: 40px; color: #333; }
+    .header { border-bottom: 2px solid #E06920; padding-bottom: 10px; margin-bottom: 20px; }
+    h2 { margin: 0; color: #E06920; }
+    p { margin: 0; }
+    .info-box { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: #333; color: white; padding: 8px; }
+    td { padding: 8px; border-bottom: 1px solid #eee; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .text-left { text-align: left; }
+    .total-row td { padding: 10px; font-weight: bold; background-color: #fff; border-bottom: none; }
+    .footer { font-size: 10px; color: #777; margin-top: 30px; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>NOTA DE REMISIÓN</h2>
+    <p>Nro: <strong><?= datos.numero ?></strong></p>
+    <p>Fecha: <?= new Date(datos.fecha).toLocaleDateString('es-PY') ?></p>
+  </div>
+
+  <div class="info-box">
+    <p><strong>Destinatario:</strong> <?= datos.nombre_cliente || 'Cliente' ?></p>
+    <p><strong>Enviado por:</strong> <?= datos.conductor || '---' ?> </p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="text-center">Cant.</th>
+        <th class="text-left">Descripción</th>
+        <th class="text-right">Precio Ref.</th>
+        <th class="text-right">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? datos.items.forEach(function(i) { ?>
+        <tr>
+          <td class="text-center"><?= i.cantidad ?></td>
+          <td class="text-left"><?= i.nombre_prod || 'Producto' ?></td>
+          <td class="text-right"><?= Number(i.precio).toLocaleString('es-PY') ?></td>
+          <td class="text-right"><?= (i.cantidad * i.precio).toLocaleString('es-PY') ?></td>
+        </tr>
+      <? }); ?>
+      
+      <tr class="total-row">
+        <td colspan="3" class="text-right">TOTAL VALORIZADO:</td>
+        <td class="text-right">Gs. <?= Number(datos.total).toLocaleString('es-PY') ?></td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Recibido por:</strong> <?= datos.chapa || '---' ?></p> <br>
+  <p><strong>Firma: ________________________________________________</strong>
+  <p><strong>Fecha: ____/____/_______</strong><br>
+  <p class="footer">Documento válido para traslado de mercaderías.</p>
+
+</body>
+</html>

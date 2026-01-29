@@ -15,6 +15,7 @@
 <style>
       /* Ajuste para que las alertas no se vean gigantes */
       .swal2-popup { font-size: 0.9rem !important; }
+      .swal2-container {z-index: 20000 !important;}
       /* =========================================
          🎨 PALETA DE COLORES CESTA
       ========================================= */
@@ -290,9 +291,9 @@
           </div>
         </div>
       </div>
-      <div v-if="cargando" class="loading-overlay">
-        <div class="spinner-border text-brand mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
-        <div class="text-muted fw-bold">Procesando...</div>
+      <div v-if="cargando" class="loading-overlay" style="background-color: rgba(209, 209, 209, 0.6);">
+          <div class="spinner-border text-brand mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
+          <div class="text-muted fw-bold">Procesando...</div>
       </div>
 
       <nav class="navbar navbar-dark bg-brand shadow sticky-top z-3">
@@ -1134,12 +1135,12 @@
                                         </select>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small">Conductor (Opcional)</label>
-                                        <input type="text" class="form-control" v-model="formRemision.conductor" placeholder="Nombre del chofer">
+                                        <label class="form-label small">Entregado por</label>
+                                        <input type="text" class="form-control" v-model="formRemision.conductor" placeholder="Indicar Nombre Completo">
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small">Chapa / Vehículo (Opcional)</label>
-                                        <input type="text" class="form-control" v-model="formRemision.chapa" placeholder="ABC-123">
+                                        <label class="form-label small">Recibido por</label>
+                                        <input type="text" class="form-control" v-model="formRemision.chapa" placeholder="Indicar Nombre Completo">
                                     </div>
                                 </div>
                             </div>
@@ -2870,11 +2871,6 @@
                 'https://api.dicebear.com/7.x/avataaars/svg?seed=Zoe',
                 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jack'
             ],
-
-            usuarioForm: {
-                // ... otros campos ...
-                avatar: '', // <--- CAMPO PARA GUARDAR LA URL
-            },
             
             formDeposito: { nombre:'', direccion:'', responsable:'', activo:'Si' },
             formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false },
@@ -2899,6 +2895,7 @@
                 password: '',
                 rol: 'OPERADOR',
                 permisos: [],
+                avatar: '',
                 activo: 'SI'
             },
 
@@ -3099,7 +3096,7 @@
 
             // 2. LÓGICA DE SESIÓN PERSISTENTE
             const tokenGuardado = localStorage.getItem('session_token');
-            
+
             if (tokenGuardado) {
                 this.cargando = true;
                 google.script.run
@@ -3108,19 +3105,37 @@
                         if (res) {
                             // ¡Sesión válida!
                             this.usuarioLogueado = res;
-                            try { this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos); } catch(e) { this.permisos = []; }
+                            try { 
+                                this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos); 
+                            } catch(e) { 
+                                this.permisos = []; 
+                            }
                             
                             // Solo cargamos datos si hay sesión
                             this.cargarDatosIniciales();
-                            this.cargarDashboard();
                             
-                            // Restaurar vista anterior si existe en history
-                            if(history.state && history.state.vista) {
+                            // --- LÓGICA DE NAVEGACIÓN (CORREGIDA) ---
+                            
+                            // 1. Intentamos recuperar del Historial del Navegador (F5 inmediato)
+                            if (history.state && history.state.vista) {
                                 this.vistaActual = history.state.vista;
+                            } 
+                            // 2. Si no hay historial, intentamos recuperar de LocalStorage (Cerrar/Abrir pestaña)
+                            else if (localStorage.getItem('ultima_vista')) {
+                                this.vistaActual = localStorage.getItem('ultima_vista');
+                                // Actualizamos el history para que empiece bien
+                                window.history.replaceState({ vista: this.vistaActual }, null, '');
+                            } 
+                            // 3. Si todo falla, vamos al Dashboard
+                            else {
+                                this.vistaActual = 'dashboard';
+                                window.history.replaceState({ vista: 'dashboard' }, null, '');
                             }
+
                         } else {
                             // Token inválido/expirado
                             localStorage.removeItem('session_token');
+                            localStorage.removeItem('ultima_vista'); // Limpiamos rastro
                             this.usuarioLogueado = null;
                         }
                     })
@@ -3131,17 +3146,28 @@
                     })
                     .retomarSesion(tokenGuardado);
             } 
-            // Nota: Si no hay token, no llamamos a cargarDatosIniciales() aquí.
-            // Se llamará cuando el usuario haga Login manual.
 
             // 3. CONFIGURACIÓN DEL HISTORIAL (Botón Atrás)
-            window.history.replaceState({ vista: 'ventas' }, null, '');
             window.onpopstate = (event) => {
                 if (event.state && event.state.vista) {
                     this.vistaActual = event.state.vista;
+                    // Guardamos también en local por si da F5 justo después de volver atrás
+                    localStorage.setItem('ultima_vista', event.state.vista);
                     this.cerrarMenuMovil();
                 }
             };
+        },
+        watch: {
+            vistaActual(nuevaVista) {
+                // 1. Guardar en memoria persistente (LocalStorage)
+                localStorage.setItem('ultima_vista', nuevaVista);
+
+                // 2. Guardar en historial de navegación (Browser History)
+                // Solo empujamos estado si es diferente al actual del historial (para evitar bucles)
+                if (!history.state || history.state.vista !== nuevaVista) {
+                    window.history.pushState({ vista: nuevaVista }, null, '');
+                }
+            }
         },
         methods: {
             // --- HELPER PARA NOTIFICACIONES ---
@@ -3876,22 +3902,47 @@
                 
                 this.cargando = true;
                 const cli = this.clientes.find(c => c.id_cliente == this.formRemision.id_cliente);
+                
                 const paquete = { 
                     ...this.formRemision, 
                     items: this.carritoRemision, 
-                    nombre_cliente: cli ? cli.razon_social : 'Cliente' 
+                    nombre_cliente: cli ? cli.razon_social : 'Cliente',
+                    usuario_editor: this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador'
                 };
 
-                google.script.run.withSuccessHandler(res => {
+                google.script.run
+                    .withSuccessHandler(res => {
                         this.cargando = false;
-                        if(res.pdf_url) window.open(res.pdf_url, '_blank');
-                        this.notificar('success', `Remisión ${res.numero} generada`);
+                        
+                        // Limpieza
                         this.carritoRemision = [];
-                        this.cargarDatosIniciales(); 
+                        this.cargarDatosIniciales();
+
+                        // --- ESTILO VENTAS ---
+                        // Usamos los botones NATIVOS de SweetAlert.
+                        // El botón "Confirmar" actuará como el botón de "Abrir PDF".
+                        if (res && res.pdf_url) {
+                            Swal.fire({
+                                title: 'Remisión Generada',
+                                text: `Nro: ${res.numero}. ¿Deseas ver el PDF?`,
+                                icon: 'success',
+                                showCancelButton: true,       // Muestra botón "Cerrar"
+                                confirmButtonColor: '#E06920', // Tu color Naranja
+                                confirmButtonText: 'Ver PDF',  // Texto del botón principal
+                                cancelButtonText: 'Cerrar'
+                            }).then((result) => {
+                                // Si el usuario hace clic en el botón Naranja (Confirmar)
+                                if (result.isConfirmed) {
+                                    window.open(res.pdf_url, '_blank');
+                                }
+                            });
+                        } else {
+                            this.notificar('success', `Remisión ${res.numero} guardada.`);
+                        }
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        this.notificar('error', "Error al guardar remisión: " + e);
+                        this.notificar('error', "Error: " + e);
                     })
                     .guardarRemision(paquete);
             },

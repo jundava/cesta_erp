@@ -18,13 +18,15 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
+
 /**
  * Función GENÉRICA para leer datos de cualquier tabla
  * Convierte las filas de la hoja en objetos JSON
  * @param {string} sheetName - Nombre exacto de la pestaña (ej: 'PRODUCTOS')
  */
 function getData(sheetName) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+  const ss = SpreadsheetApp.openById(SS_ID); // Tu ID
   const sheet = ss.getSheetByName(sheetName);
   
   if (!sheet) return []; // Si no existe la hoja, devuelve lista vacía
@@ -59,7 +61,7 @@ function getData(sheetName) {
  * @param {Object} producto - Objeto JSON enviado desde Vue.js
  */
 function guardarNuevoProducto(producto) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('PRODUCTOS');
   
   const idUnico = Utilities.getUuid();
@@ -90,7 +92,7 @@ function guardarNuevoProducto(producto) {
  * Actualiza un producto existente
  */
 function actualizarProducto(producto) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('PRODUCTOS');
   const data = ws.getDataRange().getValues();
   
@@ -158,7 +160,7 @@ function actualizarProducto(producto) {
  * Elimina un producto SOLO si no tiene historial
  */
 function eliminarProducto(idProducto) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   
   // 1. CHEQUEO DE SEGURIDAD (Integridad Referencial)
   // Verificamos si el ID existe en Ventas o Compras
@@ -197,7 +199,7 @@ function eliminarProducto(idProducto) {
 }
 
 function guardarNuevoProveedor(form) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('PROVEEDORES');
   const idUnico = Utilities.getUuid();
   
@@ -421,7 +423,7 @@ function guardarCompraCompleta(compra) {
 }
 
 function obtenerHistorialCompras() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const hoja = ss.getSheetByName('COMPRAS_CABECERA');
   const hojaProv = ss.getSheetByName('PROVEEDORES');
   
@@ -476,7 +478,7 @@ function obtenerHistorialCompras() {
 // ==========================================
 
 function obtenerClientes() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+  const ss = SpreadsheetApp.openById(SS_ID); // Tu ID
   const sheet = ss.getSheetByName('CLIENTES');
   
   if (!sheet || sheet.getLastRow() <= 1) return [];
@@ -503,7 +505,7 @@ function obtenerClientes() {
 }
 
 function guardarNuevoCliente(form) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+  const ss = SpreadsheetApp.openById(SS_ID); // Tu ID
   const ws = ss.getSheetByName('CLIENTES');
   const id = Utilities.getUuid();
   
@@ -1053,7 +1055,7 @@ function crearPDFFactura1(datos, items) {
 }
 
 function obtenerHistorialVentas() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const hojaVentas = ss.getSheetByName('VENTAS_CABECERA');
   const hojaClientes = ss.getSheetByName('CLIENTES');
   
@@ -1096,7 +1098,7 @@ function obtenerHistorialVentas() {
 // ==========================================
 
 function actualizarCliente(form) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('CLIENTES');
   const datos = ws.getDataRange().getValues();
   
@@ -1120,7 +1122,7 @@ function actualizarCliente(form) {
 }
 
 function eliminarCliente(idCliente) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   
   // 1. VALIDACIÓN DE SEGURIDAD: ¿Tiene ventas?
   const hojaVentas = ss.getSheetByName('VENTAS_CABECERA');
@@ -1151,7 +1153,7 @@ function eliminarCliente(idCliente) {
 // ==========================================
 
 function eliminarProveedor(idProveedor) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   
   // 1. VALIDACIÓN DE SEGURIDAD: ¿Tiene compras?
   const hojaCompras = ss.getSheetByName('COMPRAS_CABECERA');
@@ -1178,7 +1180,7 @@ function eliminarProveedor(idProveedor) {
 }
 
 function actualizarProveedor(form) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('PROVEEDORES');
   const datos = ws.getDataRange().getValues();
   for (let i = 1; i < datos.length; i++) {
@@ -1201,7 +1203,7 @@ function actualizarProveedor(form) {
 // =======================================================
 
 function obtenerDetalleCompra(idCompra) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const hojaDet = ss.getSheetByName('COMPRAS_DETALLE'); // Asegúrate que la hoja se llame así
   const hojaProd = ss.getSheetByName('PRODUCTOS');
 
@@ -1245,7 +1247,7 @@ function obtenerDetalleCompra(idCompra) {
 }
 
 function obtenerDetalleVenta(idVenta) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const hojaDet = ss.getSheetByName('VENTAS_DETALLE');
   const hojaProd = ss.getSheetByName('PRODUCTOS');
 
@@ -1297,7 +1299,7 @@ function anularVenta(idVenta, nombreUsuario) {
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   // ⚠️ Asegúrate de que este ID sea el correcto de tu hoja actual
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   
   const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
   const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
@@ -1390,7 +1392,7 @@ function anularCompra(idCompra, usuario) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado"; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
   const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
   const sheetProd = ss.getSheetByName('PRODUCTOS');
@@ -1516,7 +1518,7 @@ function anularCompra(idCompra, usuario) {
 
 function obtenerDepositos() {
   // Leemos la hoja tal cual la mostraste
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('DEPOSITOS');
   if(!ws || ws.getLastRow() <= 1) return [];
   
@@ -1538,7 +1540,7 @@ function obtenerDepositos() {
 }
 
 function guardarDeposito(form) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('DEPOSITOS');
   
   if(form.id_deposito) {
@@ -1565,7 +1567,7 @@ function guardarDeposito(form) {
 }
 
 function eliminarDeposito(id) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   
   // A. VALIDAR USO EN VENTAS (Columna E de VENTAS_CABECERA es index 4)
   const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
@@ -1603,7 +1605,7 @@ function eliminarDeposito(id) {
 // --- GESTIÓN DE CAMPOS ADICIONALES (CORREGIDO) ---
 
 function obtenerConfigCampos() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   let ws = ss.getSheetByName('CONFIG_CAMPOS');
   
   // Si no existe la hoja, la creamos con las cabeceras correctas
@@ -1634,7 +1636,7 @@ function obtenerConfigCampos() {
 }
 
 function guardarCampoConfig(form) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   let ws = ss.getSheetByName('CONFIG_CAMPOS');
   
   // Seguridad: Crear hoja si fue borrada
@@ -1668,7 +1670,7 @@ function guardarCampoConfig(form) {
 }
 
 function eliminarCampoConfig(id) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const ws = ss.getSheetByName('CONFIG_CAMPOS');
   const datos = ws.getDataRange().getValues();
   for(let i=1; i<datos.length; i++) {
@@ -1733,7 +1735,7 @@ function crearPDFVenta(datosVenta, listaItems) {
 // ==========================================
 
 function generarUrlTicket(idVenta) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
   const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
   const sheetProd = ss.getSheetByName('PRODUCTOS');
@@ -1843,7 +1845,7 @@ function crearPDFOrdenCompra(datosCompra, listaItems) {
  * Actualiza STOCK_EXISTENCIAS (Detalle) y PRODUCTOS (Total Global)
  */
 function actualizarStockDeposito(idProducto, idDeposito, cantidadCambio) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
   const sheetProd = ss.getSheetByName('PRODUCTOS');
   
@@ -1884,7 +1886,7 @@ function actualizarStockDeposito(idProducto, idDeposito, cantidadCambio) {
  * Obtener stock específico de un depósito
  */
 function obtenerStockLocal(idProducto, idDeposito) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
   
   // Si no existe la hoja, devolvemos 0 (seguridad para inicio del sistema)
@@ -1905,7 +1907,7 @@ function obtenerStockLocal(idProducto, idDeposito) {
  * Obtiene los productos con el desglose de stock por depósito
  */
 function obtenerProductosConStock() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheetProd = ss.getSheetByName('PRODUCTOS');
   const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
   const sheetDep = ss.getSheetByName('DEPOSITOS');
@@ -1968,7 +1970,7 @@ function obtenerProductosConStock() {
 
 // ID de la Hoja (Lo definimos una vez para no repetirlo)
 // Si el script está dentro de la hoja, puedes usar SpreadsheetApp.getActiveSpreadsheet() directamente.
-const SPREADSHEET_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'; 
+const SPREADSHEET_ID = SS_ID; 
 
 /**
  * Función MAESTRA para guardar cualquier configuración.
@@ -2073,9 +2075,6 @@ function obtenerConfigRemision() {
   return obtenerValorConfig('ULTIMO_NRO_REMISION') || "001-001-0000000";
 }
 
-function guardarConfigRemision(nuevoValor, usuario) {
-  return guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoValor, usuario);
-}
 
 // ==========================================
 // TRANSFERENCIAS DE STOCK
@@ -2085,7 +2084,7 @@ function guardarTransferencia(datos) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheetCab = ss.getSheetByName('TRANSFERENCIAS_CABECERA');
   const sheetDet = ss.getSheetByName('TRANSFERENCIAS_DETALLE');
   const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
@@ -2164,7 +2163,7 @@ function crearPDFTransferencia(datos, items) {
 }
 
 function obtenerHistorialTransferencias() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const sheet = ss.getSheetByName('TRANSFERENCIAS_CABECERA');
   const sheetDep = ss.getSheetByName('DEPOSITOS');
   if(!sheet || sheet.getLastRow() <= 1) return [];
@@ -2388,11 +2387,6 @@ function obtenerConfigRemision() {
   return obtenerValorConfig('ULTIMO_NRO_REMISION') || '001-001-0000000';
 }
 
-function guardarConfigRemision(nro) {
-  guardarValorConfig('ULTIMO_NRO_REMISION', nro);
-  return true;
-}
-
 // 2. Generar siguiente número (Lógica inteligente)
 function generarSiguienteRemision() {
   const actual = obtenerConfigRemision();
@@ -2407,11 +2401,15 @@ function generarSiguienteRemision() {
 }
 
 // 3. Guardar Remisión (Descuenta stock y guarda precios)
+
+
 function guardarRemision(datos) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const usuarioActivo = datos.usuario_editor || "Sistema";
+
+  const ss = SpreadsheetApp.openById(SS_ID);
   const shCab = ss.getSheetByName('REMISIONES_CABECERA');
   const shDet = ss.getSheetByName('REMISIONES_DETALLE');
   const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
@@ -2472,7 +2470,7 @@ function guardarRemision(datos) {
   });
 
   // F. Actualizar Configuración con el nuevo número
-  guardarConfigRemision(nuevoNumero);
+  guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoNumero, usuarioActivo);
 
   lock.releaseLock();
   return { success: true, pdf_url: urlPdf, numero: nuevoNumero };
@@ -2483,7 +2481,7 @@ function facturarRemision(remision) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const shRemCab = ss.getSheetByName('REMISIONES_CABECERA');
   const shRemDet = ss.getSheetByName('REMISIONES_DETALLE'); // Necesitamos leer los items originales
   
@@ -2510,55 +2508,37 @@ function facturarRemision(remision) {
 // 5. PDF Remisión (Actualizado con Precios)
 function crearPDFRemision(datos) {
   try {
-    const html = `
-      <html>
-        <body style="font-family: Helvetica, sans-serif; padding: 40px; color:#333;">
-          <div style="border-bottom: 2px solid #E06920; padding-bottom:10px; margin-bottom:20px;">
-            <h2 style="margin:0; color:#E06920;">NOTA DE REMISIÓN</h2>
-            <p style="margin:0;">Nro: <strong>${datos.numero}</strong></p>
-            <p style="margin:0;">Fecha: ${new Date(datos.fecha).toLocaleDateString('es-PY')}</p>
-          </div>
-          
-          <div style="background:#f9f9f9; padding:15px; border-radius:5px; margin-bottom:20px;">
-            <p><strong>Destinatario:</strong> ${datos.nombre_cliente || 'Cliente'}</p>
-            <p><strong>Transporte:</strong> ${datos.conductor || '---'} (Chapa: ${datos.chapa || '---'})</p>
-          </div>
-
-          <table style="width:100%; border-collapse: collapse; font-size:12px;">
-            <tr style="background:#333; color:white;">
-              <th style="padding:8px; text-align:center;">Cant.</th>
-              <th style="padding:8px; text-align:left;">Descripción</th>
-              <th style="padding:8px; text-align:right;">Precio Ref.</th>
-              <th style="padding:8px; text-align:right;">Subtotal</th>
-            </tr>
-            ${datos.items.map(i => `
-              <tr style="border-bottom:1px solid #eee;">
-                <td style="padding:8px; text-align:center;">${i.cantidad}</td>
-                <td style="padding:8px;">${i.nombre_prod || 'Producto'}</td>
-                <td style="padding:8px; text-align:right;">${Number(i.precio).toLocaleString('es-PY')}</td>
-                <td style="padding:8px; text-align:right;">${(i.cantidad * i.precio).toLocaleString('es-PY')}</td>
-              </tr>`).join('')}
-             <tr>
-                <td colspan="3" style="text-align:right; padding:10px; font-weight:bold;">TOTAL VALORIZADO:</td>
-                <td style="text-align:right; padding:10px; font-weight:bold;">Gs. ${Number(datos.total).toLocaleString('es-PY')}</td>
-             </tr>
-          </table>
-          <p style="font-size:10px; color:#777; margin-top:30px; text-align:center;">Documento válido para traslado de mercaderías.</p>
-        </body>
-      </html>
-    `;
+    // 1. Cargar la plantilla HTML
+    const template = HtmlService.createTemplateFromFile('Remision');
     
-    const blob = Utilities.newBlob(html, "text/html", "Remision.html");
+    // 2. Pasar los datos a la plantilla (para que <?= datos.numero ?> funcione)
+    template.datos = datos;
+    
+    // 3. Evaluar la plantilla (convierte las variables en texto final HTML)
+    const htmlContenido = template.evaluate().getContent();
+
+    // 4. Crear el Blob y el PDF (Igual que antes)
+    const blob = Utilities.newBlob(htmlContenido, "text/html", "Remision.html");
     const pdf = blob.getAs("application/pdf").setName("Remision_" + datos.numero + ".pdf");
-    const carpeta = DriveApp.getFoldersByName("CESTA_REMISIONES").hasNext() ? DriveApp.getFoldersByName("CESTA_REMISIONES").next() : DriveApp.createFolder("CESTA_REMISIONES");
+    
+    // 5. Guardar en Drive
+    const carpetas = DriveApp.getFoldersByName("CESTA_REMISIONES");
+    const carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder("CESTA_REMISIONES");
+    
+    // Configurar permisos (Opcional, cuidado con Access.ANYONE si manejas datos sensibles)
     carpeta.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    // 6. Retornar URL
     return carpeta.createFile(pdf).getUrl();
-  } catch(e) { return "ERROR_PDF: " + e.message; }
+    
+  } catch(e) { 
+    return "ERROR_PDF: " + e.message; 
+  }
 }
 
 // Agrega esto en Code.gs
 function obtenerDetalleRemisionParaFacturar(idRemision) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const data = ss.getSheetByName('REMISIONES_DETALLE').getDataRange().getValues();
   const items = [];
   
@@ -2582,7 +2562,7 @@ function obtenerDetalleRemisionParaFacturar(idRemision) {
 
 function obtenerHistorialRemisiones() {
   try {
-    const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+    const ss = SpreadsheetApp.openById(SS_ID);
     const sh = ss.getSheetByName('REMISIONES_CABECERA');
     const shCli = ss.getSheetByName('CLIENTES');
     
@@ -2654,7 +2634,7 @@ function anularRemision(idRemision) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SS_ID);
   const shCab = ss.getSheetByName('REMISIONES_CABECERA');
   const shDet = ss.getSheetByName('REMISIONES_DETALLE');
   const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
