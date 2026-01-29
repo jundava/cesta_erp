@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
 <style>
       /* Ajuste para que las alertas no se vean gigantes */
@@ -474,14 +475,21 @@
                                 <form @submit.prevent="agregarAlCarritoVenta">
                                     <div class="row g-2 align-items-end">
                                         <div class="col-md-6">
-                                            <label class="form-label small fw-bold">Producto</label>
+                                        <label class="form-label small fw-bold">Producto</label>
+                                        <div class="input-group">
+                                            <button class="btn btn-dark" type="button" @click="abrirEscaner" title="Escanear Código de Barras">
+                                                <i class="bi bi-qr-code-scan"></i>
+                                            </button>
+                                            
                                             <select class="form-select form-select-lg" v-model="lineaVenta.id_producto" required @change="alSeleccionarProductoVenta">
-                                                <option value="" disabled>🔍 Buscar producto...</option>
+                                                <option value="" disabled>🔍 Buscar o Escanear...</option>
                                                 <option v-for="p in productos" :value="p.id_producto" :disabled="(p.stock_actual||0) <= 0">
                                                     {{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{ formatoMoneda(p.precio_venta_base) }}
                                                 </option>
                                             </select>
                                         </div>
+                                    </div>
+
                                         <div class="col-md-2 col-4">
                                             <label class="form-label small">Cantidad</label>
                                             <input type="number" class="form-control form-control-lg" v-model.number="lineaVenta.cantidad" min="1" required>
@@ -2539,6 +2547,23 @@
         </div>
     </div>    
 
+    <div class="modal fade" id="modalScanner" tabindex="-1" data-bs-backdrop="static">
+          <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                  <div class="modal-header bg-light text-dark"> 
+                      <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>Escanear Producto</h5>
+                      <button type="button" class="btn-close btn-close-white" @click="detenerEscaner"></button>
+                  </div>
+                  <div class="modal-body p-0 bg-light">
+                      <div id="reader" style="width: 100%;"></div>
+                  </div>
+                  <div class="modal-footer justify-content-center bg-light">
+                      <small class="text-muted fw-bold">Apunta la cámara al código de barras</small>
+                  </div>
+              </div>
+          </div>
+      </div>
+
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -2570,6 +2595,9 @@
             permisos: [],
             loginData: { usuario: '', password: '' },
             vistaActual: 'dashboard',
+
+            html5QrcodeScanner: null, // Instancia del escáner
+            modalScanner: null,       // Instancia del modal Bootstrap
 
             perfilForm: {
                 id_usuario: '',
@@ -2822,8 +2850,8 @@
               });
             }
       },
-        mounted() {
-            // Inicializar componentes de Bootstrap
+      mounted() {
+            // 1. Inicializar TODOS los componentes de Bootstrap (Modales)
             this.modalDep = new bootstrap.Modal(document.getElementById('modalDeposito'));
             this.modalCmp = new bootstrap.Modal(document.getElementById('modalCampo'));
             this.modalProd = new bootstrap.Modal(document.getElementById('modalProducto'));
@@ -2832,20 +2860,67 @@
             this.modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
             this.modalCat = new bootstrap.Modal(document.getElementById('modalCategoria'));
             
-            // Cargar datos
-            this.cargarDatosIniciales();
+            // Referencia al modal del escáner (Importante para el fix de cámara)
+            const scannerElement = document.getElementById('modalScanner');
+            this.modalScanner = new bootstrap.Modal(scannerElement);
 
-            // --- LÓGICA DEL BOTÓN ATRÁS (NUEVO) ---
-            // 1. Crear el estado inicial
+            // --- ESCÁNER: FIX PARA APAGAR CÁMARA AL CERRAR ---
+            scannerElement.addEventListener('hidden.bs.modal', () => {
+                if (this.html5QrcodeScanner) {
+                    try {
+                        this.html5QrcodeScanner.stop().then(() => {
+                            this.html5QrcodeScanner.clear();
+                            this.html5QrcodeScanner = null;
+                        }).catch(err => {
+                            this.html5QrcodeScanner.clear();
+                            this.html5QrcodeScanner = null;
+                        });
+                    } catch(e) { this.html5QrcodeScanner = null; }
+                }
+            });
+
+            // 2. LÓGICA DE SESIÓN PERSISTENTE
+            const tokenGuardado = localStorage.getItem('session_token');
+            
+            if (tokenGuardado) {
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        if (res) {
+                            // ¡Sesión válida!
+                            this.usuarioLogueado = res;
+                            try { this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos); } catch(e) { this.permisos = []; }
+                            
+                            // Solo cargamos datos si hay sesión
+                            this.cargarDatosIniciales();
+                            this.cargarDashboard();
+                            
+                            // Restaurar vista anterior si existe en history
+                            if(history.state && history.state.vista) {
+                                this.vistaActual = history.state.vista;
+                            }
+                        } else {
+                            // Token inválido/expirado
+                            localStorage.removeItem('session_token');
+                            this.usuarioLogueado = null;
+                        }
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        console.error("Error al retomar sesión", e);
+                        localStorage.removeItem('session_token');
+                    })
+                    .retomarSesion(tokenGuardado);
+            } 
+            // Nota: Si no hay token, no llamamos a cargarDatosIniciales() aquí.
+            // Se llamará cuando el usuario haga Login manual.
+
+            // 3. CONFIGURACIÓN DEL HISTORIAL (Botón Atrás)
             window.history.replaceState({ vista: 'ventas' }, null, '');
-
-            // 2. Escuchar cuando el usuario presiona "Atrás"
             window.onpopstate = (event) => {
                 if (event.state && event.state.vista) {
-                    // Si hay un estado guardado, volvemos a esa vista
                     this.vistaActual = event.state.vista;
-                    
-                    // Si estamos volviendo al menú principal, cerramos cualquier menú lateral abierto
                     this.cerrarMenuMovil();
                 }
             };
@@ -2872,6 +2947,68 @@
                 if (v === 'usuarios') {
                     this.cargarUsuarios();
                 }
+            },
+
+            abrirEscaner() {
+                this.modalScanner.show();
+                
+                // Esperamos 500ms a que el modal se dibuje para iniciar la cámara
+                setTimeout(() => {
+                    this.html5QrcodeScanner = new Html5Qrcode("reader");
+                    
+                    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                    
+                    // 'environment' fuerza la cámara trasera del celular
+                    this.html5QrcodeScanner.start({ facingMode: "environment" }, config, this.alEscanearExito)
+                    .catch(err => {
+                        this.modalScanner.hide();
+                        // Usamos tu notificar (SweetAlert)
+                        this.notificar('error', "No se pudo acceder a la cámara. Revisa los permisos.");
+                        console.error(err);
+                    });
+                }, 500);
+            },
+
+            alEscanearExito(decodedText, decodedResult) {
+                // 1. Detener escáner inmediatamente para evitar lecturas dobles
+                this.detenerEscaner(); 
+
+                console.log(`Código escaneado: ${decodedText}`);
+
+                // 2. Buscar producto por SKU (Código de barras) en tu lista local
+                // Asumimos que el campo 'sku' es donde guardas el código de barras
+                const productoEncontrado = this.productos.find(p => String(p.sku).trim() === String(decodedText).trim());
+
+                if (productoEncontrado) {
+                    // 3. Efecto de sonido (Beep) - Opcional pero satisfactorio
+                    const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                    audio.play().catch(e => console.log("Audio bloqueado"));
+
+                    // 4. Seleccionar el producto en el formulario
+                    this.lineaVenta.id_producto = productoEncontrado.id_producto;
+                    
+                    // 5. Ejecutar la lógica de precio (para cargar el precio correcto)
+                    this.alSeleccionarProductoVenta();
+                    
+                    // 6. Notificar con SweetAlert (Toast)
+                    this.notificar('success', "Encontrado: " + productoEncontrado.nombre);
+
+                    // Opcional: ¿Quieres que se agregue al carrito automáticamente?
+                    // Descomenta las siguientes 2 líneas si quieres auto-agregar:
+                    // this.lineaVenta.cantidad = 1;
+                    // this.agregarAlCarritoVenta();
+
+                } else {
+                    this.notificar('warning', "Producto no encontrado: " + decodedText);
+                    // Opcional: Volver a abrir el escáner si falló
+                    // setTimeout(() => this.abrirEscaner(), 2000);
+                }
+            },
+
+            detenerEscaner() {
+                // Al ocultar el modal, se dispara el evento 'hidden.bs.modal' 
+                // que definimos en mounted(), el cual apagará la cámara automáticamente.
+                this.modalScanner.hide();
             },
 
             renderizarGraficoVentas() {
@@ -3075,22 +3212,28 @@
             },
 
             guardarMiPerfil() {
-                if(!confirm("¿Confirmar cambios en tu perfil?")) return;
-
-                this.cargando = true;
-                google.script.run
-                    .withSuccessHandler(res => {
-                        this.cargando = false;
-                        // Actualizamos la sesión en vivo con los nuevos datos
-                        this.usuarioLogueado = res.usuarioActualizado;
-                        this.notificar('success', "Perfil actualizado correctamente");
-                        this.vistaActual = 'dashboard';
-                    })
-                    .withFailureHandler(error => {
-                        this.cargando = false;
-                        this.notificar('error', "Error: " + error);
-                    })
-                    .actualizarMiPerfil(this.perfilForm);
+                Swal.fire({
+                    title: '¿Guardar cambios?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, guardar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.cargando = true;
+                        google.script.run
+                            .withSuccessHandler(res => {
+                                this.cargando = false;
+                                this.usuarioLogueado = res.usuarioActualizado;
+                                this.notificar('success', "Perfil actualizado correctamente");
+                                this.vistaActual = 'dashboard';
+                            })
+                            .withFailureHandler(error => {
+                                this.cargando = false;
+                                this.notificar('error', "Error: " + error);
+                            })
+                            .actualizarMiPerfil(this.perfilForm);
+                    }
+                });
             },
 
             editarUsuario(u) {
@@ -3099,7 +3242,7 @@
                     rol: u.rol,
                     permisos: this.parsearPermisos(u.modulos),
                     activo: u.activo,
-                    avatar: u.avatar || '' // <--- CARGAR AVATAR
+                    avatar: u.avatar || '' 
                 };
             },
 
@@ -3111,9 +3254,17 @@
 
             iniciarSesion() {
                 this.cargando = true;
-                google.script.run.withSuccessHandler(res => {
+                google.script.run
+                    .withSuccessHandler(res => {
                         this.cargando = false;
                         this.usuarioLogueado = res;
+                        
+                        // --- NUEVO: Guardar sesión persistente ---
+                        if (res.token) {
+                            localStorage.setItem('session_token', res.token);
+                        }
+                        // ----------------------------------------
+
                         try { this.permisos = res.rol === 'ADMIN' ? ['todo'] : JSON.parse(res.modulos); } catch(e) { this.permisos = []; }
                         this.cargarDatosIniciales();
                         this.cargarDashboard();
@@ -3223,12 +3374,19 @@
                     cancelButtonText: 'Cancelar'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        const token = localStorage.getItem('session_token');
+                        if (token) google.script.run.cerrarSesionServidor(token);
+
+                        // Borrar del navegador
+                        localStorage.removeItem('session_token');
+                        
                         this.usuarioLogueado = null;
                         this.loginData = { usuario: '', password: '' };
                         this.vistaActual = 'dashboard';
                     }
                 });
             },
+
             obtenerNombreDia(fechaStr) {
             const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             return dias[new Date(fechaStr).getDay()];
@@ -3461,10 +3619,13 @@
 
             guardarConfigRemision() {
                 this.cargando = true;
+                const usuario = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+
                 google.script.run.withSuccessHandler(() => {
                     this.cargando = false;
                     this.notificar('success', "Secuencia de remisión actualizada");
-                }).guardarConfigRemision(this.configRemisionActual);
+                })
+                .guardarConfigRemision(this.configRemisionActual, usuario);
             },
 
             // LÓGICA DE REMISIÓN MEJORADA (CON PRECIOS Y AUTO-NUM)
@@ -3775,30 +3936,55 @@
                     this.cargarDatosIniciales(); 
                 }).guardarCampoConfig(this.formCampo); 
             },
-            eliminarCampo(item) { if(!confirm("¿Borrar campo?")) return; this.cargando=true; google.script.run.withSuccessHandler(() => { this.cargando=false; this.cargarDatosIniciales(); }).eliminarCampoConfig(item.id_campo); },
+
+            eliminarCampo(item) { 
+                  Swal.fire({
+                      title: '¿Borrar Campo?',
+                      text: item.etiqueta_visible,
+                      icon: 'warning',
+                      showCancelButton: true,
+                      confirmButtonColor: '#d33',
+                      confirmButtonText: 'Sí, borrar'
+                  }).then((r) => {
+                      if(r.isConfirmed) {
+                          this.cargando = true; 
+                          google.script.run.withSuccessHandler(() => { 
+                              this.cargando = false; 
+                              this.cargarDatosIniciales(); 
+                              this.notificar('success', 'Campo eliminado');
+                          }).eliminarCampoConfig(item.id_campo); 
+                      }
+                  });
+              },
             
-          guardarConfigFactura() { 
+            guardarConfigFactura() { 
                 this.cargando = true; 
+                // Obtenemos el usuario
+                const usuario = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+                
                 google.script.run.withSuccessHandler(() => { 
                     this.cargando = false; 
                     this.notificar('success', "Numeración de facturación actualizada"); 
-                }).guardarConfigFactura(this.configFacturaActual); 
+                })
+                // Enviamos (valor, usuario)
+                .guardarConfigFactura(this.configFacturaActual, usuario); 
             },
 
             guardarConfigDepositoDefault() {
                 this.cargando = true;
+                const usuario = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
                         this.notificar('success', "Depósito predeterminado guardado.");
-                        // Recargamos datos para asegurar que se aplique en todos lados
                         this.cargarDatosIniciales(); 
                     })
                     .withFailureHandler(err => {
                         this.cargando = false;
-                        this.notificar('error', "Error: " + err);
+                        this.notificar('error', err);
                     })
-                    .guardarConfigGeneral('DEPOSITO_DEFAULT', this.depositoDefault);
+                    .guardarConfigGeneral('DEPOSITO_DEFAULT', this.depositoDefault, usuario); // Enviamos usuario al final
             },
 
             // MODALES MAESTROS
@@ -3969,6 +4155,8 @@
 
                   console.log("Enviando al servidor:", productoLimpio);
 
+                  this.formProducto.usuario_editor = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+
                   // 4. Llamada al servidor
                   google.script.run
                       .withSuccessHandler((res) => {
@@ -3991,7 +4179,30 @@
                       })
                       [funcionBackend](productoLimpio);
               },
-            eliminarProducto(item) { if(!confirm("¿Borrar?")) return; this.cargando=true; google.script.run.withSuccessHandler(r => { this.cargando=false; if(r.success) this.cargarDatosIniciales(); else this.notificar('error', r.error) }).eliminarProducto(item.id_producto); },
+
+              eliminarProducto(item) { 
+                Swal.fire({
+                    title: '¿Borrar Producto?',
+                    text: item.nombre,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Sí, borrar'
+                }).then((r) => {
+                    if(r.isConfirmed) {
+                        this.cargando = true; 
+                        google.script.run.withSuccessHandler(res => { 
+                            this.cargando = false; 
+                            if(res.success) {
+                                this.cargarDatosIniciales();
+                                this.notificar('success', 'Producto eliminado');
+                            } else {
+                                this.notificar('error', res.error);
+                            }
+                        }).eliminarProducto(item.id_producto); 
+                    }
+                });
+            },
 
             // TRANSACCIONES
             alSeleccionarProductoVenta() { 
@@ -4080,7 +4291,37 @@
                     .obtenerDetalleVenta(h.id_venta);
             },
             cargarHistorialVentas() { this.subVistaVentas='historial'; this.cargando=true; google.script.run.withSuccessHandler(r=>{this.historialVentas=r||[]; this.cargando=false;}).obtenerHistorialVentas(); },
-            anularVenta(h) { if(!confirm("¿Anular?")) return; this.cargando=true; google.script.run.withSuccessHandler(()=>{this.cargando=false; this.notificar('success', 'Anulada'); this.cargarHistorialVentas(); this.cargarDatosIniciales();}).anularVenta(h.id_venta); },
+
+            anularVenta(h) { 
+                  Swal.fire({ 
+                      title: '¿Anular Venta?', 
+                      text: `Factura: ${h.factura}. Se devolverá el stock.`,
+                      icon: 'warning', 
+                      showCancelButton: true, 
+                      confirmButtonColor: '#d33', 
+                      confirmButtonText: 'Sí, anular',
+                      cancelButtonText: 'Cancelar'
+                  }).then((result) => {
+                      if (result.isConfirmed) {
+                          this.cargando = true; 
+                          // Obtenemos usuario para la bitácora
+                          const usuarioActual = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+
+                          google.script.run.withSuccessHandler(() => {
+                              this.cargando = false; 
+                              this.notificar('success', 'Venta anulada correctamente'); 
+                              this.cargarHistorialVentas(); 
+                              this.cargarDatosIniciales();
+                          })
+                          .withFailureHandler(e => {
+                              this.cargando = false;
+                              this.notificar('error', e);
+                          })
+                          .anularVenta(h.id_venta, this.usuarioLogueado.nombre);
+                      }
+                  });
+              },
+
             agregarAlCarrito() { this.carritoCompra.push({...this.lineaTemp}); this.lineaTemp={id_producto:'', cantidad:'', costo:''}; },
             quitarDelCarrito(i) { this.carritoCompra.splice(i,1); },
             limpiarCarrito() { this.carritoCompra=[]; this.formCompra={id_proveedor:'', fecha: new Date().toISOString().slice(0,10), comprobante: ''}; },
@@ -4138,19 +4379,28 @@
             anularCompra(h) { 
                 Swal.fire({ 
                     title: '¿Anular Compra?', 
+                    text: "El stock ingresado será descontado.", 
                     icon: 'warning', 
                     showCancelButton: true, 
                     confirmButtonColor: '#d33', 
-                    confirmButtonText: 'Sí, anular' 
+                    confirmButtonText: 'Sí, anular',
+                    cancelButtonText: 'Cancelar'
                 }).then((result) => {
                     if (result.isConfirmed) {
                         this.cargando = true; 
-                        google.script.run.withSuccessHandler(() => {
-                            this.cargando = false; 
-                            this.notificar('success', "Anulada correctamente"); 
-                            this.cargarHistorial(); 
-                            this.cargarDatosIniciales();
-                        }).anularCompra(h.id_compra); 
+                        
+                        google.script.run
+                            .withSuccessHandler(() => {
+                                this.cargando = false; 
+                                this.notificar('success', "Compra anulada correctamente"); 
+                                this.cargarHistorial(); 
+                                this.cargarDatosIniciales();
+                            })
+                            .withFailureHandler(e => {
+                                this.cargando = false;
+                                this.notificar('error', "Error: " + e);
+                            })
+                            .anularCompra(h.id_compra);
                     }
                 });
             }

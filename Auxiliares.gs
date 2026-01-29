@@ -105,6 +105,10 @@ function setupDatabase() {
     {
       nombre: "GASTOS",
       cols: ["id_gasto", "fecha", "categoria", "descripcion", "monto", "metodo_pago"]
+    },
+    {
+      nombre: "SESIONES",
+      cols: ["token", "id_usuario", "fecha_creacion", "fecha_ultimo_uso"]
     }
   ];
 

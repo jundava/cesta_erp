@@ -102,7 +102,14 @@ function actualizarProducto(producto) {
 
   const fila = index + 1; // +1 porque Apps Script cuenta filas desde 1
   
-  // Actualizamos datos básicos
+  // --- 1. CAPTURA DE DATOS ANTIGUOS PARA AUDITORÍA ---
+  // Leemos lo que hay AHORA antes de sobrescribirlo
+  const filaDatos = data[index];
+  const nombreViejo = filaDatos[2]; // Columna C (índice 2)
+  const precioViejo = filaDatos[5]; // Columna F (índice 5)
+  const skuActual   = filaDatos[1]; // Columna B (índice 1)
+
+  // --- 2. ACTUALIZAMOS LOS DATOS EN LA HOJA (Tu código original) ---
   ws.getRange(fila, 2).setValue(producto.sku);           // Col B
   ws.getRange(fila, 3).setValue(producto.nombre);        // Col C
   ws.getRange(fila, 4).setValue(producto.id_categoria);  // Col D
@@ -110,24 +117,43 @@ function actualizarProducto(producto) {
   ws.getRange(fila, 6).setValue(producto.precio_venta_base); // Col F
   ws.getRange(fila, 8).setValue(producto.stock_minimo);  // Col H
   
-  // --- ACTUALIZACIÓN DE NUEVOS CAMPOS ---
+  // Actualización de nuevos campos
+  ws.getRange(fila, 9).setValue(producto.impuesto_iva);  // Col I
+  ws.getRange(fila, 11).setValue(JSON.stringify(producto.datos_adicionales || {})); // Col K
   
-  // Columna I (9) -> Impuesto IVA
-  ws.getRange(fila, 9).setValue(producto.impuesto_iva); 
-  
-  // Columna K (11) -> JSON Datos Adicionales
-  ws.getRange(fila, 11).setValue(JSON.stringify(producto.datos_adicionales || {}));
-  
-  // Columna L (12) -> Imagen (Solo actualizamos si hay una nueva URL)
+  // Imagen (Solo si hay URL nueva)
   if (producto.url_imagen) {
     ws.getRange(fila, 12).setValue(producto.url_imagen); 
   }
   
-  // Columna N (14) -> Método IVA (Corregido: antes intentabas escribir "metodo_iva" sin "producto.")
+  // Método IVA
   ws.getRange(fila, 14).setValue(producto.metodo_iva); 
+  
+  // --- 3. DETECCIÓN DE CAMBIOS Y REGISTRO EN BITÁCORA (NUEVO) ---
+  let cambios = [];
+
+  // Detectar cambio de Precio (Convertimos a Number para evitar falsos positivos por texto)
+  if (Number(precioViejo) != Number(producto.precio_venta_base)) {
+    cambios.push(`Precio: ${precioViejo} ➝ ${producto.precio_venta_base}`);
+  }
+
+  // Detectar cambio de Nombre
+  if (String(nombreViejo).trim() != String(producto.nombre).trim()) {
+    cambios.push(`Nombre: '${nombreViejo}' ➝ '${producto.nombre}'`);
+  }
+
+  // Si hubo cambios sensibles, registramos el evento
+  if (cambios.length > 0) {
+    const usuarioEditor = producto.usuario_editor || "Sistema"; // Viene del frontend o fallback
+    const detalleLog = `Producto SKU: ${skuActual}. Cambios: ${cambios.join(", ")}`;
+    
+    // Llamada a la función de auditoría (asegúrate de tener registrarEvento en Code.gs)
+    registrarEvento(usuarioEditor, "EDICIÓN PRODUCTO", detalleLog);
+  }
   
   return { status: 'actualizado' };
 }
+
 /**
  * Elimina un producto SOLO si no tiene historial
  */
@@ -1259,54 +1285,65 @@ function obtenerDetalleVenta(idVenta) {
 // ANULACIONES Y REVERSIONES
 // ==========================================
 
-function anularVenta(idVenta) {
+function anularVenta(idVenta, nombreUsuario) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
+  // ⚠️ Asegúrate de que este ID sea el correcto de tu hoja actual
   const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  
   const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
   const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const sheetProd = ss.getSheetByName('PRODUCTOS'); // Necesario para devolver stock
+  // const sheetProd = ss.getSheetByName('PRODUCTOS'); // (No se usa directo aquí, sino en la función auxiliar)
   
   const dataCab = sheetCab.getDataRange().getValues();
   
-  // 1. Marcar como ANULADO y ELIMINAR DEUDA
-  let fechaVenta = new Date();
+  // Variables para la Bitácora
+  let nroFactura = "S/N";
+  let totalVenta = 0;
   let encontrado = false;
 
+  // 1. Marcar como ANULADO y ELIMINAR DEUDA
   for (let i = 1; i < dataCab.length; i++) {
-    if (dataCab[i][0] === idVenta) {
-      if (dataCab[i][6] === 'ANULADO') throw "La venta ya estaba anulada.";
+    if (String(dataCab[i][0]) === String(idVenta)) {
+      if (dataCab[i][6] === 'ANULADO') {
+        lock.releaseLock();
+        throw "La venta ya estaba anulada.";
+      }
       
-      fechaVenta = dataCab[i][2]; // Guardamos fecha original para el kardex (opcional)
+      // Capturamos datos para el Log antes de borrar nada
+      nroFactura = dataCab[i][3]; // Asumiendo Columna D es Factura
+      totalVenta = dataCab[i][5]; // Asumiendo Columna F es Total
 
-      // A. Cambiar estado
-      sheetCab.getRange(i + 1, 7).setValue("ANULADO"); // Columna G
+      // A. Cambiar estado a ANULADO (Columna G / índice 6)
+      sheetCab.getRange(i + 1, 7).setValue("ANULADO"); 
       
-      // B. Borrar saldo pendiente (IMPORTANTE PARA CUENTAS CORRIENTES)
-      // Si la venta era a crédito, ahora no deben nada.
-      sheetCab.getRange(i + 1, 10).setValue(0);       // Columna J (saldo_pendiente)
+      // B. Borrar saldo pendiente (Columna J / índice 9)
+      // Importante para que no le cobren al cliente una venta cancelada
+      sheetCab.getRange(i + 1, 10).setValue(0);       
 
       encontrado = true;
       break;
     }
   }
 
-  if (!encontrado) throw "Venta no encontrada.";
+  if (!encontrado) {
+    lock.releaseLock();
+    throw "Venta no encontrada.";
+  }
 
   // 2. Revertir Movimientos de Stock (Devolver mercadería)
-  // Buscamos los movimientos originales de esta venta
   const dataMov = sheetMov.getDataRange().getValues();
   const movimientosRevertir = [];
 
   for(let i=1; i < dataMov.length; i++){
-     // Si la referencia (Col G/6) coincide con el ID Venta
-     if(dataMov[i][6] == idVenta && dataMov[i][2] == 'SALIDA_VENTA'){
+     // Si la referencia (Col G/6) coincide con el ID Venta y es una salida
+     if(String(dataMov[i][6]) == String(idVenta) && dataMov[i][2] == 'SALIDA_VENTA'){
         const idProd = dataMov[i][3];
         const idDep = dataMov[i][4];
         const cantSalida = Number(dataMov[i][5]); // Es negativo (ej: -5)
 
-        // Creamos movimiento contrario (positivo)
+        // Creamos movimiento contrario (positivo) para que sume al stock
         movimientosRevertir.push([
            Utilities.getUuid(),
            new Date(), // Fecha actual de anulación
@@ -1317,15 +1354,26 @@ function anularVenta(idVenta) {
            idVenta
         ]);
 
-        // Actualizamos Stock Real (usando tu función auxiliar)
+        // Actualizamos Stock Real en hoja PRODUCTOS/DEPOSITOS
+        // (Esta función debe existir en tu archivo Code.gs o Auxiliares.gs)
         actualizarStockDeposito(idProd, idDep, Math.abs(cantSalida));
      }
   }
 
-  // Guardar devoluciones en lotes
+  // Guardar devoluciones en lotes en MOVIMIENTOS_STOCK
   if(movimientosRevertir.length > 0){
     sheetMov.getRange(sheetMov.getLastRow()+1, 1, movimientosRevertir.length, 7).setValues(movimientosRevertir);
   }
+
+  // 3. 🕵️‍♂️ REGISTRO EN BITÁCORA (NUEVO)
+  // Se guarda: Quién lo hizo, Qué hizo y Detalles (Factura y Monto)
+  const detalleLog = `Se anuló la Factura N° ${nroFactura} por valor de ${totalVenta}. Stock retornado.`;
+  
+  // Usamos el usuario que viene del frontend, o 'Sistema' si falló la captura
+  const usuarioLog = nombreUsuario || "Sistema";
+  
+  // Asegúrate de tener la función registrarEvento en tu Code.gs
+  registrarEvento(usuarioLog, "ANULAR VENTA", detalleLog);
 
   lock.releaseLock();
   return { success: true };
@@ -1577,35 +1625,6 @@ function eliminarCampoConfig(id) {
 }
 
 // --- 3. NUMERACIÓN DE FACTURACIÓN AUTOMÁTICA ---
-
-function obtenerConfigFactura() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  if(!sheet) return "001-001-0000000"; // Default si no existe
-  
-  const datos = sheet.getDataRange().getValues();
-  for(let i=0; i<datos.length; i++) {
-    if(datos[i][0] === 'ULTIMO_NRO_FACTURA') return datos[i][1];
-  }
-  return "001-001-0000000";
-}
-
-function guardarConfigFactura(nuevoValor) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  if(!sheet) sheet = ss.insertSheet('CONFIG_GENERAL');
-  
-  const datos = sheet.getDataRange().getValues();
-  for(let i=0; i<datos.length; i++) {
-    if(datos[i][0] === 'ULTIMO_NRO_FACTURA') {
-      sheet.getRange(i+1, 2).setValue(nuevoValor);
-      return { success: true };
-    }
-  }
-  // Si no existe la fila, la creamos
-  sheet.appendRow(['ULTIMO_NRO_FACTURA', nuevoValor]);
-  return { success: true };
-}
 
 // Función auxiliar para sumar +1 al string de factura
 function incrementarFactura(actual) {
@@ -1891,48 +1910,82 @@ function obtenerProductosConStock() {
 // CONFIGURACIÓN GENERAL
 // ==========================================
 
+// ID de la Hoja (Lo definimos una vez para no repetirlo)
+// Si el script está dentro de la hoja, puedes usar SpreadsheetApp.getActiveSpreadsheet() directamente.
+const SPREADSHEET_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'; 
+
 /**
- * Guarda o actualiza una configuración general
+ * Función MAESTRA para guardar cualquier configuración.
+ * Maneja la creación de la hoja, actualización/inserción y el LOG DE AUDITORÍA.
  */
-function guardarConfigGeneral(clave, valor) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE'); // Tu ID
+function guardarConfigGeneral(clave, valor, usuario) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName('CONFIG_GENERAL');
   
+  // Si no existe, la crea
   if (!sheet) {
     sheet = ss.insertSheet('CONFIG_GENERAL');
-    sheet.appendRow(['clave', 'valor']); // Cabecera opcional
+    sheet.appendRow(['CLAVE', 'VALOR']);
+    sheet.getRange("A1:B1").setFontWeight("bold");
   }
 
   const datos = sheet.getDataRange().getValues();
   let encontrado = false;
+  let valorAnterior = "";
 
+  // Buscamos si la clave ya existe
   for (let i = 0; i < datos.length; i++) {
-    if (datos[i][0] === clave) {
+    if (String(datos[i][0]) === String(clave)) {
+      valorAnterior = datos[i][1];
       sheet.getRange(i + 1, 2).setValue(valor); // Actualiza valor (Columna B)
       encontrado = true;
       break;
     }
   }
 
+  // Si no existe, creamos nueva fila
   if (!encontrado) {
-    sheet.appendRow([clave, valor]); // Crea nueva fila si no existe
+    sheet.appendRow([clave, valor]);
+  }
+
+  // --- REGISTRO EN BITÁCORA ---
+  // Solo registramos si hubo un cambio real o es un valor nuevo
+  if (String(valorAnterior) !== String(valor)) {
+    const userLog = usuario || "Sistema";
+    let detalle = `Configuración [${clave}] modificada.`;
+    
+    // Personalizamos el mensaje para claves conocidas
+    if (clave === 'DEPOSITO_DEFAULT') {
+      detalle = `Depósito Predeterminado cambiado de '${valorAnterior}' a '${valor}'`;
+    } else if (clave === 'ULTIMO_NRO_FACTURA') {
+      detalle = `Secuencia Factura actualizada a: ${valor}`;
+    } else if (clave === 'ULTIMO_NRO_REMISION') {
+      detalle = `Secuencia Remisión actualizada a: ${valor}`;
+    } else {
+      detalle += ` Valor: ${valor}`;
+    }
+
+    // Llamamos a tu función de bitácora (asegúrate de tenerla en Code.gs)
+    registrarEvento(userLog, "CONFIGURACIÓN", detalle);
   }
   
   return { success: true };
 }
 
 /**
- * Obtiene toda la configuración general como un objeto
+ * Obtiene toda la configuración como un objeto {clave: valor}
+ * Útil para cargar al iniciar la app.
  */
 function obtenerConfigGeneral() {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName('CONFIG_GENERAL');
   if (!sheet) return {};
 
   const datos = sheet.getDataRange().getValues();
   const config = {};
 
-  for (let i = 0; i < datos.length; i++) {
+  // Empezamos en 1 si hay cabecera, o 0 si no. Asumimos cabecera en fila 1.
+  for (let i = 1; i < datos.length; i++) {
     const clave = datos[i][0];
     const valor = datos[i][1];
     if (clave) {
@@ -1940,6 +1993,32 @@ function obtenerConfigGeneral() {
     }
   }
   return config;
+}
+
+/**
+ * Obtiene un valor específico por su clave.
+ */
+function obtenerValorConfig(clave) {
+  const config = obtenerConfigGeneral(); // Reutilizamos la función anterior para no repetir lógica
+  return config[clave] || null;
+}
+
+// --- WRAPPERS (Funciones específicas que usan la maestra) ---
+
+function obtenerConfigFactura() {
+  return obtenerValorConfig('ULTIMO_NRO_FACTURA') || "001-001-0000000";
+}
+
+function guardarConfigFactura(nuevoValor, usuario) {
+  return guardarConfigGeneral('ULTIMO_NRO_FACTURA', nuevoValor, usuario);
+}
+
+function obtenerConfigRemision() {
+  return obtenerValorConfig('ULTIMO_NRO_REMISION') || "001-001-0000000";
+}
+
+function guardarConfigRemision(nuevoValor, usuario) {
+  return guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoValor, usuario);
 }
 
 // ==========================================
@@ -2445,44 +2524,6 @@ function obtenerDetalleRemisionParaFacturar(idRemision) {
 //  FUNCIONES AUXILIARES DE CONFIGURACIÓN (FALTABAN ESTAS)
 // =========================================================
 
-function obtenerValorConfig(clave) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  const sheet = ss.getSheetByName('CONFIG_GENERAL');
-  if (!sheet) return null;
-
-  const data = sheet.getDataRange().getValues();
-  for(let i=0; i<data.length; i++) {
-    // Comparamos la Clave (Columna A)
-    if(data[i][0] == clave) return data[i][1]; // Retorna el Valor (Columna B)
-  }
-  return null;
-}
-
-function guardarValorConfig(clave, valor) {
-  const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  
-  if (!sheet) {
-    sheet = ss.insertSheet('CONFIG_GENERAL');
-    sheet.appendRow(['clave', 'valor']);
-  }
-
-  const data = sheet.getDataRange().getValues();
-  let encontrado = false;
-
-  for(let i=0; i<data.length; i++) {
-    if(data[i][0] == clave) {
-      sheet.getRange(i+1, 2).setValue(valor); // Actualiza valor existente
-      encontrado = true;
-      break;
-    }
-  }
-
-  if(!encontrado) {
-    sheet.appendRow([clave, valor]); // Crea nueva fila si no existe
-  }
-}
-
 function obtenerHistorialRemisiones() {
   try {
     const ss = SpreadsheetApp.openById('1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE');
@@ -2925,27 +2966,47 @@ function eliminarGasto(idGasto) {
   }
 }
 
-function loginUsuario(usuario, password) {
+function loginUsuario(user, pass) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('USUARIOS');
-  const data = sh.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    // Col 2: email/usuario, Col 3: password
-    if (String(data[i][2]) === usuario && String(data[i][3]) === password) {
-      if (data[i][6] === "NO") throw "Usuario inactivo.";
+  const ws = ss.getSheetByName('USUARIOS');
+  
+  if(!ws) throw new Error("No existe la hoja de USUARIOS");
+  
+  const data = ws.getDataRange().getValues();
+  
+  for(let i = 1; i < data.length; i++) {
+    // Columna C (2) = Usuario, Columna D (3) = Contraseña
+    // Usamos String() y trim() para evitar errores por espacios invisibles o formatos de número
+    if(String(data[i][2]).trim().toLowerCase() === String(user).trim().toLowerCase() && 
+       String(data[i][3]).trim() === String(pass).trim()) {
       
-      return {
-        success: true,
+      // --- CORRECCIÓN AQUÍ: Usar índice 6 (Columna G) para Activo ---
+      // Si dice "NO", bloqueamos. Si dice cualquier otra cosa (SI, Si, Admin, vacío), dejamos pasar.
+      if(String(data[i][6]).toUpperCase() === 'NO') throw new Error("Usuario inactivo");
+      
+      const usuarioEncontrado = {
         id_usuario: data[i][0],
         nombre: data[i][1],
-        rol: data[i][4],
-        modulos: data[i][5], // Esto es un string JSON ej: "['ventas','dashboard']"
+        email: data[i][2],
+        password: data[i][3],
+        // Rol estaba en Columna E (índice 4)
+        rol: data[i][4], 
+        // Módulos en Columna F (índice 5)
+        modulos: data[i][5],
+        // Activo en Columna G (índice 6)
+        activo: data[i][6],
+        // Avatar en Columna H (índice 7)
         avatar: data[i][7] || ''
       };
+
+      // Generar Token de sesión
+      const token = crearSesion(usuarioEncontrado);
+      usuarioEncontrado.token = token; 
+      
+      return usuarioEncontrado;
     }
   }
-  throw "Usuario o contraseña incorrectos.";
+  throw new Error("Credenciales incorrectas");
 }
 
 // ==========================================
@@ -3869,5 +3930,127 @@ function generarReporte(peticion) {
   }
 
   return { cabeceras: cabeceras, filas: filas, totales: totales };
+}
+
+/**
+ * Genera un Token único y guarda la sesión en la hoja SESIONES
+ */
+function crearSesion(usuario) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ws = ss.getSheetByName('SESIONES');
+  
+  // Generar un token aleatorio simple
+  const token = Utilities.getUuid(); 
+  const fecha = new Date();
+  
+  // Guardar en la hoja: Token | ID Usuario | Creación | Último Uso
+  ws.appendRow([token, usuario.id_usuario, fecha, fecha]);
+  
+  return token;
+}
+
+/**
+ * Verifica si un token es válido y devuelve el usuario asociado
+ */
+function retomarSesion(token) {
+  if (!token) return null;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shSes = ss.getSheetByName('SESIONES');
+  if (!shSes) return null;
+  
+  const data = shSes.getDataRange().getValues();
+  
+  // Buscar token en Columna A (0)
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] == token) {
+      const idUsuario = data[i][1]; // El ID está en Columna B (1)
+      return buscarUsuarioPorID(idUsuario);
+    }
+  }
+  return null;
+}
+
+/**
+ * Función auxiliar para obtener usuario por ID (usada por retomarSesion)
+ */
+function buscarUsuarioPorID(id) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ws = ss.getSheetByName('USUARIOS');
+  const data = ws.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    // Columna A (0) = ID
+    // Columna G (6) = Activo (Antes estabas mirando la 4)
+    if (String(data[i][0]) === String(id)) {
+      
+       // Si no está activo, retornamos null (forzar logout)
+       if (String(data[i][6]).toUpperCase() !== 'SI') return null;
+
+       return {
+        id_usuario: data[i][0],
+        nombre: data[i][1],
+        email: data[i][2],
+        password: data[i][3], 
+        rol: data[i][4],      // Columna E
+        modulos: data[i][5],  // Columna F
+        activo: data[i][6],   // Columna G
+        avatar: data[i][7] || '' // Columna H
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Elimina la sesión (Logout)
+ */
+function cerrarSesionServidor(token) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ws = ss.getSheetByName('SESIONES');
+  const data = ws.getDataRange().getValues();
+  
+  // Buscar y borrar la fila del token
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] == token) {
+      ws.deleteRow(i + 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 🕵️‍♂️ SISTEMA DE AUDITORÍA (BITÁCORA)
+ * Registra eventos críticos del sistema.
+ * @param {string} usuario - Nombre del usuario que realiza la acción.
+ * @param {string} accion - Tipo de acción (ej: "ELIMINAR VENTA", "CAMBIO PRECIO").
+ * @param {string} detalle - Descripción detallada (valores antes/después).
+ */
+function registrarEvento(usuario, accion, detalle) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ws = ss.getSheetByName('BITACORA');
+  
+  // 1. Si no existe la hoja, la creamos y configuramos
+  if (!ws) {
+    ws = ss.insertSheet('BITACORA');
+    // Cabeceras
+    ws.appendRow(['FECHA', 'HORA', 'USUARIO', 'ACCIÓN', 'DETALLE']);
+    // Formato visual
+    ws.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#333333').setFontColor('white');
+    ws.setColumnWidth(1, 100); // Fecha
+    ws.setColumnWidth(2, 80);  // Hora
+    ws.setColumnWidth(3, 150); // Usuario
+    ws.setColumnWidth(4, 150); // Acción
+    ws.setColumnWidth(5, 400); // Detalle
+    // Opcional: Ocultar la hoja para que no la toquen manualmente
+    // ws.hideSheet(); 
+  }
+  
+  const fecha = new Date();
+  const fechaStr = Utilities.formatDate(fecha, Session.getScriptTimeZone(), "dd/MM/yyyy");
+  const horaStr = Utilities.formatDate(fecha, Session.getScriptTimeZone(), "HH:mm:ss");
+  
+  // 2. Insertar el registro (appendRow es atómico y seguro)
+  ws.appendRow([fechaStr, horaStr, usuario, accion, detalle]);
 }
 
