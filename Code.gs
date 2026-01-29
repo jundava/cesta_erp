@@ -2889,9 +2889,12 @@ function guardarGasto(datos) {
   if (!sh) throw "No se encontró la hoja GASTOS.";
 
   const id = Utilities.getUuid();
-  const fecha = new Date(datos.fecha);
-  // Ajuste horario para que no se guarde con hora anterior
-  fecha.setHours(12,0,0,0);
+  
+  // --- CORRECCIÓN DE FECHA ---
+  // Al agregar "T12:00:00" al texto, forzamos a que la fecha nazca al mediodía.
+  // Así, aunque el sistema reste 3 o 4 horas por la zona horaria, 
+  // seguirá siendo el mismo día (ej: caerá a las 08:00 AM o 09:00 AM del día 29).
+  const fecha = new Date(datos.fecha + "T12:00:00");
 
   sh.appendRow([
     id,
@@ -2901,6 +2904,9 @@ function guardarGasto(datos) {
     Number(datos.monto),
     datos.metodo
   ]);
+
+  // (Opcional) Si quieres registrar esto en la bitácora, descomenta esta línea:
+  // registrarEvento(datos.usuario_editor || "Sistema", "NUEVO GASTO", `Monto: ${datos.monto} (${datos.categoria})`);
 
   lock.releaseLock();
   return { success: true };
@@ -2935,7 +2941,7 @@ function obtenerGastos() {
   return lista.reverse();
 }
 
-function eliminarGasto(idGasto) {
+function eliminarGasto(idGasto, usuario) { 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
@@ -2946,17 +2952,24 @@ function eliminarGasto(idGasto) {
 
   const data = sh.getDataRange().getValues();
   let filaEncontrada = -1;
+  
+  // Variables temporales para el log
+  let monto = 0;
+  let descripcion = "";
 
-  // Buscar el ID en la columna A (índice 0)
-  // Empezamos en 1 para saltar encabezados
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(idGasto)) {
-      filaEncontrada = i + 1; // +1 porque el array empieza en 0 y la hoja en 1
+      filaEncontrada = i + 1;      
+      descripcion = data[i][3]; 
+      monto = data[i][4];
       break;
     }
   }
 
   if (filaEncontrada > 0) {
+    const quien = usuario || "Sistema";
+    registrarEvento(quien, "ELIMINAR GASTO", `Se borró gasto de ${monto} Gs. (${descripcion})`);
+    
     sh.deleteRow(filaEncontrada);
     lock.releaseLock();
     return { success: true };

@@ -3435,32 +3435,37 @@
                     .obtenerGastos();
             },
 
-          eliminarGasto(item) {
-                Swal.fire({ 
-                    title: '¿Eliminar Gasto?', 
-                    text: `${item.categoria}: ${this.formatoMoneda(item.monto)}`, 
-                    icon: 'warning', 
-                    showCancelButton: true, 
-                    confirmButtonColor: '#d33', 
-                    confirmButtonText: 'Sí, eliminar' 
-                })
-                .then((result) => {
+            eliminarGasto(item) {
+                Swal.fire({
+                    title: '¿Eliminar Gasto?',
+                    text: `${item.categoria}: ${this.formatoMoneda(item.monto)}`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
                     if (result.isConfirmed) {
                         this.cargando = true;
-                        google.script.run.withSuccessHandler(() => {
-                            this.cargando = false;
-                            this.listaGastos = this.listaGastos.filter(g => g.id_gasto !== item.id_gasto);
-                            this.notificar('success', "Gasto eliminado.");
-                        })
-                        .withFailureHandler(e => {
-                            this.cargando = false;
-                            this.notificar('error', "Error: " + e);
-                        })
-                        .eliminarGasto(item.id_gasto);
+                        
+                        // 1. Obtenemos el usuario para la bitácora
+                        const usuario = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+
+                        google.script.run
+                            .withSuccessHandler(() => {
+                                this.cargando = false;
+                                this.notificar('success', "Gasto eliminado.");
+                                this.cargarGastos(); 
+                            })
+                            .withFailureHandler(e => {
+                                this.cargando = false;
+                                this.notificar('error', "Error: " + e);
+                            })
+                            // 3. Enviamos ID y USUARIO al backend
+                            .eliminarGasto(item.id_gasto, usuario);
                     }
                 });
             },
-
           guardarAjuste() {
               if (!this.formAjuste.id_producto || !this.formAjuste.id_deposito) return this.notificar('warning', "Completa todos los datos.");
               if (this.formAjuste.cantidad <= 0) return this.notificar('warning', "Cantidad inválida.");
