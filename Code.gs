@@ -758,9 +758,15 @@ function guardarVenta(venta) {
     // 2. Generación de Datos
     const idVenta = Utilities.getUuid();
     // Asegurar fecha correcta
-    const fecha = new Date(venta.fecha); 
-    // Ajuste de zona horaria simple para que no reste un día
-    fecha.setHours(12,0,0,0); 
+    // Forzamos que la fecha nazca a las 12:00 del mediodía para evitar
+    // que la zona horaria reste horas y caiga al día anterior.
+    let fechaSegura;
+    if (venta.fecha && typeof venta.fecha === 'string' && !venta.fecha.includes('T')) {
+        fechaSegura = new Date(venta.fecha + "T12:00:00");
+    } else {
+        // Fallback si ya es objeto o viene vacía
+        fechaSegura = venta.fecha ? new Date(venta.fecha) : new Date();
+    }
     
     // Auto-incremental
     let nroFacturaFinal = venta.nro_factura;
@@ -833,7 +839,7 @@ function guardarVenta(venta) {
 
     // Generar PDF
     const datosParaPDF = {
-        fecha: fecha.toLocaleDateString('es-PY'),
+        fecha: fechaSegura.toLocaleDateString('es-PY'),
         nro_factura: nroFacturaFinal,
         cliente_nombre: nombreCli,
         cliente_doc: docCli,
@@ -855,7 +861,7 @@ function guardarVenta(venta) {
     sheetCab.appendRow([
       idVenta,
       nroFacturaFinal,
-      fecha,
+      fechaSegura,
       venta.id_cliente,
       depositoUsado,
       totalGeneral,
@@ -3186,7 +3192,7 @@ function cambiarPassword(idUsuario, passActual, passNueva) {
 // 📊 DASHBOARD Y ANALÍTICA
 // ==========================================
 
-function obtenerDatosDashboard() {
+function obtenerDatosDashboardA() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Fechas Clave
@@ -3290,6 +3296,181 @@ function obtenerDatosDashboard() {
 
   // ------------------------------------------------
   // RETORNO ESTRUCTURADO (Coincide con tu HTML)
+  // ------------------------------------------------
+  return {
+    kpi: {
+      ventasHoy: ventasHoy,
+      ventasMes: ventasMes,
+      gastosMes: gastosMes,
+      stockBajo: alertasStock
+    },
+    flujoCaja: {
+      ingresoActual: ingresoActual,
+      ingresoPasado: ingresoPasado,
+      gastoActual: gastoActual,
+      gastoPasado: gastoPasado,
+      balanceActual: ingresoActual - gastoActual
+    },
+    grafico: {
+      labels: fechasLabels,
+      data: fechasLabels.map(f => ultimos7Dias[f])
+    }
+  };
+}
+
+function obtenerDatosDashboard() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const timeZone = Session.getScriptTimeZone();
+  
+  // Fechas Clave
+  const ahora = new Date();
+  const hoyStr = Utilities.formatDate(ahora, timeZone, "dd/MM/yyyy");
+  const mesActualStr = Utilities.formatDate(ahora, timeZone, "MM/yyyy");
+  
+  // Calcular Mes Pasado
+  let fechaPasado = new Date();
+  fechaPasado.setMonth(fechaPasado.getMonth() - 1);
+  const mesPasadoStr = Utilities.formatDate(fechaPasado, timeZone, "MM/yyyy");
+
+  // --- FUNCIONES AUXILIARES DE LIMPIEZA ---
+  // Convierte cualquier cosa a número real (Maneja "100.000" y 100000)
+  const parseNum = (val) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    // Si es texto, quitamos puntos de miles y cambiamos coma decimal por punto
+    let limpio = String(val).replace(/\./g, '').replace(',', '.');
+    return parseFloat(limpio) || 0;
+  };
+
+  // Convierte texto DD/MM/YYYY a Objeto Fecha real
+  const parseFecha = (val) => {
+    if (val instanceof Date) return val;
+    if (!val) return null;
+    try {
+      // Si viene como string "29/01/2026"
+      const partes = String(val).split('/');
+      if (partes.length === 3) {
+        return new Date(partes[2], partes[1] - 1, partes[0]);
+      }
+      return new Date(val); // Intento final estándar
+    } catch(e) { return null; }
+  };
+
+  // ------------------------------------------------
+  // 1. PROCESAR VENTAS (KPIs + Gráfico + Flujo)
+  // ------------------------------------------------
+  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
+  const dataVentas = shVentas ? shVentas.getDataRange().getValues() : [];
+  
+  let ventasHoy = 0;
+  let ventasMes = 0;
+  let ingresoActual = 0;
+  let ingresoPasado = 0;
+
+  // Inicializar Gráfico 7 Días
+  let ultimos7Dias = {}; 
+  let fechasLabels = [];
+  for (let d = 6; d >= 0; d--) {
+    let f = new Date();
+    f.setDate(f.getDate() - d);
+    let fLabel = Utilities.formatDate(f, timeZone, "dd/MM");
+    fechasLabels.push(fLabel);
+    ultimos7Dias[fLabel] = 0; 
+  }
+
+  // Recorremos Ventas (Empezamos en 1 para saltar cabecera)
+  for (let i = 1; i < dataVentas.length; i++) {
+    let row = dataVentas[i];
+    
+    // Verificamos columna Estado (Índice 6)
+    if (String(row[6]).toUpperCase() === 'ANULADO') continue;
+
+    // Parseo Seguro de Fecha (Índice 2)
+    let fechaVenta = parseFecha(row[2]);
+    if (!fechaVenta || isNaN(fechaVenta.getTime())) continue;
+
+    // Parseo Seguro de Monto (Índice 5)
+    let monto = parseNum(row[5]);
+    
+    let diaVentaStr = Utilities.formatDate(fechaVenta, timeZone, "dd/MM/yyyy");
+    let mesVentaStr = Utilities.formatDate(fechaVenta, timeZone, "MM/yyyy");
+    let diaGrafico = Utilities.formatDate(fechaVenta, timeZone, "dd/MM");
+
+    // KPIs
+    if (diaVentaStr === hoyStr) ventasHoy += monto;
+    
+    if (mesVentaStr === mesActualStr) {
+        ventasMes += monto;
+        ingresoActual += monto;
+    }
+    
+    if (mesVentaStr === mesPasadoStr) {
+        ingresoPasado += monto;
+    }
+
+    // Gráfico
+    if (ultimos7Dias.hasOwnProperty(diaGrafico)) {
+      ultimos7Dias[diaGrafico] += monto;
+    }
+  }
+
+  // ------------------------------------------------
+  // 2. PROCESAR GASTOS (KPIs + Flujo)
+  // ------------------------------------------------
+  const shGastos = ss.getSheetByName('GASTOS');
+  const dataGastos = shGastos ? shGastos.getDataRange().getValues() : [];
+  
+  let gastosMes = 0;
+  let gastoActual = 0;
+  let gastoPasado = 0;
+
+  for (let i = 1; i < dataGastos.length; i++) {
+    // Fecha en Índice 1
+    let fechaGasto = parseFecha(dataGastos[i][1]);
+    if (!fechaGasto || isNaN(fechaGasto.getTime())) continue;
+
+    let mesGastoStr = Utilities.formatDate(fechaGasto, timeZone, "MM/yyyy");
+    
+    // Monto en Índice 4
+    let monto = parseNum(dataGastos[i][4]);
+
+    if (mesGastoStr === mesActualStr) {
+      gastosMes += monto;
+      gastoActual += monto;
+    }
+    if (mesGastoStr === mesPasadoStr) {
+      gastoPasado += monto;
+    }
+  }
+
+  // ------------------------------------------------
+  // 3. STOCK BAJO
+  // ------------------------------------------------
+  let alertasStock = 0;
+  const shProd = ss.getSheetByName('PRODUCTOS');
+  if(shProd) {
+      const dataProd = shProd.getDataRange().getValues();
+      for(let i=1; i<dataProd.length; i++) {
+          // Primero verificamos si el producto maneja stock (Columna 9 / Índice 9)
+          // Si dice "False" o "No", lo saltamos
+          let manejaStock = String(dataProd[i][9]).toUpperCase();
+          if(manejaStock === 'FALSE' || manejaStock === 'NO') continue;
+
+          // Stock Mínimo (Índice 7)
+          let min = parseNum(dataProd[i][7]);
+          
+          // Stock Actual (Índice 12)
+          let act = parseNum(dataProd[i][12]);
+          
+          // Solo alertar si el mínimo es mayor a 0 y el actual está por debajo o igual
+          if(min > 0 && act <= min) {
+            alertasStock++;
+          }
+      }
+  }
+
+  // ------------------------------------------------
+  // RETORNO ESTRUCTURADO
   // ------------------------------------------------
   return {
     kpi: {

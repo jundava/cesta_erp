@@ -868,8 +868,8 @@
                                             <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Ventas Mes</small>
                                             <h4 class="fw-bold text-brand mt-2 mb-0">{{ formatoMoneda(dashboardData.kpi.ventasMes) }}</h4>
                                         </div>
-                                        <div class="bg-brand bg-opacity-10 text-brand rounded p-2">
-                                            <i class="bi bi-graph-up"></i>
+                                        <div class="bg-brand bg-opacity-10 text-light rounded p-2">
+                                            <i class="bi bi-cash-stack"></i>
                                         </div>
                                     </div>
                                 </div>
@@ -2536,20 +2536,21 @@
                                     <label class="form-label text-secondary small fw-bold">Razón Social</label>
                                     <input type="text" class="form-control" v-model="formCliente.razon_social" required>
                                 </div>
-
                                 <div class="mb-3">
                                     <label class="form-label text-secondary small fw-bold">RUC</label>
                                     <input type="text" class="form-control" v-model="formCliente.doc_identidad" required>
                                 </div>
-
                                 <div class="mb-3">
                                     <label class="form-label text-secondary small fw-bold">Email</label>
                                     <input type="email" class="form-control" v-model="formCliente.email">
                                 </div>
-
                                 <div class="mb-3">
                                     <label class="form-label text-secondary small fw-bold">Teléfono</label>
                                     <input type="text" class="form-control" v-model="formCliente.telefono">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary small fw-bold">Dirección</label>
+                                    <input type="text" class="form-control" v-model="formCliente.direccion">
                                 </div>
                             </div>
                         </div>
@@ -3325,9 +3326,25 @@
                       (cabecera.includes('total') || cabecera.includes('monto') || cabecera.includes('costo') || cabecera.includes('precio'));
             },
 
-            formatoFecha(f) {
-                if(!f) return '';
-                return new Date(f).toLocaleDateString('es-ES'); // O 'es-PY'
+            formatoFecha(fecha) {
+                if (!fecha) return '';
+
+                // CASO 1: Si es texto del input (YYYY-MM-DD)
+                // Lo cortamos y reordenamos manualmente para evitar que JS le reste horas
+                if (typeof fecha === 'string' && fecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    const [anio, mes, dia] = fecha.split('-');
+                    return `${dia}/${mes}/${anio}`;
+                }
+
+                // CASO 2: Si es un objeto fecha real (ej: new Date() para "Generado el...")
+                // O si es una fecha completa ISO con hora
+                try {
+                    // Intentamos convertirlo a objeto si no lo es
+                    const fechaObj = (fecha instanceof Date) ? fecha : new Date(fecha);
+                    return fechaObj.toLocaleDateString('es-PY');
+                } catch (e) {
+                    return fecha; // Si falla, devuelve el original
+                }
             },
 
             // --- FUNCIÓN QUE FALTA PARA EL FORMULARIO ---
@@ -4262,7 +4279,25 @@
             },
 
             // MODALES MAESTROS
-            abrirModalCliente(item) { this.modoEdicion=!!item; this.formCliente = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }; if(!this.formCliente.datos_adicionales) this.formCliente.datos_adicionales={}; this.modalCli.show(); },
+          abrirModalCliente(item) { 
+              this.modoEdicion = !!item; 
+              
+              // AQUI ESTA EL CAMBIO: Agregamos direccion: '' y telefono: ''
+              this.formCliente = item ? JSON.parse(JSON.stringify(item)) : { 
+                  razon_social: '', 
+                  doc_identidad: '', 
+                  email: '', 
+                  telefono: '',   // <--- Agregado para inicializar
+                  direccion: '',  // <--- VITAL: Agregado para que funcione el nuevo input
+                  datos_adicionales: {} 
+              }; 
+              
+              if(!this.formCliente.datos_adicionales) {
+                this.formCliente.datos_adicionales = {}; 
+              }
+              
+              this.modalCli.show(); 
+            },
           guardarCliente() { 
                 this.cargando = true; 
                 const f = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente'; 

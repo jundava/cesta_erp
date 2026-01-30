@@ -1,8 +1,8 @@
 /*** INICIALIZACIÓN DE LA BASE DE DATOS * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes. */
 function setupDatabase() {
-  const ss = SpreadsheetApp.openById(SS_ID); //const ss = SpreadsheetApp.getActiveSpreadsheet(); 
+  const ss = SpreadsheetApp.openById(SS_ID); 
 
-  // Definición de todas las tablas del sistema
+  // Definición de la estructura ideal
   const estructura = [
     {
       nombre: "PRODUCTOS",
@@ -44,16 +44,14 @@ function setupDatabase() {
       nombre: "MOVIMIENTOS_STOCK",
       cols: ["id_movimiento", "fecha", "tipo_movimiento", "id_producto", "id_deposito", "cantidad", "referencia_origen"]
     },
-    // --- MÓDULO VENTAS ---
     {
       nombre: "VENTAS_CABECERA",
-      cols: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado", "url_pdf", "condicion", "saldo_pendiente"]
+      cols: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado", "url_pdf", "condicion", "saldo_pendiente", "json_pagos"]
     },
     {
       nombre: "VENTAS_DETALLE",
       cols: ["id_detalle", "id_venta", "id_producto", "cantidad", "precio_unitario", "iva_aplicado", "subtotal"]
     },
-    // --- MÓDULO COMPRAS ---
     {
       nombre: "COMPRAS_CABECERA",
       cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf"]
@@ -62,7 +60,6 @@ function setupDatabase() {
       nombre: "COMPRAS_DETALLE",
       cols: ["id_detalle", "id_compra", "id_producto", "cantidad", "costo_unitario", "subtotal"]
     },
-    // --- MÓDULO TRANSFERENCIAS ---
     {
       nombre: "TRANSFERENCIAS_CABECERA",
       cols: ["id_transferencia", "fecha", "id_deposito_origen", "id_deposito_destino", "responsable", "observacion", "url_pdf"]
@@ -71,12 +68,10 @@ function setupDatabase() {
       nombre: "TRANSFERENCIAS_DETALLE",
       cols: ["id_detalle", "id_transferencia", "id_producto", "cantidad"]
     },
-    // --- MÓDULO COBRANZAS ---
     {
       nombre: "COBRANZAS",
       cols: ["id_cobro", "fecha", "id_cliente", "monto", "metodo_pago", "observacion", "id_venta_asociada"]
     },
-    // --- MÓDULO REMISIONES ---
     {
       nombre: "REMISIONES_CABECERA",
       cols: ["id_remision", "fecha", "numero_comprobante", "id_cliente", "id_deposito", "conductor", "chapa_vehiculo", "estado", "url_pdf", "total_valorizado"]
@@ -87,7 +82,7 @@ function setupDatabase() {
     },
     {
       nombre: "USUARIOS",
-      cols: ["id_usuario", "nombre", "email", "password", "rol", "modulos_permitidos", "activo"]
+      cols: ["id_usuario", "nombre", "email", "password", "rol", "modulos_permitidos", "activo", "avatar"]
     },
     {
       nombre: "GASTOS",
@@ -96,110 +91,90 @@ function setupDatabase() {
     {
       nombre: "SESIONES",
       cols: ["token", "id_usuario", "fecha_creacion", "fecha_ultimo_uso"]
+    },
+    {
+      nombre: "CAJA_SESIONES",
+      cols: ["id_sesion", "id_usuario", "fecha_apertura", "monto_inicial", "fecha_cierre", "total_sistema", "total_real", "diferencia", "estado"]
+    },
+    {
+      nombre: "BITACORA",
+      cols: ["FECHA", "HORA", "USUARIO", "ACCIÓN", "DETALLE"]
     }
   ];
 
-  // Recorrer y crear
+  // Recorrer cada definición
   estructura.forEach(hoja => {
     let ws = ss.getSheetByName(hoja.nombre);
     
-    // Si no existe, la creamos
+    // CASO A: La hoja no existe -> Se crea nueva
     if (!ws) {
       ws = ss.insertSheet(hoja.nombre);
-      ws.appendRow(hoja.cols); // Crear encabezados
-      
-      // Estética básica: Negrita y fondo gris en encabezado
-      ws.getRange(1, 1, 1, hoja.cols.length).setFontWeight("bold").setBackground("#EFEFEF");
-      ws.setFrozenRows(1); // Congelar primera fila
-      
+      ws.appendRow(hoja.cols);
+      styleSheetHeader(ws, hoja.cols.length);
       console.log(`✅ Creada hoja: ${hoja.nombre}`);
-    } else {
-      console.log(`ℹ️ Ya existe: ${hoja.nombre}`);
+    } 
+    // CASO B: La hoja existe -> Verificamos cabeceras
+    else {
+      const lastCol = ws.getLastColumn();
+      // Obtenemos las cabeceras actuales de la hoja (si está vacía, devuelve array vacío)
+      const currentHeaders = lastCol > 0 ? ws.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+      
+      let necesitaActualizar = false;
+
+      // 1. Verificar si faltan columnas (La hoja tiene menos columnas que la definición)
+      if (currentHeaders.length < hoja.cols.length) {
+        necesitaActualizar = true;
+      } 
+      // 2. Verificar si los nombres no coinciden (posición por posición)
+      else {
+        for (let i = 0; i < hoja.cols.length; i++) {
+          if (String(currentHeaders[i]).trim() !== String(hoja.cols[i]).trim()) {
+            necesitaActualizar = true;
+            break;
+          }
+        }
+      }
+
+      if (necesitaActualizar) {
+        // Sobrescribimos la Fila 1 completa con la definición correcta del código
+        // Esto agrega columnas faltantes y corrige nombres erróneos
+        ws.getRange(1, 1, 1, hoja.cols.length).setValues([hoja.cols]);
+        
+        // Re-aplicamos estilo por si se agregaron columnas nuevas
+        styleSheetHeader(ws, hoja.cols.length);
+        
+        console.log(`🔄 Cabeceras actualizadas en: ${hoja.nombre}`);
+      }
     }
   });
 
-  // --- DATOS INICIALES NECESARIOS ---
+  // --- CONFIGURACIÓN INICIAL (Igual que antes) ---
   const sheetConfig = ss.getSheetByName('CONFIG_GENERAL');
   if (sheetConfig) {
       const dataConfig = sheetConfig.getDataRange().getValues();
-      
       const configsRequeridas = [
         ['ULTIMO_NRO_FACTURA', '001-001-0000000'],
         ['ULTIMO_NRO_REMISION', '001-001-0000000'],
         ['DEPOSITO_DEFAULT', '1']
       ];
-
       configsRequeridas.forEach(req => {
         let existe = false;
         for(let i=0; i<dataConfig.length; i++) {
-          if(String(dataConfig[i][0]) == String(req[0])) {
-            existe = true; 
-            break; 
-          }
+          if(String(dataConfig[i][0]) == String(req[0])) { existe = true; break; }
         }
-        if(!existe) {
-          sheetConfig.appendRow(req);
-          console.log(`⚙️ Configuración inicial creada: ${req[0]}`);
-        }
+        if(!existe) sheetConfig.appendRow(req);
       });
   }
 }
 
-function TEST_DIAGNOSTICO_F5() {
-  // 1. PEGA AQUÍ EL TOKEN QUE COPIASTE DEL NAVEGADOR
-  const tokenPrueba = "4c5e690d-3fd3-450a-b56b-49e8fd55040d"; 
-
-  Logger.log("--- INICIANDO TEST DE PERSISTENCIA ---");
-  
-  // A. Buscar el token en la hoja SESIONES
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shSes = ss.getSheetByName('SESIONES');
-  const dataSes = shSes.getDataRange().getValues();
-  
-  let idUsuario = null;
-  
-  for (let i = 1; i < dataSes.length; i++) {
-    if (String(dataSes[i][0]) === String(tokenPrueba)) { // Columna A = Token
-      idUsuario = dataSes[i][1]; // Columna B = ID Usuario
-      Logger.log("✅ Token encontrado en fila " + (i+1));
-      Logger.log("   ID de Usuario vinculado: " + idUsuario);
-      break;
-    }
+// Función auxiliar para no repetir código de estilos
+function styleSheetHeader(sheet, numCols) {
+  if (numCols > 0) {
+    const range = sheet.getRange(1, 1, 1, numCols);
+    range.setFontWeight("bold")
+         .setBackground("#4a4a4a") // Gris oscuro profesional
+         .setFontColor("white")
+         .setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
   }
-  
-  if (!idUsuario) {
-    Logger.log("❌ ERROR: El token no existe en la hoja SESIONES.");
-    return;
-  }
-  
-  // B. Buscar al usuario en la hoja USUARIOS (Aquí suele fallar por las columnas)
-  const shUs = ss.getSheetByName('USUARIOS');
-  const dataUs = shUs.getDataRange().getValues();
-  let usuarioEncontrado = false;
-  
-  for (let i = 1; i < dataUs.length; i++) {
-    if (String(dataUs[i][0]) === String(idUsuario)) { // Columna A = ID
-      usuarioEncontrado = true;
-      Logger.log("✅ Usuario encontrado en fila " + (i+1));
-      Logger.log("   Nombre: " + dataUs[i][1]);
-      
-      // VERIFICACIÓN CRÍTICA DE COLUMNAS
-      const estadoActivo = dataUs[i][6]; // Columna G (Índice 6)
-      Logger.log("   Estado (Col G / Index 6): " + estadoActivo);
-      
-      if (String(estadoActivo).toUpperCase() === 'SI') {
-        Logger.log("🟢 RESULTADO: Login debería funcionar. El usuario está ACTIVO.");
-      } else {
-        Logger.log("🔴 RESULTADO: Login falla. El estado no es 'SI'.");
-        Logger.log("   (Revisa si estás leyendo la columna correcta)");
-      }
-      break;
-    }
-  }
-  
-  if (!usuarioEncontrado) {
-    Logger.log("❌ ERROR: El ID de usuario " + idUsuario + " no existe en la hoja USUARIOS.");
-  }
-  
-  Logger.log("--- FIN DEL TEST ---");
 }
