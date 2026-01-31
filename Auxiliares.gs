@@ -54,11 +54,11 @@ function setupDatabase() {
     },
     {
       nombre: "COMPRAS_CABECERA",
-      cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf"]
+      cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf", "numero_factura", "condicion", "saldo_pendiente", "json_pagos"]
     },
     {
       nombre: "COMPRAS_DETALLE",
-      cols: ["id_detalle", "id_compra", "id_producto", "cantidad", "costo_unitario", "subtotal"]
+      cols: ["id_detalle", "id_compra", "id_producto", "cantidad", "costo_unitario", "iva_aplicado", "subtotal"]
     },
     {
       nombre: "TRANSFERENCIAS_CABECERA",

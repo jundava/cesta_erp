@@ -255,224 +255,179 @@ function subirImagenDrive(data, nombre, tipo) {
  * Guarda una Compra Completa (Cabecera + Detalles) y actualiza Stock
  * @param {Object} compra - { id_proveedor, fecha, comprobante, items: [{id_producto, cantidad, costo}, ...] }
  */
+// ==========================================
+// MÓDULO COMPRAS V2 (Soporte Crédito y Depósitos)
+// ==========================================
+
 function guardarCompraCompleta(compra) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
   try {
-    // ✅ CORRECCIÓN 1: Usar hoja activa para asegurar que escribe en este archivo
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    const sheetProd = ss.getSheetByName('PRODUCTOS');
-    const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
-    const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
-    const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-    const sheetProv = ss.getSheetByName('PROVEEDORES');
-    
-    // ✅ CORRECCIÓN 2: Declarar la hoja de existencias que faltaba
-    const sheetExistencias = ss.getSheetByName('STOCK_EXISTENCIAS');
-
-    // Obtener configuración
-    const config = obtenerConfigGeneral();
-    const depositoDestino = config['DEPOSITO_DEFAULT'] || "1";
-
-    // 1. CARGAR DATOS DE PRODUCTOS Y PROVEEDOR
-    const datosProd = sheetProd.getDataRange().getValues();
-    const mapaProd = {}; // ID -> {fila, stock, costo, nombre}
-    for (let i = 1; i < datosProd.length; i++) {
-      mapaProd[datosProd[i][0]] = { 
-        fila: i + 1, 
-        nombre: datosProd[i][2],
-        stock: Number(datosProd[i][12] || 0), // Col M (13) stock_actual
-        costo: Number(datosProd[i][6] || 0)   // Col G (7) costo_promedio
-      };
+    // 1. VALIDACIÓN DE CAJA (Solo si es CONTADO)
+    if (compra.condicion === 'CONTADO') {
+       const idUsuario = compra.usuario_id || "Sistema";
+       if (idUsuario !== "Sistema") {
+          const caja = verificarCajaAbierta(idUsuario);
+          if (!caja || !caja.exito) throw "⛔ CAJA CERRADA: Para compras al contado necesitas caja abierta.";
+       }
     }
 
-    let nombreProv = "Proveedor General";
-    let docProv = "";
-    let contactoProv = "";
-    const datosProv = sheetProv.getDataRange().getValues();
-    for(let p=1; p<datosProv.length; p++){
-      if(String(datosProv[p][0]) == String(compra.id_proveedor)){
-        nombreProv = datosProv[p][1];
-        docProv = datosProv[p][2];
-        contactoProv = datosProv[p][3];
-        break;
-      }
-    }
+    const shCab = ss.getSheetByName('COMPRAS_CABECERA');
+    const shDet = ss.getSheetByName('COMPRAS_DETALLE');
+    const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
 
-    // 2. GENERAR PDF
-    const itemsParaPDF = compra.items.map(item => ({
-      producto: mapaProd[item.id_producto] ? mapaProd[item.id_producto].nombre : "Producto Desconocido",
-      cantidad: item.cantidad,
-      costo: item.costo,
-      subtotal: item.cantidad * item.costo
-    }));
+    if (!shCab || !shDet) throw "Faltan hojas de base de datos de compras.";
 
-    const datosParaPDF = {
-      proveedor_nombre: nombreProv,
-      proveedor_doc: docProv,
-      proveedor_contacto: contactoProv || '',
-      comprobante: compra.comprobante || 'S/N',
-      fecha: new Date(compra.fecha).toLocaleDateString('es-PY'),
-      estado: 'APROBADO',
-      total: compra.total
-    };
-
-    let urlPdf = "";
-    try {
-       urlPdf = crearPDFOrdenCompra(datosParaPDF, itemsParaPDF);
-    } catch(e) {
-       console.error("Error generando PDF: " + e);
-       urlPdf = "ERROR_PDF";
-    }
-
-    // 3. GUARDAR EN HOJAS
     const idCompra = Utilities.getUuid();
     
-    // Guardar Cabecera
-    sheetCab.appendRow([
-      idCompra, 
-      new Date(compra.fecha), // Asegurar formato fecha 
-      compra.id_proveedor, 
-      depositoDestino, 
-      compra.total, 
-      "APROBADO", 
-      urlPdf
+    // 2. Preparar Datos
+    // Fecha segura (Mediodía para evitar problemas de zona horaria)
+    const fecha = new Date(compra.fecha + "T12:00:00");
+    const total = Number(compra.total);
+    
+    // Lógica de Estado y Saldo
+    let estado = 'PAGADO';
+    let saldo = 0;
+    let jsonPagos = '[]';
+
+    if (compra.condicion === 'CREDITO') {
+        estado = 'PENDIENTE';
+        saldo = total;
+    } else {
+        // Si es Contado, generamos un pago automático de EFECTIVO
+        estado = 'PAGADO';
+        jsonPagos = JSON.stringify([{ metodo: 'EFECTIVO', monto: total, fecha: new Date() }]);
+    }
+
+    // 3. Guardar Cabecera (Nueva Estructura)
+    // Cols: [id, fecha, prov, dep, total, estado, url, nro, cond, saldo, json]
+    shCab.appendRow([
+      idCompra,
+      fecha,
+      compra.id_proveedor,
+      compra.id_deposito_destino, // Nuevo: Depósito Físico
+      total,
+      estado,
+      "", // URL PDF (Pendiente)
+      compra.comprobante, 
+      compra.condicion,   // Nuevo: CONTADO/CREDITO
+      saldo,              // Nuevo: Deuda actual
+      jsonPagos           // Nuevo: Historial de pagos
     ]);
 
-    // Cargar datos de existencias para no leer en cada iteración (Optimización)
-    const datosExistencias = sheetExistencias.getDataRange().getValues();
-
+    // 4. Guardar Detalles y Mover Stock
     compra.items.forEach(item => {
-      const cantidad = Number(item.cantidad);
-      const costo = Number(item.costo);
+       // A. Insertar en Detalle
+       shDet.appendRow([
+         Utilities.getUuid(),
+         idCompra,
+         item.id_producto,
+         item.cantidad,
+         item.costo,
+         item.iva || 10,
+         item.cantidad * item.costo
+       ]);
 
-      // A. Guardar Detalle
-      sheetDet.appendRow([
-          Utilities.getUuid(), 
-          idCompra, 
-          item.id_producto, 
-          cantidad, 
-          costo, 
-          cantidad * costo
-      ]);
-      
-      // B. Guardar Movimiento (Esto ahora sí se verá reflejado)
-      sheetMov.appendRow([
-          Utilities.getUuid(), 
-          new Date(), 
-          "ENTRADA_COMPRA", 
-          item.id_producto, 
-          depositoDestino, 
-          cantidad, 
-          idCompra
-      ]);
+       // B. Movimiento de Stock (ENTRADA POSITIVA)
+       shMov.appendRow([
+         Utilities.getUuid(),
+         new Date(),
+         "ENTRADA_COMPRA",
+         item.id_producto,
+         compra.id_deposito_destino, // Afecta al depósito seleccionado
+         Number(item.cantidad),      
+         idCompra
+       ]);
 
-      // C. Actualizar Stock Global y PMP en PRODUCTOS
-      const p = mapaProd[item.id_producto];
-      if (p) {
-        const nuevoStockGlobal = p.stock + cantidad;
-        // PMP = ((StockActual * CostoActual) + (CantCompra * CostoCompra)) / NuevoStock
-        const valorTotal = (p.stock * p.costo) + (cantidad * costo);
-        const nuevoCosto = valorTotal / nuevoStockGlobal;
-
-        sheetProd.getRange(p.fila, 13).setValue(nuevoStockGlobal); // Stock Global
-        sheetProd.getRange(p.fila, 7).setValue(nuevoCosto);   // Costo Promedio
-      }
-
-      // ✅ D. ACTUALIZAR STOCK_EXISTENCIAS (Por Depósito) - Lógica Nueva
-      let encontrado = false;
-      for(let k=1; k<datosExistencias.length; k++){
-          // Si coincide Producto y Depósito
-          if(String(datosExistencias[k][1]) == String(item.id_producto) && 
-             String(datosExistencias[k][2]) == String(depositoDestino)) {
-              
-              const filaReal = k + 1;
-              const stockActualLocal = Number(datosExistencias[k][3] || 0);
-              const nuevoStockLocal = stockActualLocal + cantidad;
-              
-              // Actualizamos la celda específica
-              sheetExistencias.getRange(filaReal, 4).setValue(nuevoStockLocal); // Col 4: Cantidad
-              sheetExistencias.getRange(filaReal, 5).setValue(new Date());      // Col 5: Fecha Act.
-              encontrado = true;
-              break;
-          }
-      }
-
-      // Si no existía registro en ese depósito, creamos uno nuevo
-      if(!encontrado) {
-          sheetExistencias.appendRow([
-              Utilities.getUuid(),
-              item.id_producto,
-              depositoDestino,
-              cantidad,
-              new Date()
-          ]);
-      }
-
+       // C. Actualizar Caché Visual
+       actualizarStockDeposito(item.id_producto, compra.id_deposito_destino, Number(item.cantidad));
     });
 
-    return { success: true, pdf_url: urlPdf };
+    return { success: true };
 
-  } catch (error) {
-    throw error;
+  } catch (e) {
+    throw e;
   } finally {
     lock.releaseLock();
   }
 }
 
 function obtenerHistorialCompras() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const hoja = ss.getSheetByName('COMPRAS_CABECERA');
-  const hojaProv = ss.getSheetByName('PROVEEDORES');
-  
-  if (!hoja || hoja.getLastRow() <= 1) return [];
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('COMPRAS_CABECERA');
+    const shProv = ss.getSheetByName('PROVEEDORES');
+    
+    if (!sh) return [];
 
-  const datos = hoja.getDataRange().getValues();
-  
-  // Mapa de Proveedores
-  const mapaProv = {};
-  if(hojaProv && hojaProv.getLastRow() > 1) {
-    const dP = hojaProv.getDataRange().getValues();
-    for(let i=1; i<dP.length; i++) {
-      mapaProv[dP[i][0]] = dP[i][1]; 
+    // 1. Obtener Proveedores (Protegido)
+    const mapProv = {};
+    if (shProv && shProv.getLastRow() > 1) {
+       try {
+         const datosProv = shProv.getDataRange().getValues();
+         for(let i=1; i<datosProv.length; i++) {
+           // Col 0: ID, Col 1: Razon Social
+           if(datosProv[i][0]) {
+              mapProv[String(datosProv[i][0])] = datosProv[i][1];
+           }
+         }
+       } catch(e) { console.error("Error leyendo proveedores: " + e); }
     }
-  }
 
-  const historial = [];
-  
-  for(let i=1; i < datos.length; i++) {
-    const fila = datos[i];
-    if(fila[0]) { 
-        // --- 1. CORRECCIÓN DE FECHA SEGURA ---
-        let fechaSafe = fila[1];
-        try {
-            // Si es objeto fecha, lo pasamos a ISO. Si es texto, lo dejamos tal cual.
-            if (typeof fila[1].toISOString === 'function') {
-                fechaSafe = fila[1].toISOString();
-            }
-        } catch(e) {
-            fechaSafe = new Date().toISOString(); // Fallback si la fecha está corrupta
-        }
+    // 2. Leer compras
+    const data = sh.getDataRange().getValues();
+    const result = [];
+    
+    // Indices basados en tu imagen:
+    // 0:id, 1:fecha, 2:prov, 3:dep, 4:total, 5:estado, 6:url, 7:nro, 8:cond, 9:saldo
+    
+    for (let i = 1; i < data.length; i++) {
+       const row = data[i];
+       
+       // Validamos que haya ID de compra
+       if (row[0] && row[0] !== "") {
+         
+         // --- CORRECCIÓN DE FECHA ---
+         // Convertimos la fecha a formato ISO seguro para que el HTML no falle
+         let fechaSegura = row[1];
+         if (row[1] instanceof Date) {
+            fechaSegura = row[1].toISOString();
+         } else {
+            // Si es texto, forzamos un string simple para evitar errores
+            fechaSegura = String(row[1]);
+         }
 
-        historial.push({
-          id_compra: fila[0],                 
-          fecha: fechaSafe,                   
-          nombre_proveedor: mapaProv[fila[2]] || 'Desconocido', 
-          
-          // --- 2. AGREGADO COMPROBANTE (Faltaba esto) ---
-          comprobante: fila[3] || 'S/N',      // Col D: Factura
-          
-          total: Number(fila[4]) || 0,        
-          estado: fila[5],                    
-          url_pdf: fila[6] || ''              
-        });
+         result.push({
+           id_compra: String(row[0]),
+           fecha: fechaSegura, 
+           // Si no encuentra el proveedor, muestra el ID o "Desconocido" en vez de romper
+           nombre_proveedor: mapProv[String(row[2])] || (row[2] ? 'Prov. (' + row[2] + ')' : 'Proveedor General'),
+           total: Number(row[4] || 0),
+           estado: row[5],
+           url_pdf: row[6],
+           comprobante: row[7],
+           condicion: row[8] || 'CONTADO',
+           saldo: Number(row[9] || 0)
+         });
+       }
     }
+    
+    // Si no hay datos, imprimimos en consola para debug
+    if (result.length === 0) console.log("La función corrió bien pero no encontró filas válidas.");
+
+    return result.reverse();
+    
+  } catch (e) {
+    // Si hay error fatal, lo mostramos en los logs de Apps Script
+    console.error("ERROR FATAL EN HISTORIAL COMPRAS: " + e.toString());
+    return [];
   }
-  
-  return historial.reverse(); 
 }
+
+
 // ==========================================
 // SECCIÓN CLIENTES (AJUSTADO A TU HOJA)
 // ==========================================
@@ -528,203 +483,13 @@ function guardarVenta(venta) {
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   try {
-    // ✅ CORRECCIÓN 1: Usar hoja activa para evitar problemas de ID
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    const sheetProd = ss.getSheetByName('PRODUCTOS');
-    const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
-    const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
-    const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-    const sheetCli = ss.getSheetByName('CLIENTES');
-
-    // 1. Validaciones y Configuración
-    const config = obtenerConfigGeneral();
-    const depositoDefault = config['DEPOSITO_DEFAULT'] || "1"; 
-    const depositoUsado = venta.id_deposito || depositoDefault;
-
-    // Lógica de Crédito
-    const esCredito = venta.condicion === 'CREDITO';
-    const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
-    const saldoInicial = esCredito ? venta.total : 0;
-
-    // Obtener nombres
-    const datosProd = sheetProd.getDataRange().getValues();
-    const mapaNombres = {};
-    for(let i=1; i<datosProd.length; i++) {
-        mapaNombres[datosProd[i][0]] = datosProd[i][2]; 
-    }
-
-    // ✅ CORRECCIÓN 2: NO validar stock si viene de remisión (porque ya se entregó)
-    if (!venta.es_desde_remision) {
-        for (let item of venta.items) {
-          const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
-          const nombreProd = mapaNombres[item.id_producto] || "Item";
-          if (stockDisponible < item.cantidad) {
-            throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
-          }
-        }
-    }
-
-    // 2. Generación de Datos
-    const idVenta = Utilities.getUuid();
-    // Asegurar fecha correcta
-    const fecha = new Date(venta.fecha); 
-    // Ajuste de zona horaria simple para que no reste un día
-    fecha.setHours(12,0,0,0); 
-    
-    // Auto-incremental
-    let nroFacturaFinal = venta.nro_factura;
-    if (!nroFacturaFinal) {
-       const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
-       const partes = ultimoNro.split('-');
-       // Logica simple: sumar 1 al final
-       const nuevoSec = Number(partes[2]) + 1;
-       nroFacturaFinal = `${partes[0]}-${partes[1]}-${String(nuevoSec).padStart(7, '0')}`;
-       guardarConfigGeneral('ULTIMO_NRO_FACTURA', nroFacturaFinal);
-    }
-
-    // Buscar Cliente
-    let nombreCli = "Cliente Ocasional";
-    let docCli = "X";
-    let dirCli = "";
-    const dataCli = sheetCli.getDataRange().getValues();
-    for(let i=1; i<dataCli.length; i++){
-        if(String(dataCli[i][0]) === String(venta.id_cliente)){
-            nombreCli = dataCli[i][1];
-            docCli = dataCli[i][2];
-            dirCli = dataCli[i][5] || "";
-            break;
-        }
-    }
-
-    // 3. Cálculos e HTML (Igual que antes)
-    let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0, totalIVA10 = 0, totalIVA5 = 0;
-
-    const htmlFilasItems = venta.items.map(it => {
-        const precioUnitario = Number(it.precio); 
-        const cantidad = Number(it.cantidad);
-        const subtotal = cantidad * precioUnitario;
-        const tasa = Number(it.tasa_iva || 10); 
-        const nombreProducto = mapaNombres[it.id_producto] || "Producto";
-
-        let montoIVA = 0;
-        if (tasa === 10) {
-            montoIVA = subtotal / 11;
-            totalGrabada10 += subtotal;
-            totalIVA10 += montoIVA;
-        } else if (tasa === 5) {
-            montoIVA = subtotal / 21;
-            totalGrabada5 += subtotal;
-            totalIVA5 += montoIVA;
-        } else {
-            totalExenta += subtotal;
-        }
-
-        return `
-        <tr class="item-row">
-            <td class="col-desc">${nombreProducto}</td>
-            <td class="col-iva">${tasa === 0 ? 'Exenta' : tasa + '%'}</td>
-            <td class="col-cant">${cantidad}</td>
-            <td class="col-money">${precioUnitario.toLocaleString('es-PY')}</td>
-            <td class="col-money fw-bold">${subtotal.toLocaleString('es-PY')}</td>
-        </tr>`;
-    }).join('');
-
-    const totalGeneral = totalGrabada10 + totalGrabada5 + totalExenta;
-    const totalLiquidacionIVA = totalIVA10 + totalIVA5;
-
-    const htmlBloqueTotales = `
-        <tr><td class="total-label">Total Exenta:</td><td>${Math.round(totalExenta).toLocaleString('es-PY')}</td></tr>
-        <tr><td class="total-label">Total IVA 5%:</td><td>${Math.round(totalGrabada5).toLocaleString('es-PY')}</td></tr>
-        <tr><td class="total-label">Total IVA 10%:</td><td>${Math.round(totalGrabada10).toLocaleString('es-PY')}</td></tr>
-        <tr><td class="total-label grand-total">TOTAL A PAGAR:</td><td class="grand-total">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td></tr>
-        <tr><td colspan="2" style="font-size: 9px; color: #777; padding-top: 5px;">(Liq. IVA: 5%=${Math.round(totalIVA5).toLocaleString('es-PY')} | 10%=${Math.round(totalIVA10).toLocaleString('es-PY')} | Tot=${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')})</td></tr>
-    `;
-
-    // Generar PDF
-    const datosParaPDF = {
-        fecha: fecha.toLocaleDateString('es-PY'),
-        nro_factura: nroFacturaFinal,
-        cliente_nombre: nombreCli,
-        cliente_doc: docCli,
-        cliente_dir: dirCli,
-        condicion: venta.condicion || "CONTADO",
-        html_items: htmlFilasItems,
-        html_totales: htmlBloqueTotales
-    };
-    
-    let urlPdf = "";
-    try {
-        urlPdf = crearPDFFactura(datosParaPDF); 
-    } catch(e) {
-        console.error("Error PDF: " + e);
-        urlPdf = "ERROR_PDF"; 
-    }
-
-    // 4. Guardar Cabecera
-    sheetCab.appendRow([
-      idVenta,
-      nroFacturaFinal,
-      fecha,
-      venta.id_cliente,
-      depositoUsado,
-      totalGeneral,
-      estadoVenta, 
-      urlPdf,
-      venta.condicion || 'CONTADO', 
-      saldoInicial                  
-    ]);
-
-    // 5. Guardar Detalle y Movimientos
-    venta.items.forEach(item => {
-      // Guardar detalle siempre
-      sheetDet.appendRow([
-          Utilities.getUuid(), 
-          idVenta, 
-          item.id_producto, 
-          item.cantidad, 
-          item.precio, 
-          item.tasa_iva || 10,
-          item.cantidad * item.precio 
-      ]);
-      
-      // ✅ CORRECCIÓN 3: Descontar Stock SOLO si NO es remisión
-      if (!venta.es_desde_remision) { 
-          sheetMov.appendRow([
-              Utilities.getUuid(), 
-              new Date(), 
-              "SALIDA_VENTA", 
-              item.id_producto, 
-              depositoUsado, 
-              item.cantidad * -1, 
-              idVenta
-          ]);
-          // Actualizar caché visual
-          actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
-      }
-    });
-
-    return { success: true, pdf_url: urlPdf };
-
-  } catch (error) {
-    throw error;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function guardarVenta(venta) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
-  try {
-    
-      // 1. VALIDACIÓN DE CAJA
-    // Obtenemos el usuario (asegúrate de enviarlo desde el frontend como hicimos en remisión)
-    const idUsuario = venta.usuario_id || "Sistema"; // Necesitarás pasar el ID, no solo el nombre
+    // 🛡️ 1. SEGURIDAD DE CAJA
+    const idUsuario = venta.usuario_id || "Sistema"; 
     if (idUsuario !== "Sistema") {
-        const caja = verificarCajaAbierta(idUsuario);
-        if (!caja) throw "⛔ CAJA CERRADA. Debes realizar la apertura de caja antes de vender.";
+        const estadoCaja = verificarCajaAbierta(idUsuario);
+        if (!estadoCaja || !estadoCaja.exito) {
+            throw "⛔ CAJA CERRADA: Debes realizar la apertura de caja antes de vender.";
+        }
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -752,7 +517,7 @@ function guardarVenta(venta) {
         mapaNombres[datosProd[i][0]] = datosProd[i][2]; 
     }
 
-    // ✅ CORRECCIÓN 2: NO validar stock si viene de remisión (porque ya se entregó)
+    // ✅ VALIDAR STOCK (Solo si NO es remisión)
     if (!venta.es_desde_remision) {
         for (let item of venta.items) {
           const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
@@ -765,14 +530,12 @@ function guardarVenta(venta) {
 
     // 2. Generación de Datos
     const idVenta = Utilities.getUuid();
-    // Asegurar fecha correcta
-    // Forzamos que la fecha nazca a las 12:00 del mediodía para evitar
-    // que la zona horaria reste horas y caiga al día anterior.
+    
+    // Asegurar fecha correcta (Mediodía para evitar desfase horario)
     let fechaSegura;
     if (venta.fecha && typeof venta.fecha === 'string' && !venta.fecha.includes('T')) {
         fechaSegura = new Date(venta.fecha + "T12:00:00");
     } else {
-        // Fallback si ya es objeto o viene vacía
         fechaSegura = venta.fecha ? new Date(venta.fecha) : new Date();
     }
     
@@ -781,7 +544,6 @@ function guardarVenta(venta) {
     if (!nroFacturaFinal) {
        const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
        const partes = ultimoNro.split('-');
-       // Logica simple: sumar 1 al final
        const nuevoSec = Number(partes[2]) + 1;
        nroFacturaFinal = `${partes[0]}-${partes[1]}-${String(nuevoSec).padStart(7, '0')}`;
        guardarConfigGeneral('ULTIMO_NRO_FACTURA', nroFacturaFinal);
@@ -801,7 +563,7 @@ function guardarVenta(venta) {
         }
     }
 
-    // 3. Cálculos e HTML (Igual que antes)
+    // 3. Cálculos e HTML
     let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0, totalIVA10 = 0, totalIVA5 = 0;
 
     const htmlFilasItems = venta.items.map(it => {
@@ -893,7 +655,7 @@ function guardarVenta(venta) {
           item.cantidad * item.precio 
       ]);
       
-      // ✅ CORRECCIÓN 3: Descontar Stock SOLO si NO es remisión
+      // ✅ DESCONTAR STOCK (Solo si NO es remisión)
       if (!venta.es_desde_remision) { 
           sheetMov.appendRow([
               Utilities.getUuid(), 
@@ -2329,68 +2091,79 @@ function registrarCobro(datos) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shCob = ss.getSheetByName('COBRANZAS');
-  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
-
-  // 1. Buscar la Factura Específica por ID
-  const data = shVentas.getDataRange().getValues();
-  let filaEncontrada = -1;
-  let saldoActual = 0;
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(datos.id_venta)) { // Col A: ID Venta
-      filaEncontrada = i + 1; // +1 porque la hoja empieza en 1
-      // Col 9 (Indice 9, Columna J) es el Saldo Pendiente
-      // Si está vacío, asumimos que es el total original (Col 5 / Indice 5)
-      saldoActual = Number(data[i][9]);
-      if ((data[i][9] === "" || data[i][9] == null)) {
-         saldoActual = Number(data[i][5]);
-      }
-      break;
+  try {
+    // 🛡️ 1. SEGURIDAD DE CAJA
+    const idUsuario = datos.usuario_id || "Sistema";
+    if (idUsuario !== "Sistema") {
+        const estadoCaja = verificarCajaAbierta(idUsuario);
+        if (!estadoCaja || !estadoCaja.exito) {
+            throw "⛔ CAJA CERRADA: No puedes registrar cobros sin abrir caja.";
+        }
     }
-  }
 
-  if (filaEncontrada === -1) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shCob = ss.getSheetByName('COBRANZAS');
+    const shVentas = ss.getSheetByName('VENTAS_CABECERA');
+
+    // 1. Buscar la Factura Específica por ID
+    const data = shVentas.getDataRange().getValues();
+    let filaEncontrada = -1;
+    let saldoActual = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(datos.id_venta)) { // Col A: ID Venta
+        filaEncontrada = i + 1; // +1 porque la hoja empieza en 1
+        // Col 9 (Indice 9, Columna J) es el Saldo Pendiente
+        saldoActual = Number(data[i][9]);
+        // Si está vacío, asumimos que es el total original (Col 5 / Indice 5)
+        if ((data[i][9] === "" || data[i][9] == null)) {
+           saldoActual = Number(data[i][5]);
+        }
+        break;
+      }
+    }
+
+    if (filaEncontrada === -1) {
+      throw "No se encontró la factura indicada.";
+    }
+
+    // 2. Validar que no pague más de lo que debe
+    const montoAPagar = Number(datos.monto);
+    
+    // Pequeño margen de error por decimales (0.1)
+    if (montoAPagar > (saldoActual + 0.1)) { 
+      throw "El monto supera el saldo pendiente de la factura.";
+    }
+
+    // 3. Registrar el Cobro en Historial
+    shCob.appendRow([
+      Utilities.getUuid(),
+      new Date(),
+      datos.id_cliente,
+      montoAPagar,
+      datos.metodo,
+      datos.observacion,
+      datos.id_venta // ID de la venta asociada
+    ]);
+
+    // 4. Actualizar la Factura en Ventas
+    const nuevoSaldo = saldoActual - montoAPagar;
+    
+    // Columna 10 (J) es el Saldo
+    shVentas.getRange(filaEncontrada, 10).setValue(nuevoSaldo);
+
+    // Si el saldo es 0 (o menor por decimales), cambiar estado a PAGADO
+    if (nuevoSaldo <= 0.1) {
+      // Columna 7 (G) es Estado
+      shVentas.getRange(filaEncontrada, 7).setValue('PAGADO'); 
+      shVentas.getRange(filaEncontrada, 10).setValue(0); // Forzar 0 exacto
+    }
+
+    return { success: true };
+
+  } finally {
     lock.releaseLock();
-    throw "No se encontró la factura indicada.";
   }
-
-  // 2. Validar que no pague más de lo que debe
-  const montoAPagar = Number(datos.monto);
-  
-  // Pequeño margen de error por decimales (0.1)
-  if (montoAPagar > (saldoActual + 0.1)) { 
-    lock.releaseLock();
-    throw "El monto supera el saldo pendiente de la factura.";
-  }
-
-  // 3. Registrar el Cobro en Historial
-  shCob.appendRow([
-    Utilities.getUuid(),
-    new Date(),
-    datos.id_cliente,
-    montoAPagar,
-    datos.metodo,
-    datos.observacion,
-    datos.id_venta // Ahora SÍ guardamos el ID de la venta asociada
-  ]);
-
-  // 4. Actualizar la Factura en Ventas
-  const nuevoSaldo = saldoActual - montoAPagar;
-  
-  // Columna 10 (J) es el Saldo
-  shVentas.getRange(filaEncontrada, 10).setValue(nuevoSaldo);
-
-  // Si el saldo es 0 (o menor por decimales), cambiar estado a PAGADO
-  if (nuevoSaldo <= 0.1) {
-    // Columna 7 (G) es Estado
-    shVentas.getRange(filaEncontrada, 7).setValue('PAGADO'); 
-    shVentas.getRange(filaEncontrada, 10).setValue(0); // Forzar 0 exacto
-  }
-
-  lock.releaseLock();
-  return { success: true };
 }
 
 // =========================================================
@@ -2932,35 +2705,42 @@ function guardarGasto(datos) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('GASTOS');
-  
-  if (!sh) throw "No se encontró la hoja GASTOS.";
+  try {
+    // 🛡️ 1. SEGURIDAD DE CAJA
+    const idUsuario = datos.usuario_id || "Sistema";
+    if (idUsuario !== "Sistema") {
+        // Usamos la función V3 optimizada (Memoria)
+        const estadoCaja = verificarCajaAbierta(idUsuario);
+        if (!estadoCaja || !estadoCaja.exito) {
+            throw "⛔ CAJA CERRADA: No puedes registrar gastos sin abrir caja.";
+        }
+    }
 
-  const id = Utilities.getUuid();
-  
-  // --- CORRECCIÓN DE FECHA ---
-  // Al agregar "T12:00:00" al texto, forzamos a que la fecha nazca al mediodía.
-  // Así, aunque el sistema reste 3 o 4 horas por la zona horaria, 
-  // seguirá siendo el mismo día (ej: caerá a las 08:00 AM o 09:00 AM del día 29).
-  const fecha = new Date(datos.fecha + "T12:00:00");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('GASTOS');
+    
+    if (!sh) throw "No se encontró la hoja GASTOS.";
 
-  sh.appendRow([
-    id,
-    fecha,
-    datos.categoria,
-    datos.descripcion,
-    Number(datos.monto),
-    datos.metodo
-  ]);
+    const id = Utilities.getUuid();
+    
+    // --- CORRECCIÓN DE FECHA ---
+    const fecha = new Date(datos.fecha + "T12:00:00");
 
-  // (Opcional) Si quieres registrar esto en la bitácora, descomenta esta línea:
-  // registrarEvento(datos.usuario_editor || "Sistema", "NUEVO GASTO", `Monto: ${datos.monto} (${datos.categoria})`);
+    sh.appendRow([
+      id,
+      fecha,
+      datos.categoria,
+      datos.descripcion,
+      Number(datos.monto),
+      datos.metodo
+    ]);
 
-  lock.releaseLock();
-  return { success: true };
+    return { success: true };
+
+  } finally {
+    lock.releaseLock();
+  }
 }
-
 function obtenerGastos() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName('GASTOS');
@@ -3803,6 +3583,31 @@ function generarReporte(peticion) {
   return { cabeceras: cabeceras, filas: filas, totales: totales };
 }
 
+function obtenerProveedores() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('PROVEEDORES');
+    if (!sh) return [];
+    
+    const data = sh.getDataRange().getValues();
+    const lista = [];
+    
+    // Estructura esperada: [0:ID, 1:Razon Social, 2:RUC, ...]
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0]) { // Si tiene ID
+        lista.push({
+          id_proveedor: data[i][0], // IMPORTANTE: Este nombre debe coincidir con el HTML
+          razon_social: data[i][1],
+          ruc: data[i][2]
+        });
+      }
+    }
+    return lista;
+  } catch (e) {
+    return [];
+  }
+}
+
 /**
  * Genera un Token único y guarda la sesión en la hoja SESIONES
  */
@@ -3931,47 +3736,108 @@ function registrarEvento(usuario, accion, detalle) {
 
 // 3. Obtener Resumen para el Cierre (Arqueo Teórico)
 function obtenerResumenCaja(idUsuario) {
-  const sesion = verificarCajaAbierta(idUsuario);
-  if (!sesion) throw "No hay caja abierta para auditar.";
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // A. Sumar Ventas en EFECTIVO desde la fecha de apertura
-  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
-  const dataVentas = shVentas.getDataRange().getValues();
-  let totalVentasEfectivo = 0;
-  
-  // Estructura Ventas: [2]=Fecha, [5]=Total, [6]=Estado, [9]=DetallePagos(JSON) o Metodo
-  // NOTA: Aquí asumiremos que implementaremos el desglose JSON en breve.
-  
-  const inicio = new Date(sesion.fecha_apertura);
-
-  for (let i = 1; i < dataVentas.length; i++) {
-    let fechaVenta = new Date(dataVentas[i][2]);
-    let estado = dataVentas[i][6]; // Pagado/Anulado
+  try {
+    // 1. Obtener la sesión activa de memoria
+    const check = verificarCajaAbierta(idUsuario);
     
-    // Si la venta es posterior a la apertura Y no está anulada
-    if (fechaVenta >= inicio && estado === 'PAGADO') {
-       // Lógica simple: Si no hay desglose, miramos condición.
-       // Si hay desglose (JSON), sumamos solo lo que dice "Efectivo".
-       // Por ahora, lógica simple:
-       // TODO: Aquí conectaremos el desglose del Paso 3
-       totalVentasEfectivo += Number(dataVentas[i][5]); 
+    if (!check || !check.exito) {
+       return { id_sesion: null, teorico: 0 };
     }
+
+    const fechaApertura = new Date(check.fecha_apertura);
+    const montoInicial = Number(check.monto_inicial);
+    
+    // --- TRUCO: Creamos una fecha "Inicio del Día" para comparar Ventas y Gastos ---
+    // Esto soluciona el problema de que las ventas se guarden a las 12:00
+    const inicioDiaApertura = new Date(fechaApertura);
+    inicioDiaApertura.setHours(0, 0, 0, 0); // La volvemos las 00:00 de ese día
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- A. SUMAR VENTAS (Usando inicioDiaApertura) ---
+    let totalVentasEfectivo = 0;
+    const shVentas = ss.getSheetByName('VENTAS_CABECERA');
+    if (shVentas) {
+      const dataV = shVentas.getDataRange().getValues();
+      
+      for (let i = 1; i < dataV.length; i++) {
+        const fechaVenta = new Date(dataV[i][2]); 
+        const estado = String(dataV[i][6]); 
+        
+        // AQUÍ EL CAMBIO: Comparamos con el INICIO del día, no la hora exacta
+        if (fechaVenta >= inicioDiaApertura && estado !== 'ANULADO') {
+           const jsonPagos = dataV[i][10]; 
+           
+           if (jsonPagos && jsonPagos !== "[]") {
+             try {
+               const pagos = JSON.parse(jsonPagos);
+               pagos.forEach(p => {
+                 if (String(p.metodo).toUpperCase() === 'EFECTIVO') {
+                   totalVentasEfectivo += Number(p.monto);
+                 }
+               });
+             } catch(e) { }
+           } else {
+             // Compatibilidad vieja
+             if (String(dataV[i][8]) === 'CONTADO') {
+                totalVentasEfectivo += Number(dataV[i][5]); 
+             }
+           }
+        }
+      }
+    }
+
+    // --- B. RESTAR GASTOS (Usando inicioDiaApertura) ---
+    let totalGastosEfectivo = 0;
+    const shGastos = ss.getSheetByName('GASTOS');
+    if (shGastos) {
+      const dataG = shGastos.getDataRange().getValues();
+      for (let i = 1; i < dataG.length; i++) {
+        const fechaGasto = new Date(dataG[i][1]); 
+        const metodo = String(dataG[i][5]).toUpperCase(); 
+        
+        // AQUÍ EL CAMBIO: Comparamos con el INICIO del día
+        if (fechaGasto >= inicioDiaApertura && metodo === 'EFECTIVO') {
+           totalGastosEfectivo += Number(dataG[i][4]); 
+        }
+      }
+    }
+
+    // --- C. SUMAR COBRANZAS (Mantenemos estricto fechaApertura) ---
+    // Las cobranzas guardan hora exacta, así que mantenemos la lógica estricta
+    // para no sumar cobros de la mañana si abriste caja a la tarde.
+    let totalCobrosEfectivo = 0;
+    const shCob = ss.getSheetByName('COBRANZAS');
+    if (shCob) {
+      const dataC = shCob.getDataRange().getValues();
+      for (let i = 1; i < dataC.length; i++) {
+        const fechaCobro = new Date(dataC[i][1]); 
+        const metodo = String(dataC[i][4]).toUpperCase();
+        
+        if (fechaCobro >= fechaApertura && metodo === 'EFECTIVO') {
+           totalCobrosEfectivo += Number(dataC[i][3]);
+        }
+      }
+    }
+
+    // CÁLCULO FINAL
+    const saldoTeorico = montoInicial + totalVentasEfectivo + totalCobrosEfectivo - totalGastosEfectivo;
+
+    return {
+      id_sesion: check.id_sesion,
+      teorico: saldoTeorico,
+      detalle: { 
+        inicial: montoInicial,
+        ventas: totalVentasEfectivo,
+        cobros: totalCobrosEfectivo,
+        gastos: totalGastosEfectivo
+      }
+    };
+
+  } catch (e) {
+    throw "Error calculando caja: " + e.toString();
   }
-
-  // B. Calcular Teórico
-  const teorico = sesion.monto_inicial + totalVentasEfectivo; // - Gastos en efectivo
-
-  return {
-    inicio: sesion.monto_inicial,
-    ventas: totalVentasEfectivo,
-    gastos: 0, // Implementar suma de gastos si aplica
-    teorico: teorico,
-    id_sesion: sesion.id_sesion
-  };
 }
-
 // ==========================================
 // MÓDULO CAJA V3 (PROPERTIES SERVICE) - INFALIBLE
 // ==========================================
@@ -4123,5 +3989,58 @@ function forzarResetCaja(idUsuario) {
    const idStr = String(idUsuario).trim();
    PropertiesService.getScriptProperties().deleteProperty('CAJA_ACTIVA_' + idStr);
    return "Memoria de caja reiniciada para usuario " + idStr;
+}
+
+function obtenerHistorialCajas() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shCaja = ss.getSheetByName('CAJA_SESIONES');
+    const shUser = ss.getSheetByName('USUARIOS');
+    
+    if (!shCaja || shCaja.getLastRow() <= 1) return [];
+
+    // 1. Mapa de Usuarios (ID -> Nombre)
+    const mapUser = {};
+    if (shUser) {
+      const dUser = shUser.getDataRange().getValues();
+      for (let i = 1; i < dUser.length; i++) {
+        mapUser[String(dUser[i][0])] = dUser[i][1];
+      }
+    }
+
+    const data = shCaja.getDataRange().getValues();
+    const historial = [];
+
+    // Recorremos (fila 1 en adelante)
+    // Estructura: [0:id, 1:id_user, 2:f_apertura, 3:m_inicial, 4:f_cierre, 5:m_teorico, 6:m_real, 7:dif, 8:estado]
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (row[0]) {
+        
+        // Formatear fechas para evitar problemas de zona horaria
+        let aperturaIso = row[2];
+        let cierreIso = row[4];
+        try { if(row[2] instanceof Date) aperturaIso = row[2].toISOString(); } catch(e){}
+        try { if(row[4] instanceof Date) cierreIso = row[4].toISOString(); } catch(e){}
+
+        historial.push({
+          id_sesion: row[0],
+          usuario: mapUser[String(row[1])] || 'Usuario ' + row[1],
+          fecha_apertura: aperturaIso,
+          monto_inicial: Number(row[3] || 0),
+          fecha_cierre: cierreIso,
+          monto_teorico: Number(row[5] || 0), // Sistema
+          monto_real: Number(row[6] || 0),    // Efectivo Real
+          diferencia: Number(row[7] || 0),
+          estado: row[8]
+        });
+      }
+    }
+
+    return historial.reverse(); // Lo más reciente primero
+
+  } catch (e) {
+    throw "Error al obtener historial caja: " + e.toString();
+  }
 }
 
