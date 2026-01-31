@@ -439,295 +439,292 @@
                 </div>
 
                 <div class="col-md-10 p-4 bg-light min-vh-100 main-content">
+                  <div v-if="vistaActual === 'ventas'">
+                      <div class="d-flex justify-content-between align-items-center mb-4">
+                          <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas</h3>
+                          <div class="btn-group shadow-sm">
+                              <button class="btn"
+                                  :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                  @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
+                              <button class="btn"
+                                  :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                  @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
+                          </div>
+                      </div>
 
-                    <div v-if="vistaActual === 'ventas'">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas</h3>
-                            <div class="btn-group shadow-sm">
-                                <button class="btn"
-                                    :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
-                                    @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
-                                <button class="btn"
-                                    :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
-                                    @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
-                            </div>
-                        </div>
+                      <div v-if="subVistaVentas === 'nueva'">
+                        <h6 class="text-muted text-uppercase fw-bold small mb-3">Datos de la Factura de Venta</h6>
+                          <div class="card border-0 shadow-sm mb-3 no-hover">
+                              <div class="card-body">
+                                  <div class="row g-3 align-items-end">
 
-                        <div v-if="subVistaVentas === 'nueva'">
-                            <div class="card border-0 shadow-sm mb-3 no-hover">
-                                <div class="card-body">
-                                    <div class="row g-3 align-items-end">
+                                      <div class="col-md-2">
+                                          <label class="form-label fw-bold">Cliente</label>
+                                          <div class="input-group">
+                                              <select class="form-select" v-model="formVenta.id_cliente">
+                                                  <option value="" disabled>Seleccionar cliente...</option>
+                                                  <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}
+                                                  </option>
+                                              </select>
+                                              <button class="btn btn-outline-secondary" type="button"
+                                                  @click="abrirModalCliente(null)" title="Crear Nuevo Cliente">
+                                                  <i class="bi bi-person-plus"></i>
+                                              </button>
+                                          </div>
+                                      </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-bold">Cliente</label>
-                                            <div class="input-group">
-                                                <select class="form-select" v-model="formVenta.id_cliente">
-                                                    <option value="" disabled>Seleccionar cliente...</option>
-                                                    <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}
-                                                    </option>
-                                                </select>
-                                                <button class="btn btn-outline-secondary" type="button"
-                                                    @click="abrirModalCliente(null)" title="Crear Nuevo Cliente">
-                                                    <i class="bi bi-person-plus"></i>
-                                                </button>
-                                            </div>
-                                        </div>
+                                      <div class="col-md-2">
+                                          <label class="form-label fw-bold">Desde Depósito</label>
+                                          <select class="form-select text-brand fw-bold" v-model="formVenta.id_deposito">
+                                              <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}
+                                              </option>
+                                          </select>
+                                      </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-bold">Desde Depósito</label>
-                                            <select class="form-select text-brand fw-bold" v-model="formVenta.id_deposito">
-                                                <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}
-                                                </option>
-                                            </select>
-                                        </div>
+                                      <div class="col-md-1">
+                                          <label class="form-label fw-bold">Fecha</label>
+                                          <input type="date" class="form-control" v-model="formVenta.fecha">
+                                      </div>
 
-                                        <div class="col-md-2">
-                                            <label class="form-label fw-bold">Fecha</label>
-                                            <input type="date" class="form-control" v-model="formVenta.fecha">
-                                        </div>
+                                      <div class="col-md-2">
+                                          <label class="form-label fw-bold">Nº Factura</label>
+                                          <input type="text" class="form-control" v-model="formVenta.nro_factura"
+                                              placeholder="Automático">
+                                      </div>
+                                      <div class="col-md-2">
+                                          <label class="form-label fw-bold">Condición</label>
+                                          <select class="form-select" v-model="formVenta.condicion"
+                                              @change="pagosVenta=[]">
+                                              <option value="CONTADO">CONTADO</option>
+                                              <option value="CREDITO">CRÉDITO</option>
+                                          </select>
+                                      </div>
+                                      <div class="col-md-2">
+                                          <label class="form-label fw-bold">Total a Pagar</label>
+                                          <div class="h4 fw-bold text-primary text-end">{{formatoMoneda(totalCarrito) }}</div>
+                                      </div>                                        
+                                      <div class="card bg-light border-0 mb-3">
+                                          <div v-if="formVenta.condicion === 'CONTADO'" class="card-body">
+                                            <label class="fw-bold small">Detalle del pago</label>
+                                              <div>
+                                                  <hr>
 
-                                        <div class="col-md-2">
-                                            <label class="form-label fw-bold">Nº Factura</label>
-                                            <input type="text" class="form-control" v-model="formVenta.nro_factura"
-                                                placeholder="Automático">
-                                        </div>
-                                        <div class="card bg-light border-0 mb-3">
-                                            <div class="card-body">
+                                                  <ul class="list-group mb-2" v-if="pagosVenta.length > 0">
+                                                      <li v-for="(p, i) in pagosVenta" :key="i"
+                                                          class="list-group-item d-flex justify-content-between p-2">
+                                                          <span><small>{{ p.metodo }}:</small> <b>{{
+                                                                  Number(p.monto).toLocaleString() }}</b></span>
+                                                          <i class="bi bi-x-circle text-danger" style="cursor:pointer"
+                                                              @click="quitarPagoLista(i)"></i>
+                                                      </li>
+                                                  </ul>
 
-                                                <div class="d-flex justify-content-between mb-3">
-                                                    <div style="width: 48%;">
-                                                        <label class="fw-bold small">Condición</label>
-                                                        <select class="form-select" v-model="formVenta.condicion"
-                                                            @change="pagosVenta=[]">
-                                                            <option value="CONTADO">CONTADO</option>
-                                                            <option value="CREDITO">CRÉDITO</option>
-                                                        </select>
-                                                    </div>
-                                                    <div style="width: 48%;">
-                                                        <label class="fw-bold small">Total a Pagar</label>
-                                                        <div class="h4 fw-bold text-primary text-end">{{
-                                                            totalCarrito.toLocaleString('es-PY') }}</div>
-                                                    </div>
-                                                </div>
+                                                  <div class="input-group mb-2" v-if="saldoRestanteVenta > 0">
+                                                      <select class="form-select" v-model="pagoInput.metodo"
+                                                          style="flex: 0 0 110px;">
+                                                          <option value="EFECTIVO">Efectivo</option>
+                                                          <option value="QR">QR</option>
+                                                          <option value="TARJETA">Tarjeta</option>
+                                                          <option value="TRANSFERENCIA">Transf.</option>
+                                                      </select>
+                                                      <input type="number" class="form-control" v-model="pagoInput.monto">
+                                                      <button class="btn btn-secondary" @click="agregarPagoLista"><i
+                                                              class="bi bi-plus"></i></button>
+                                                  </div>
 
-                                                <div v-if="formVenta.condicion === 'CONTADO'">
-                                                    <hr>
+                                                  <div class="text-end small fw-bold"
+                                                      :class="saldoRestanteVenta > 0 ? 'text-danger' : 'text-success'">
+                                                      {{ saldoRestanteVenta > 0 ? 'Falta: ' +
+                                                      saldoRestanteVenta.toLocaleString() : '¡Cubierto!' }}
+                                                  </div>
+                                              </div>
 
-                                                    <ul class="list-group mb-2" v-if="pagosVenta.length > 0">
-                                                        <li v-for="(p, i) in pagosVenta" :key="i"
-                                                            class="list-group-item d-flex justify-content-between p-2">
-                                                            <span><small>{{ p.metodo }}:</small> <b>{{
-                                                                    Number(p.monto).toLocaleString() }}</b></span>
-                                                            <i class="bi bi-x-circle text-danger" style="cursor:pointer"
-                                                                @click="quitarPagoLista(i)"></i>
-                                                        </li>
-                                                    </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
 
-                                                    <div class="input-group mb-2" v-if="saldoRestanteVenta > 0">
-                                                        <select class="form-select" v-model="pagoInput.metodo"
-                                                            style="flex: 0 0 110px;">
-                                                            <option value="EFECTIVO">Efectivo</option>
-                                                            <option value="QR">QR</option>
-                                                            <option value="TARJETA">Tarjeta</option>
-                                                            <option value="TRANSFERENCIA">Transf.</option>
-                                                        </select>
-                                                        <input type="number" class="form-control" v-model="pagoInput.monto">
-                                                        <button class="btn btn-secondary" @click="agregarPagoLista"><i
-                                                                class="bi bi-plus"></i></button>
-                                                    </div>
+                          <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3">
+                              <div class="card-body bg-light">
+                                <h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6>
+                                  <form @submit.prevent="agregarAlCarritoVenta">
+                                      <div class="row g-2 align-items-end">
+                                          <div class="col-md-6">
+                                              <label class="form-label small">Producto</label>
+                                              <div class="input-group">
+                                                  <button class="btn btn-dark" type="button" @click="abrirEscaner"
+                                                      title="Escanear Código de Barras">
+                                                      <i class="bi bi-qr-code-scan"></i>
+                                                  </button>
 
-                                                    <div class="text-end small fw-bold"
-                                                        :class="saldoRestanteVenta > 0 ? 'text-danger' : 'text-success'">
-                                                        {{ saldoRestanteVenta > 0 ? 'Falta: ' +
-                                                        saldoRestanteVenta.toLocaleString() : '¡Cubierto!' }}
-                                                    </div>
-                                                </div>
+                                                  <select class="form-select form-select-lg"
+                                                      v-model="lineaVenta.id_producto" required
+                                                      @change="alSeleccionarProductoVenta">
+                                                      <option value="" disabled>🔍 Buscar o Escanear...</option>
+                                                      <option v-for="p in productos" :value="p.id_producto"
+                                                          :disabled="(p.stock_actual||0) <= 0">
+                                                          {{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{
+                                                          formatoMoneda(p.precio_venta_base) }}
+                                                      </option>
+                                                  </select>
+                                              </div>
+                                          </div>
 
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                          <div class="col-md-2 col-4">
+                                              <label class="form-label small">Cantidad</label>
+                                              <input type="number" class="form-control form-control-lg"
+                                                  v-model.number="lineaVenta.cantidad" min="1" required>
+                                          </div>
+                                          <div class="col-md-2 col-8">
+                                              <label class="form-label small">Precio Unit.</label>
+                                              <input type="number" class="form-control form-control-lg"
+                                                  v-model.number="lineaVenta.precio" min="0" required>
+                                          </div>
+                                          <div class="col-md-2 d-grid">
+                                              <button type="submit" class="btn btn-brand btn-lg fw-bold"><i
+                                                      class="bi bi-cart-plus"></i></button>
+                                          </div>
+                                      </div>
+                                  </form>
+                              </div>
+                          </div>
 
-                            <div class="card border-0 shadow-sm mb-3 no-hover border-brand border-top border-3">
-                                <div class="card-body bg-light">
-                                    <form @submit.prevent="agregarAlCarritoVenta">
-                                        <div class="row g-2 align-items-end">
-                                            <div class="col-md-6">
-                                                <label class="form-label small">Producto</label>
-                                                <div class="input-group">
-                                                    <button class="btn btn-dark" type="button" @click="abrirEscaner"
-                                                        title="Escanear Código de Barras">
-                                                        <i class="bi bi-qr-code-scan"></i>
-                                                    </button>
+                          <div class="card border-0 shadow-sm no-hover">
+                              <div class="table-responsive">
+                                  <table class="table align-middle mb-0 table-striped">
+                                      <thead class="table-light">
+                                          <tr>
+                                              <th>Producto</th>
+                                              <th class="text-center">Cant.</th>
+                                              <th class="text-end">Precio</th>
+                                              <th class="text-end">Subtotal</th>
+                                              <th style="width: 50px;"></th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          <tr v-for="(item, index) in carritoVenta" :key="index">
+                                              <td class="fw-bold text-secondary">{{
+                                                  obtenerNombreProducto(item.id_producto) }}</td>
+                                              <td class="text-center">{{ item.cantidad }}</td>
+                                              <td class="text-end">{{ formatoMoneda(item.precio) }}</td>
+                                              <td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio)
+                                                  }}</td>
+                                              <td>
+                                                  <button class="btn btn-sm text-danger"
+                                                      @click="quitarDelCarritoVenta(index)"><i
+                                                          class="bi bi-trash"></i></button>
+                                              </td>
+                                          </tr>
+                                          <tr v-if="carritoVenta.length === 0">
+                                              <td colspan="5" class="text-center py-5 text-muted">Carrito vacío, agrega
+                                                  productos arriba.</td>
+                                          </tr>
+                                      </tbody>
+                                      <tfoot v-if="carritoVenta.length > 0">
+                                          <tr class="text-muted small">
+                                              <td colspan="3" class="text-end border-0 pt-3">Liquidación IVA:</td>
+                                              <td class="text-end border-0 pt-3">{{ formatoMoneda(totalIVA) }}</td>
+                                              <td class="border-0"></td>
+                                          </tr>
+                                          <tr class="bg-brand text-white">
+                                              <td colspan="3" class="text-end fw-bold fs-5 border-0">TOTAL A PAGAR:</td>
+                                              <td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}
+                                              </td>
+                                              <td class="border-0"></td>
+                                          </tr>
+                                      </tfoot>
+                                  </table>
+                              </div>
+                              <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
+                                  <button class="btn btn-outline-secondary me-2"
+                                      @click="limpiarCarritoVenta">Cancelar</button>
 
-                                                    <select class="form-select form-select-lg"
-                                                        v-model="lineaVenta.id_producto" required
-                                                        @change="alSeleccionarProductoVenta">
-                                                        <option value="" disabled>🔍 Buscar o Escanear...</option>
-                                                        <option v-for="p in productos" :value="p.id_producto"
-                                                            :disabled="(p.stock_actual||0) <= 0">
-                                                            {{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{
-                                                            formatoMoneda(p.precio_venta_base) }}
-                                                        </option>
-                                                    </select>
-                                                </div>
-                                            </div>
+                                  <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"
+                                      :disabled="datosCaja.estado !== 'ABIERTA'"> <i class="bi bi-cash-coin me-2"></i>
+                                      {{ datosCaja.estado === 'ABIERTA' ? 'FINALIZAR VENTA' : 'CAJA CERRADA' }}
+                                  </button>
+                              </div>
 
-                                            <div class="col-md-2 col-4">
-                                                <label class="form-label small">Cantidad</label>
-                                                <input type="number" class="form-control form-control-lg"
-                                                    v-model.number="lineaVenta.cantidad" min="1" required>
-                                            </div>
-                                            <div class="col-md-2 col-8">
-                                                <label class="form-label small">Precio Unit.</label>
-                                                <input type="number" class="form-control form-control-lg"
-                                                    v-model.number="lineaVenta.precio" min="0" required>
-                                            </div>
-                                            <div class="col-md-2 d-grid">
-                                                <button type="submit" class="btn btn-brand btn-lg fw-bold"><i
-                                                        class="bi bi-cart-plus"></i></button>
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
+                          </div>
 
-                            <div class="card border-0 shadow-sm no-hover">
-                                <div class="table-responsive">
-                                    <table class="table align-middle mb-0 table-striped">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>Producto</th>
-                                                <th class="text-center">Cant.</th>
-                                                <th class="text-end">Precio</th>
-                                                <th class="text-end">Subtotal</th>
-                                                <th style="width: 50px;"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="(item, index) in carritoVenta" :key="index">
-                                                <td class="fw-bold text-secondary">{{
-                                                    obtenerNombreProducto(item.id_producto) }}</td>
-                                                <td class="text-center">{{ item.cantidad }}</td>
-                                                <td class="text-end">{{ formatoMoneda(item.precio) }}</td>
-                                                <td class="text-end fw-bold">{{ formatoMoneda(item.cantidad * item.precio)
-                                                    }}</td>
-                                                <td>
-                                                    <button class="btn btn-sm text-danger"
-                                                        @click="quitarDelCarritoVenta(index)"><i
-                                                            class="bi bi-trash"></i></button>
-                                                </td>
-                                            </tr>
-                                            <tr v-if="carritoVenta.length === 0">
-                                                <td colspan="5" class="text-center py-5 text-muted">Carrito vacío, agrega
-                                                    productos arriba.</td>
-                                            </tr>
-                                        </tbody>
-                                        <tfoot v-if="carritoVenta.length > 0">
-                                            <tr class="text-muted small">
-                                                <td colspan="3" class="text-end border-0 pt-3">Liquidación IVA:</td>
-                                                <td class="text-end border-0 pt-3">{{ formatoMoneda(totalIVA) }}</td>
-                                                <td class="border-0"></td>
-                                            </tr>
-                                            <tr class="bg-brand text-white">
-                                                <td colspan="3" class="text-end fw-bold fs-5 border-0">TOTAL A PAGAR:</td>
-                                                <td class="text-end fw-bold fs-3 border-0">{{ formatoMoneda(totalVenta) }}
-                                                </td>
-                                                <td class="border-0"></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                                <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
-                                    <button class="btn btn-outline-secondary me-2"
-                                        @click="limpiarCarritoVenta">Cancelar</button>
+                      </div>
 
-                                    <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"
-                                        :disabled="datosCaja.estado !== 'ABIERTA'"> <i class="bi bi-cash-coin me-2"></i>
-                                        {{ datosCaja.estado === 'ABIERTA' ? 'FINALIZAR VENTA' : 'CAJA CERRADA' }}
-                                    </button>
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                        <div v-if="subVistaVentas === 'historial'">
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <div class="input-group shadow-sm">
-                                        <span class="input-group-text bg-white border-end-0">
-                                            <i class="bi bi-search text-muted"></i>
-                                        </span>
-                                        <input type="text" class="form-control border-start-0 ps-0" v-model="busquedaVenta"
-                                            placeholder="Buscar por cliente o factura...">
-                                        <button v-if="busquedaVenta" class="btn btn-outline-secondary"
-                                            @click="busquedaVenta = ''">
-                                            <i class="bi bi-x-lg"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="card border-0 shadow-sm">
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th class="ps-3">Fecha</th>
-                                                <th>Cliente</th>
-                                                <th>Factura</th>
-                                                <th class="text-center">Condición</th>
-                                                <th class="text-end">Total</th>
-                                                <th class="text-center">Estado</th>
-                                                <th class="text-end pe-3">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="h in ventasFiltradas" :key="h.id_venta">
-                                                <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString()
-                                                    }}</td>
-                                                <td class="fw-bold">{{ h.nombre_cliente }}</td>
-                                                <td><span class="badge bg-light text-dark border">{{ h.factura }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="badge"
-                                                        :class="h.condicion === 'CREDITO' ? 'bg-warning text-dark border' : 'bg-info bg-opacity-10 text-primary border border-primary'">
-                                                        {{ h.condicion }}
-                                                    </span>
-                                                </td>
-                                                <td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td>
-                                                <td class="text-center">
-                                                    <span v-if="h.estado === 'ANULADO'"
-                                                        class="badge bg-danger">ANULADO</span>
-                                                    <span v-else-if="h.estado === 'PENDIENTE'"
-                                                        class="badge bg-warning text-dark">PENDIENTE</span>
-                                                    <span v-else class="badge bg-success">PAGADO</span>
-                                                </td>
-                                                <td class="text-end pe-3">
-                                                    <button class="btn btn-sm btn-outline-dark me-1"
-                                                        @click="imprimirTicket(h)" title="Imprimir Ticket Térmico"><i
-                                                            class="bi bi-printer-fill"></i></button>
-                                                    <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank"
-                                                        class="btn btn-sm btn-outline-secondary me-1"
-                                                        title="Ver Factura PDF"><i class="bi bi-file-earmark-pdf"></i></a>
-                                                    <button class="btn btn-sm btn-outline-primary me-1"
-                                                        @click="verDetalleVenta(h)" title="Ver productos">
-                                                        <i class="bi bi-eye"></i>
-                                                    </button>
-                                                    <button v-if="h.estado !== 'ANULADO'"
-                                                        class="btn btn-sm btn-outline-danger" @click="anularVenta(h)"
-                                                        title="Anular venta">
-                                                        <i class="bi bi-slash-circle"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                      <div v-if="subVistaVentas === 'historial'">
+                          <div class="row mb-3">
+                              <div class="col-md-6">
+                                  <div class="input-group shadow-sm">
+                                      <span class="input-group-text bg-white border-end-0">
+                                          <i class="bi bi-search text-muted"></i>
+                                      </span>
+                                      <input type="text" class="form-control border-start-0 ps-0" v-model="busquedaVenta"
+                                          placeholder="Buscar por cliente o factura...">
+                                      <button v-if="busquedaVenta" class="btn btn-outline-secondary"
+                                          @click="busquedaVenta = ''">
+                                          <i class="bi bi-x-lg"></i>
+                                      </button>
+                                  </div>
+                              </div>
+                          </div>
+                          <div class="card border-0 shadow-sm">
+                              <div class="table-responsive">
+                                  <table class="table table-hover align-middle mb-0">
+                                      <thead class="table-light">
+                                          <tr>
+                                              <th class="ps-3">Fecha</th>
+                                              <th>Cliente</th>
+                                              <th>Factura</th>
+                                              <th class="text-center">Condición</th>
+                                              <th class="text-end">Total</th>
+                                              <th class="text-center">Estado</th>
+                                              <th class="text-end pe-3">Acciones</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          <tr v-for="h in ventasFiltradas" :key="h.id_venta">
+                                              <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString()
+                                                  }}</td>
+                                              <td class="fw-bold">{{ h.nombre_cliente }}</td>
+                                              <td><span class="badge bg-light text-dark border">{{ h.factura }}</span>
+                                              </td>
+                                              <td class="text-center">
+                                                  <span class="badge"
+                                                      :class="h.condicion === 'CREDITO' ? 'bg-warning text-dark border' : 'bg-info bg-opacity-10 text-primary border border-primary'">
+                                                      {{ h.condicion }}
+                                                  </span>
+                                              </td>
+                                              <td class="text-end fw-bold text-success">{{ formatoMoneda(h.total) }}</td>
+                                              <td class="text-center">
+                                                  <span v-if="h.estado === 'ANULADO'"
+                                                      class="badge bg-danger">ANULADO</span>
+                                                  <span v-else-if="h.estado === 'PENDIENTE'"
+                                                      class="badge bg-warning text-dark">PENDIENTE</span>
+                                                  <span v-else class="badge bg-success">PAGADO</span>
+                                              </td>
+                                              <td class="text-end pe-3">
+                                                  <button class="btn btn-sm btn-outline-dark me-1"
+                                                      @click="imprimirTicket(h)" title="Imprimir Ticket Térmico"><i
+                                                          class="bi bi-printer-fill"></i></button>
+                                                  <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank"
+                                                      class="btn btn-sm btn-outline-secondary me-1"
+                                                      title="Ver Factura PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+                                                  <button class="btn btn-sm btn-outline-primary me-1"
+                                                      @click="verDetalleVenta(h)" title="Ver productos">
+                                                      <i class="bi bi-eye"></i>
+                                                  </button>
+                                                  <button v-if="h.estado !== 'ANULADO'"
+                                                      class="btn btn-sm btn-outline-danger" @click="anularVenta(h)"
+                                                      title="Anular venta">
+                                                      <i class="bi bi-slash-circle"></i>
+                                                  </button>
+                                              </td>
+                                          </tr>
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
 
                     <div v-if="vistaActual === 'caja'" class="animate__animated animate__fadeIn">
 
@@ -2122,14 +2119,29 @@
                     </div>
 
                     <div v-if="vistaActual === 'compras'">
+                    
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras</h3>
+                        <div>
+                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart4 text-brand me-2"></i>Compras</h3>
+                        </div>
+                        
                         <div class="btn-group shadow-sm">
-                            <button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaCompras = 'nueva'">
-                                <i class="bi bi-plus-lg"></i> Nueva Compra
+                            <button class="btn" 
+                                :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                @click="subVistaCompras = 'nueva'">
+                                <i class="bi bi-plus-lg me-1"></i> Nueva Compra
                             </button>
-                            <button class="btn" :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialCompras">
-                                <i class="bi bi-clock-history"></i> Historial
+                            
+                            <button class="btn" 
+                                :class="subVistaCompras === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                @click="cargarHistorialCompras()">
+                                <i class="bi bi-clock-history me-1"></i> Historial
+                            </button>
+                            
+                            <button class="btn" 
+                                :class="subVistaCompras === 'cuentas_pagar' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                @click="cargarCuentasPagar()">
+                                <i class="bi bi-wallet2 me-1"></i> Cuentas a Pagar
                             </button>
                         </div>
                     </div>
@@ -2139,7 +2151,7 @@
                             <div class="card-body">
                                 <h6 class="text-muted text-uppercase fw-bold small mb-3">Datos de la Factura de Compra</h6>
                                 <div class="row g-3">
-                                    <div class="col-md-4">
+                                    <div class="col-md-2">
                                         <label class="form-label fw-bold small">Proveedor</label>
                                         <select class="form-select" v-model="formCompra.id_proveedor">
                                             <option value="" disabled>Seleccione proveedor...</option>
@@ -2147,26 +2159,30 @@
                                         </select>
                                     </div>
                                     <div class="col-md-2">
+                                        <label class="form-label fw-bold small">Nº Factura</label>
+                                        <input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456">
+                                    </div>                                    
+                                    <div class="col-md-2">
                                         <label class="form-label fw-bold small">Condición</label>
                                         <select class="form-select" v-model="formCompra.condicion">
                                             <option value="CONTADO">Contado</option>
                                             <option value="CREDITO">Crédito</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <label class="form-label fw-bold small">Ingresar en Depósito</label>
                                         <select class="form-select text-primary fw-bold" v-model="formCompra.id_deposito_destino">
                                             <option value="" disabled>Seleccione...</option>
                                             <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-1">
                                         <label class="form-label fw-bold small">Fecha Emisión</label>
                                         <input type="date" class="form-control" v-model="formCompra.fecha">
                                     </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold small">Nº Factura</label>
-                                        <input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456">
+                                    <div class="col-md-1">
+                                        <label class="form-label small fw-bold text-danger">Vencimiento</label>
+                                        <input type="date" class="form-control border-danger" v-model="formCompra.vencimiento">
                                     </div>
                                 </div>
                             </div>
@@ -2174,9 +2190,10 @@
 
                         <div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3">
                             <div class="card-body bg-light">
+                                <h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6>
                                 <form @submit.prevent="agregarAlCarrito">
                                     <div class="row g-2 align-items-end">
-                                        <div class="col-md-5">
+                                        <div class="col-md-4">
                                             <label class="form-label small">Producto</label>
                                             <select class="form-select" v-model="lineaTemp.id_producto" required>
                                                 <option value="" disabled>Buscar producto...</option>
@@ -2185,19 +2202,42 @@
                                                 </option>
                                             </select>
                                         </div>
-                                        <div class="col-md-2 col-6">
-                                            <label class="form-label small">Cantidad</label>
-                                            <input type="number" class="form-control" v-model.number="lineaTemp.cantidad" min="1" required placeholder="0">
-                                        </div>
-                                        <div class="col-md-3 col-6">
+
+                                        <div class="col-md-2">
                                             <label class="form-label small">Costo (Gs)</label>
                                             <input type="number" class="form-control" v-model.number="lineaTemp.costo" min="0" required placeholder="0">
                                         </div>
-                                        <div class="col-md-2 d-grid">
+
+                                        <div class="col-md-2">
+                                            <label class="form-label small">IVA %</label>
+                                            <select class="form-select" v-model.number="lineaTemp.tasa_iva">
+                                                <option value="10">10%</option>
+                                                <option value="5">5%</option>
+                                                <option value="0">Exenta</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-2">
+                                            <label class="form-label small">Tipo</label>
+                                            <select class="form-select" v-model="lineaTemp.metodo_iva">
+                                                <option value="INCLUIDO">Incluido</option>
+                                                <option value="EXCLUIDO">Excluido (+)</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-1">
+                                            <label class="form-label small">Cant.</label>
+                                            <input type="number" class="form-control" v-model.number="lineaTemp.cantidad" min="1" required placeholder="1">
+                                        </div>
+
+                                        <div class="col-md-1 d-grid">
                                             <button type="submit" class="btn btn-brand fw-bold">
-                                                <i class="bi bi-plus-lg"></i> Agregar
+                                                <i class="bi bi-plus-lg"></i>
                                             </button>
                                         </div>
+                                    </div>
+                                    <div class="mt-2 text-end small text-muted" v-if="lineaTemp.costo > 0">
+                                        Costo Final Unitario: <strong>{{ formatoMoneda(calcularCostoFinal(lineaTemp)) }}</strong>
                                     </div>
                                 </form>
                             </div>
@@ -2210,29 +2250,38 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="ps-3">Producto</th>
+                                                <th class="text-center">IVA</th>
                                                 <th class="text-center">Cant.</th>
-                                                <th class="text-end">Costo</th>
+                                                <th class="text-end">Costo Final</th>
                                                 <th class="text-end">Subtotal</th>
                                                 <th class="text-end pe-3">Acción</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr v-for="(item, index) in carritoCompra" :key="index">
-                                                <td class="ps-3"><div class="fw-bold text-dark">{{ item.nombre }}</div></td>
+                                                <td class="ps-3">
+                                                    <div class="fw-bold text-dark">{{ item.nombre }}</div>
+                                                </td>
+                                                <td class="text-center small">
+                                                    <span class="badge bg-light text-dark border">{{ item.tasa_iva }}%</span>
+                                                    <div style="font-size: 9px;" class="text-muted">{{ item.metodo_iva === 'INCLUIDO' ? '(Inc)' : '(Exc)' }}</div>
+                                                </td>
                                                 <td class="text-center">{{ item.cantidad }}</td>
-                                                <td class="text-end">{{ formatoMoneda(item.costo) }}</td>
+                                                <td class="text-end">{{ formatoMoneda(item.costo_final) }}</td>
                                                 <td class="text-end fw-bold">{{ formatoMoneda(item.subtotal) }}</td>
                                                 <td class="text-end pe-3">
-                                                    <button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)"><i class="bi bi-trash"></i></button>
+                                                    <button class="btn btn-sm text-danger" @click="quitarDelCarrito(index)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                             <tr v-if="carritoCompra.length === 0">
-                                                <td colspan="5" class="text-center py-4 text-muted">El carrito está vacío.</td>
+                                                <td colspan="6" class="text-center py-4 text-muted">El carrito está vacío.</td>
                                             </tr>
                                         </tbody>
                                         <tfoot v-if="carritoCompra.length > 0" class="table-light fw-bold">
                                             <tr>
-                                                <td colspan="3" class="text-end text-uppercase text-secondary pe-3">Total Compra:</td>
+                                                <td colspan="4" class="text-end text-uppercase text-secondary pe-3">Total a Pagar:</td>
                                                 <td class="text-end fs-5 text-dark">{{ formatoMoneda(carritoCompra.reduce((a, b) => a + b.subtotal, 0)) }}</td>
                                                 <td></td>
                                             </tr>
@@ -2242,12 +2291,13 @@
                             </div>
                             <div class="card-footer bg-white p-3 text-end" v-if="carritoCompra.length > 0">
                                 <button class="btn btn-outline-secondary me-2" @click="limpiarCarrito">Cancelar</button>
-                                <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarCompraFinal"
-                                    :disabled="datosCaja.estado !== 'ABIERTA'"> <i class="bi bi-cash-coin me-2"></i>
-                                    {{ datosCaja.estado === 'ABIERTA' ? 'FINALIZAR COMPRA' : 'CAJA CERRADA' }}
+                                <button class="btn btn-brand fw-bold px-4" @click="guardarCompraFinal">
+                                    <i class="bi bi-check-lg me-1"></i> FINALIZAR COMPRA
                                 </button>
                             </div>
                         </div>
+
+
                     </div>
                     
                     <div v-if="subVistaCompras === 'historial'">
@@ -2310,6 +2360,86 @@
                             </div>
                         </div>
                     </div>
+
+                    <div v-if="subVistaCompras === 'cuentas_pagar'" class="animate__animated animate__fadeIn">
+                      <div class="row g-3 mb-4">
+                          <div class="col-md-6">
+                              <div class="card border-0 shadow-sm border-start border-4 border-danger">
+                                  <div class="card-body">
+                                      <small class="text-muted fw-bold text-uppercase">Deuda Vencida (Urgente)</small>
+                                      <h3 class="text-danger fw-bold my-1">{{ formatoMoneda(totalesDeuda.vencido) }}</h3>
+                                      <small class="text-danger"><i class="bi bi-exclamation-circle-fill"></i> Requiere atención</small>
+                                  </div>
+                              </div>
+                          </div>
+                          <div class="col-md-6">
+                              <div class="card border-0 shadow-sm border-start border-4 border-secondary">
+                                  <div class="card-body">
+                                      <small class="text-muted fw-bold text-uppercase">Total Deuda Pendiente</small>
+                                      <h3 class="text-dark fw-bold my-1">{{ formatoMoneda(totalesDeuda.total) }}</h3>
+                                      <small class="text-muted">Totalidad de saldo a proveedores</small>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div class="card border-0 shadow-sm">
+                          <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                              <h6 class="fw-bold m-0"><i class="bi bi-list-check me-2"></i>Facturas Pendientes de Pago</h6>
+                              <button class="btn btn-sm btn-outline-secondary" @click="cargarCuentasPagar" title="Actualizar">
+                                  <i class="bi bi-arrow-clockwise"></i>
+                              </button>
+                          </div>
+                          <div class="table-responsive">
+                              <table class="table table-hover align-middle mb-0">
+                                  <thead class="table-light">
+                                      <tr>
+                                          <th class="ps-3">Vencimiento</th>
+                                          <th>Proveedor</th>
+                                          <th>Factura</th>
+                                          <th class="text-end">Total Orig.</th>
+                                          <th class="text-end">Saldo Pendiente</th>
+                                          <th class="text-center">Estado</th>
+                                          <th class="text-end pe-3">Acción</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      <tr v-for="c in listaCuentasPagar" :key="c.id_compra">
+                                          <td class="ps-3">
+                                              <div class="fw-bold">{{ c.fecha_vencimiento }}</div>
+                                              <small class="text-danger fw-bold" v-if="c.dias_restantes < 0">Hace {{ Math.abs(c.dias_restantes) }} días</small>
+                                              <small class="text-success" v-else>En {{ c.dias_restantes }} días</small>
+                                          </td>
+                                          <td>
+                                              <div class="fw-bold text-dark">{{ c.nombre_proveedor }}</div>
+                                              <div class="small text-muted">Emisión: {{ c.fecha_emision }}</div>
+                                          </td>
+                                          <td><span class="badge bg-light text-secondary border">{{ c.comprobante }}</span></td>
+                                          <td class="text-end text-muted">{{ formatoMoneda(c.total_original) }}</td>
+                                          <td class="text-end fw-bold fs-5 text-dark">{{ formatoMoneda(c.saldo_pendiente) }}</td>
+                                          <td class="text-center">
+                                              <span class="badge rounded-pill" :class="getClaseSemaforo(c.estado_semaforo)">
+                                                  {{ c.estado_semaforo === 'ROJO' ? 'VENCIDO' : (c.estado_semaforo === 'AMARILLO' ? 'PRONTO' : 'AL DÍA') }}
+                                              </span>
+                                          </td>
+                                          <td class="text-end pe-3">
+                                              <button class="btn btn-sm btn-success fw-bold px-3 shadow-sm" @click="abrirModalPagoProv(c)">
+                                                  <i class="bi bi-wallet2 me-1"></i> PAGAR
+                                              </button>
+                                          </td>
+                                      </tr>
+                                      <tr v-if="listaCuentasPagar.length === 0">
+                                          <td colspan="7" class="text-center py-5 text-muted">
+                                              <i class="bi bi-emoji-smile text-success fs-1 mb-2"></i><br>
+                                              ¡Todo al día! No tienes deudas pendientes.
+                                          </td>
+                                      </tr>
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  </div>
+
                 </div>
 
                 <div v-if="vistaActual === 'productos'">
@@ -3650,6 +3780,12 @@
                 confirmacion: ''
             },
 
+            listaCuentasPagar: [],
+            totalesDeuda: { total: 0, vencido: 0 }, 
+            
+            modalPagoProv: null,
+            formPagoProv: { /* ... */ },
+
             subVistaProductos: 'lista',
 
             filtroRemisionCliente: '', 
@@ -3777,13 +3913,13 @@
             historialVentas: [], 
             itemsDetalle: [],
             
-            formCompra: { 
-                id_proveedor: '', 
-                id_deposito_destino: '', // Variable clave nueva
-                fecha: new Date().toISOString().slice(0,10), 
-                comprobante: '',
-                condicion: 'CONTADO',    // Variable clave nueva
-                usuario_id: ''
+            formCompra: {
+                id_proveedor: '',
+                id_deposito_destino: '',
+                condicion: 'CONTADO',
+                fecha: new Date().toISOString().split('T')[0],
+                vencimiento: new Date().toISOString().split('T')[0], // <--- AGREGAR ESTO
+                comprobante: ''
             },
             lineaTemp: { id_producto:'', cantidad:'', costo:'' },
             carritoCompra: [], historialCompras: [],
@@ -3809,6 +3945,14 @@
                 nombre:'', sku:'', precio_venta_base:0, 
                 impuesto_iva: 10, metodo_iva: 'INCLUIDO', // <--- AGREGAR ESTO
                 datos_adicionales:{} 
+            },
+            calcularCostoFinal(item) {
+                let costo = Number(item.costo);
+                if (item.metodo_iva === 'EXCLUIDO') {
+                    // Si es excluido, le sumamos el impuesto al costo para saber el total a pagar
+                    costo = costo * (1 + (item.tasa_iva / 100));
+                }
+                return costo;
             },
             formCliente: { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }, 
             formProveedor: { razon_social:'', doc_identidad:'', contacto:'', datos_adicionales:{} },
@@ -4088,6 +4232,126 @@
                     .obtenerHistorialCajas();
             },
 
+            abrirModalPagoProv(item) {
+                // Rellenamos el formulario con los datos de la factura seleccionada
+                this.formPagoProv = {
+                    id_compra: item.id_compra,
+                    id_proveedor: item.id_proveedor || '', 
+                    proveedor_nombre: item.nombre_proveedor,
+                    nro_factura: item.comprobante,
+                    saldo_pendiente: item.saldo_pendiente,
+                    monto: item.saldo_pendiente, // Por defecto sugerimos pagar todo lo que debe
+                    metodo: 'EFECTIVO',
+                    referencia: '',
+                    observacion: ''
+                };
+                
+                // Inicializamos el modal de Bootstrap si no existe aún en memoria
+                if (!this.modalPagoProv) {
+                    var el = document.getElementById('modalPagoProveedor');
+                    if(el) this.modalPagoProv = new bootstrap.Modal(el);
+                }
+                
+                // Mostramos el modal
+                if(this.modalPagoProv) this.modalPagoProv.show();
+            },
+
+            calcularVencimiento() {
+                if (this.formCompra.condicion === 'CONTADO') {
+                    // Si es Contado, Vencimiento = Emisión
+                    this.formCompra.vencimiento = this.formCompra.fecha;
+                } else {
+                    // Si es Crédito, sugerimos 30 días (el usuario puede cambiarlo luego)
+                    const fechaEmision = new Date(this.formCompra.fecha);
+                    fechaEmision.setDate(fechaEmision.getDate() + 30); // Sumar 30 días
+                    this.formCompra.vencimiento = fechaEmision.toISOString().split('T')[0];
+                }
+            },
+
+            confirmarPagoProveedor() {
+                // A. Validaciones básicas
+                if (this.formPagoProv.monto <= 0) {
+                    return this.notificar('warning', "El monto debe ser mayor a 0.");
+                }
+                // Permitimos un pequeño margen de error (100 Gs) por redondeos
+                if (this.formPagoProv.monto > (this.formPagoProv.saldo_pendiente + 100)) {
+                    return this.notificar('warning', "El monto excede la deuda pendiente.");
+                }
+                
+                // B. Validación de Caja (Si paga en efectivo)
+                if (this.formPagoProv.metodo === 'EFECTIVO' && this.datosCaja.estado !== 'ABIERTA') {
+                    return this.notificar('error', "⛔ Caja Cerrada. Abre la caja para pagar en efectivo.");
+                }
+
+                this.cargando = true;
+
+                // Preparar paquete para enviar
+                const pkg = {
+                    ...this.formPagoProv,
+                    usuario_id: this.usuarioLogueado ? this.usuarioLogueado.id_usuario : "Sistema",
+                    usuario_nombre: this.usuarioLogueado ? this.usuarioLogueado.nombre : "Sistema"
+                };
+
+                // C. Llamada al Google Apps Script
+                google.script.run.withSuccessHandler(res => {
+                    this.cargando = false;
+                    if(res.success) {
+                        this.notificar('success', "Pago registrado correctamente.");
+                        
+                        // Ocultar modal
+                        if(this.modalPagoProv) this.modalPagoProv.hide();
+                        
+                        // Recargar la lista de deudas para ver el saldo actualizado
+                        this.cargarCuentasPagar(); 
+                        
+                        // Recargar datos globales (por si bajó el saldo de caja)
+                        this.cargarDatosIniciales(); 
+                    }
+                })
+                .withFailureHandler(e => {
+                    this.cargando = false;
+                    this.notificar('error', "Error al pagar: " + e);
+                })
+                .registrarPagoProveedor(pkg);
+            },
+
+            getClaseSemaforo(estado) {
+                if (estado === 'ROJO') return 'bg-danger text-white';     // Vencido
+                if (estado === 'AMARILLO') return 'bg-warning text-dark'; // Por vencer
+                return 'bg-success text-white';                           // Al día
+            },
+
+            cargarCuentasPagar() {
+                this.vistaActual = 'compras'; 
+                this.subVistaCompras = 'cuentas_pagar'; 
+                
+                this.cargando = true;
+                this.listaCuentasPagar = [];
+                
+                // Reiniciamos los totales visualmente a 0 mientras carga
+                this.totalesDeuda = { total: 0, vencido: 0 }; 
+
+                google.script.run.withSuccessHandler(res => {
+                    this.cargando = false;
+                    this.listaCuentasPagar = res;
+                    
+                    // Aseguramos que el objeto exista antes de asignar propiedades
+                    if (!this.totalesDeuda) this.totalesDeuda = { total: 0, vencido: 0 };
+
+                    // Calculamos Totales
+                    this.totalesDeuda.total = res.reduce((sum, i) => sum + (Number(i.saldo_pendiente) || 0), 0);
+                    
+                    this.totalesDeuda.vencido = res
+                        .filter(i => i.estado_semaforo === 'ROJO')
+                        .reduce((sum, i) => sum + (Number(i.saldo_pendiente) || 0), 0);
+                })
+                .withFailureHandler(e => {
+                    this.cargando = false;
+                    this.notificar('error', "Error cargando cuentas: " + e);
+                })
+                .obtenerCuentasPorPagar();
+            },
+
             // --- MÓDULO CAJA ---
 
             verificarEstadoCaja() {
@@ -4119,7 +4383,6 @@
                     .verificarCajaAbierta(idParaEnviar);
             },
 
-            // Agrega esto en tus methods:
             formatoFechaHora(fecha) {
                 if (!fecha) return '---';
                 try {
@@ -5795,28 +6058,40 @@
                   });
               },
 
-            // Reemplaza tu agregarAlCarrito actual por este:
-            agregarAlCarrito() {
-                // 1. Validaciones básicas
+              agregarAlCarrito() {
+                // 1. Validaciones
                 if (!this.lineaTemp.id_producto) return this.notificar('warning', 'Selecciona un producto.');
-                if (!this.lineaTemp.cantidad || this.lineaTemp.cantidad <= 0) return this.notificar('warning', 'Cantidad inválida.');
-                if (!this.lineaTemp.costo) return this.notificar('warning', 'Ingresa el costo.');
+                if (this.lineaTemp.cantidad <= 0) return this.notificar('warning', 'Cantidad inválida.');
+                if (this.lineaTemp.costo < 0) return this.notificar('warning', 'Costo inválido.');
 
-                // 2. BUSCAR EL NOMBRE (Esto es lo que faltaba)
+                // 2. Buscar Nombre
                 const prod = this.productos.find(p => p.id_producto == this.lineaTemp.id_producto);
                 const nombreProducto = prod ? prod.nombre : 'Producto desconocido';
 
-                // 3. Guardar en el carrito CON EL NOMBRE INCLUIDO
+                // 3. Calcular Subtotal Real (Lo que se pagará al proveedor)
+                const costoFinalUnitario = this.calcularCostoFinal(this.lineaTemp);
+                const subtotal = costoFinalUnitario * this.lineaTemp.cantidad;
+
+                // 4. Push al carrito
                 this.carritoCompra.push({
                     id_producto: this.lineaTemp.id_producto,
-                    nombre: nombreProducto, // <--- AQUÍ ESTÁ LA SOLUCIÓN
+                    nombre: nombreProducto,
                     cantidad: Number(this.lineaTemp.cantidad),
-                    costo: Number(this.lineaTemp.costo),
-                    subtotal: Number(this.lineaTemp.cantidad) * Number(this.lineaTemp.costo)
+                    
+                    // Guardamos los datos puros para el PDF y Backend
+                    costo: Number(this.lineaTemp.costo), 
+                    tasa_iva: Number(this.lineaTemp.tasa_iva),
+                    metodo_iva: this.lineaTemp.metodo_iva,
+                    
+                    // Guardamos el costo final calculado para mostrar totales correctos en la tabla
+                    costo_final: costoFinalUnitario,
+                    subtotal: subtotal
                 });
 
-                // 4. Resetear formulario temporal
-                this.lineaTemp = { id_producto: '', cantidad: '', costo: '' };
+                // 5. Reset (Mantenemos tasa y método previos por comodidad)
+                this.lineaTemp.id_producto = '';
+                this.lineaTemp.cantidad = 1;
+                this.lineaTemp.costo = '';
             },
 
             // Tus otras funciones se quedan igual (o asegúrate de tenerlas así):
@@ -5905,7 +6180,7 @@
                         
                         this.limpiarCarrito(); 
                         this.cargarDatosIniciales(); 
-                        this.cargarHistorialCompras(); 
+                        //this.cargarHistorialCompras(); 
                     }
                 })
                 .withFailureHandler(e => {

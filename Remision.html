@@ -1,64 +1,127 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <style>
-    body { font-family: Helvetica, sans-serif; padding: 40px; color: #333; }
-    .header { border-bottom: 2px solid #E06920; padding-bottom: 10px; margin-bottom: 20px; }
-    h2 { margin: 0; color: #E06920; }
-    p { margin: 0; }
-    .info-box { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th { background: #333; color: white; padding: 8px; }
-    td { padding: 8px; border-bottom: 1px solid #eee; }
-    .text-center { text-align: center; }
+    <style>
+    body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11px; color: #333; padding: 30px; }
+    
+    /* Cajas Superiores */
+    .header-box { border: 1px solid #000; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+    .row { display: flex; justify-content: space-between; }
+    .col-6 { width: 48%; }
+    .col-12 { width: 100%; }
+    
+    .company-title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+    .doc-title { font-size: 16px; font-weight: bold; text-align: center; background: #eee; padding: 5px; border: 1px solid #000; margin-bottom: 10px; }
+    
+    .label { font-weight: bold; margin-right: 5px; }
+    
+    /* Tabla */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { border: 1px solid #000; background-color: #ddd; padding: 5px; text-align: center; font-size: 10px; }
+    td { border: 1px solid #000; padding: 5px; font-size: 10px; vertical-align: middle; }
+    
     .text-right { text-align: right; }
-    .text-left { text-align: left; }
-    .total-row td { padding: 10px; font-weight: bold; background-color: #fff; border-bottom: none; }
-    .footer { font-size: 10px; color: #777; margin-top: 30px; text-align: center; }
+    .text-center { text-align: center; }
+    .fw-bold { font-weight: bold; }
+    
+    /* Totales */
+    .total-section { margin-top: 5px; }
+    .grand-total { background-color: #ddd; font-weight: bold; padding: 5px; border: 1px solid #000; }
+    
+    /* Liquidación IVA */
+    .liq-iva { margin-top: 10px; font-size: 10px; }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <h2>NOTA DE REMISIÓN</h2>
-    <p>Nro: <strong><?= datos.numero ?></strong></p>
-    <p>Fecha: <?= new Date(datos.fecha).toLocaleDateString('es-PY') ?></p>
+  <div class="row">
+    <div class="col-6 header-box">
+      <div class="company-title">CESTA ERP</div>
+      <div style="font-size: 12px; margin-bottom: 2px;">Sistema de Gestión de Stock</div>
+      <div style="font-size: 10px; color: #777;">Traslado de Mercaderías</div>
+    </div>
+    
+    <div class="col-6 col-right header-box">
+      <div class="doc-title">NOTA DE REMISIÓN</div>
+      <div class="text-center" style="font-size: 12px;">
+         Nro: <span class="fw-bold"><?= datos.numero ?></span>
+      </div>
+      <div class="text-center" style="font-size: 11px; margin-top: 5px;">
+         Fecha de Emisión: <?= new Date(datos.fecha).toLocaleDateString('es-PY') ?>
+      </div>
+    </div>
   </div>
 
-  <div class="info-box">
-    <p><strong>Destinatario:</strong> <?= datos.nombre_cliente || 'Cliente' ?></p>
-    <p><strong>Enviado por:</strong> <?= datos.conductor || '---' ?> </p>
+  <div class="header-box" style="height: auto; margin-bottom: 20px;">
+    <div class="row" style="margin-bottom: 0;">
+      <div style="width: 50%; float: left;">
+        <div><span class="label">Destinatario / Cliente:</span> <?= datos.nombre_cliente || 'A quien corresponda' ?></div>
+        <div style="margin-top: 5px;"><span class="label">Motivo del Traslado:</span> Venta / Traslado</div>
+        <div style="margin-top: 5px;"><span class="label">Punto de Partida:</span> Depósito Central</div>
+      </div>
+      
+      <div style="width: 45%; float: right; text-align: right;">
+        <div><span class="label">Conductor / Entregado por:</span> <?= datos.conductor || '---' ?></div>
+        <div style="margin-top: 5px;"><span class="label">Ref / Recibido por:</span> <?= datos.chapa || '---' ?></div>
+      </div>
+    </div>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th class="text-center">Cant.</th>
-        <th class="text-left">Descripción</th>
-        <th class="text-right">Precio Ref.</th>
-        <th class="text-right">Subtotal</th>
+        <th style="width: 10%;">CANT.</th>
+        <th style="width: 60%;">DESCRIPCIÓN / PRODUCTO</th>
+        <th style="width: 15%;">PRECIO REF.</th>
+        <th style="width: 15%;">VALOR TOTAL</th>
       </tr>
     </thead>
     <tbody>
-      <? datos.items.forEach(function(i) { ?>
-        <tr>
-          <td class="text-center"><?= i.cantidad ?></td>
-          <td class="text-left"><?= i.nombre_prod || 'Producto' ?></td>
-          <td class="text-right"><?= Number(i.precio).toLocaleString('es-PY') ?></td>
-          <td class="text-right"><?= (i.cantidad * i.precio).toLocaleString('es-PY') ?></td>
-        </tr>
-      <? }); ?>
+      <? 
+         var totalValorizado = 0;
+         
+         // Usamos un bucle for clásico para Apps Script (más seguro que forEach en templates)
+         for(var i = 0; i < datos.items.length; i++) { 
+           var it = datos.items[i];
+           var cant = Number(it.cantidad);
+           var precio = Number(it.precio);
+           var subtotal = cant * precio;
+           totalValorizado += subtotal;
+      ?>
+      <tr>
+        <td class="text-center fw-bold"><?= cant ?></td>
+        <td style="padding-left: 8px;"><?= it.nombre_prod || 'Producto' ?></td>
+        <td class="text-right"><?= precio.toLocaleString('es-PY') ?></td>
+        <td class="text-right"><?= subtotal.toLocaleString('es-PY') ?></td>
+      </tr>
+      <? } ?>
       
-      <tr class="total-row">
-        <td colspan="3" class="text-right">TOTAL VALORIZADO:</td>
-        <td class="text-right">Gs. <?= Number(datos.total).toLocaleString('es-PY') ?></td>
+      <? for(var k=0; k < (12 - datos.items.length); k++) { ?>
+        <tr><td style="color:white">.</td><td></td><td></td><td></td></tr>
+      <? } ?>
+
+      <tr>
+        <td colspan="3" class="text-right fw-bold" style="padding: 8px; background-color: #eee;">TOTAL VALORIZADO Gs.:</td>
+        <td class="text-right fw-bold" style="background-color: #ddd; font-size: 12px;"><?= totalValorizado.toLocaleString('es-PY') ?></td>
       </tr>
     </tbody>
   </table>
-  <p><strong>Recibido por:</strong> <?= datos.chapa || '---' ?></p> <br>
-  <p><strong>Firma: ________________________________________________</strong>
-  <p><strong>Fecha: ____/____/_______</strong><br>
-  <p class="footer">Documento válido para traslado de mercaderías.</p>
+  <br><br>
+  <div class="signatures">
+    <div class="sig-box">
+      _____________________________________________________________________________________
+      <br>Firma | Entregado por <strong><?= datos.conductor || '---' ?></strong>
+    </div>
+    <br><br>
+    <div class="sig-box sig-box-right">
+      _____________________________________________________________________________________
+      <br>Firma | Recibido por <strong><?= datos.chapa || '---' ?></strong>
+    </div>
+  </div>
+  <br><br>
+  <div class="footer-warning">
+    Documento válido para el traslado de mercaderías dentro del territorio nacional. No válido como comprobante de venta legal.
+  </div>
 
 </body>
 </html>

@@ -2,84 +2,125 @@
 <html>
 <head>
   <style>
-    body { font-family: 'Helvetica', sans-serif; color: #333; padding: 20px; }
-    .header { border-bottom: 2px solid #666; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; }
-    .titulo { font-size: 20px; font-weight: bold; color: #333; }
+    body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11px; color: #333; padding: 30px; }
     
-    .ruta { display: flex; justify-content: space-between; background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ddd; }
-    .ruta-bloque { width: 45%; }
-    .flecha { font-size: 24px; color: #999; display: flex; align-items: center; }
+    /* Cajas Superiores */
+    .header-box { border: 1px solid #000; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+    .row { display: flex; justify-content: space-between; }
+    .col-6 { width: 48%; }
+    .col-12 { width: 100%; }
     
-    .label { font-size: 10px; text-transform: uppercase; color: #666; font-weight: bold; }
-    .dato { font-size: 14px; font-weight: bold; }
+    .company-title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+    .doc-title { font-size: 16px; font-weight: bold; text-align: center; background: #eee; padding: 5px; border: 1px solid #000; margin-bottom: 10px; }
     
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-    th { background-color: #eee; padding: 8px; text-align: left; border-bottom: 2px solid #ccc; }
-    td { padding: 8px; border-bottom: 1px solid #eee; }
+    .label { font-weight: bold; margin-right: 5px; }
     
-    .footer { margin-top: 40px; border-top: 1px dashed #ccc; padding-top: 10px; font-size: 10px; text-align: center; color: #999; }
-    .firmas { margin-top: 50px; display: flex; justify-content: space-between; }
-    .firma-box { width: 40%; border-top: 1px solid #333; padding-top: 5px; text-align: center; font-size: 11px; }
+    /* Tabla */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { border: 1px solid #000; background-color: #ddd; padding: 5px; text-align: center; font-size: 10px; }
+    td { border: 1px solid #000; padding: 5px; font-size: 10px; vertical-align: middle; }
+    
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .fw-bold { font-weight: bold; }
+    
+    /* Totales */
+    .total-section { margin-top: 5px; }
+    .grand-total { background-color: #ddd; font-weight: bold; padding: 5px; border: 1px solid #000; }
+    
+    /* Liquidación IVA */
+    .liq-iva { margin-top: 10px; font-size: 10px; }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="titulo">ORDEN DE TRANSFERENCIA</div>
-    <div style="text-align: right;">
-      <div class="label">FECHA</div>
-      <div><?= datos.fecha ?></div>
-      <div class="label" style="margin-top:5px;">ID REF</div>
-      <div><?= datos.id_corto ?></div>
+  <div class="row">
+    <div class="col-6 header-box">
+      <div class="company-title">CESTA ERP</div>
+      <div style="font-size: 12px; margin-bottom: 2px;">Movimiento Interno de Stock</div>
+      <div style="font-size: 10px; color: #777;">Control Logístico</div>
+    </div>
+    
+    <div class="col-6 col-right header-box">
+      <div class="doc-title">ORDEN DE TRANSFERENCIA</div>
+      <div class="text-center" style="font-size: 12px;">
+         Ref ID: <span style="font-weight: bold;"><?= datos.id_corto ?></span>
+      </div>
+      <div class="text-center" style="font-size: 11px; margin-top: 5px;">
+         Fecha: <?= new Date(datos.fecha).toLocaleDateString('es-PY') ?>
+      </div>
     </div>
   </div>
 
-  <div class="ruta">
-    <div class="ruta-bloque">
-      <div class="label">ORIGEN (SALIDA)</div>
-      <div class="dato"><?= datos.origen ?></div>
-      <div style="font-size: 11px; margin-top: 4px;">Responsable: <?= datos.responsable ?></div>
-    </div>
-    <div class="flecha">➝</div>
-    <div class="ruta-bloque" style="text-align: right;">
-      <div class="label">DESTINO (ENTRADA)</div>
-      <div class="dato"><?= datos.destino ?></div>
+  <div class="header-box" style="height: auto; min-height: 60px; margin-bottom: 20px;">
+    <div class="row" style="margin-bottom: 0;">
+      
+      <div style="width: 45%; float: left;">
+        <div class="label">ORIGEN (SALIDA)</div>
+        <div style="font-size: 12px; font-weight: bold; margin-top: 2px;"><?= datos.origen ?></div>
+        <div style="margin-top: 5px; font-size: 10px;">
+            <span class="label">Responsable:</span> <?= datos.responsable ?>
+        </div>
+      </div>
+
+      <div style="width: 10%; float: left; text-align: center;">
+         <span style="font-size: 24px; color: #aaa;">&#10132;</span>
+      </div>
+      
+      <div style="width: 45%; float: right; text-align: right;">
+        <div class="label">DESTINO (ENTRADA)</div>
+        <div style="font-size: 12px; font-weight: bold; margin-top: 2px;"><?= datos.destino ?></div>
+      </div>
+
     </div>
   </div>
 
-  <div class="label">DETALLE DE PRODUCTOS</div>
+  <div class="label" style="margin-bottom: 5px;">DETALLE DE PRODUCTOS</div>
   <table>
     <thead>
       <tr>
-        <th width="15%">SKU</th>
-        <th width="65%">PRODUCTO</th>
-        <th width="20%" style="text-align: center;">CANTIDAD</th>
+        <th width="20%">CÓDIGO / SKU</th>
+        <th width="60%" class="text-left">DESCRIPCIÓN DEL PRODUCTO</th>
+        <th width="20%">CANTIDAD</th>
       </tr>
     </thead>
     <tbody>
       <? for(var i=0; i<items.length; i++) { ?>
       <tr>
-        <td><?= items[i].sku ?></td>
-        <td><?= items[i].nombre ?></td>
-        <td style="text-align: center; font-weight: bold;"><?= items[i].cantidad ?></td>
+        <td class="text-center"><?= items[i].sku || '---' ?></td>
+        <td class="text-left"><?= items[i].nombre || 'Producto' ?></td>
+        <td class="text-center" style="font-weight: bold; font-size: 12px;"><?= items[i].cantidad ?></td>
       </tr>
+      <? } ?>
+      
+      <? for(var k=0; k < (10 - items.length); k++) { ?>
+        <tr><td style="color:white">.</td><td></td><td></td></tr>
       <? } ?>
     </tbody>
   </table>
-  
+
   <? if(datos.observacion) { ?>
-  <div style="margin-top: 20px; font-size: 12px; background: #fffde7; padding: 10px; border: 1px solid #f0e68c;">
-    <strong>Observación:</strong> <?= datos.observacion ?>
+  <div class="obs-box">
+    <strong>OBSERVACIÓN:</strong> <?= datos.observacion ?>
   </div>
   <? } ?>
-
-  <div class="firmas">
-    <div class="firma-box">Firma Responsable Salida</div>
-    <div class="firma-box">Firma Responsable Entrada</div>
+  <br><br>
+  <div class="signatures">
+    ______________________________________________________
+    <div class="sig-box">
+      Firma Responsable Salida<br>
+      <span style="color:#ddd;">(Origen)</span>
+    </div>
+    <br><br>
+    ______________________________________________________
+    <div class="sig-box sig-box-right">
+      Firma Responsable Entrada<br>
+      <span style="color:#ddd;">(Destino)</span>
+    </div>
   </div>
-
+  <br><br>
   <div class="footer">
-    Documento generado por Cesta ERP - Control Interno
+    Documento interno generado por Sistema CESTA ERP - Control de Inventario
   </div>
 
 </body>

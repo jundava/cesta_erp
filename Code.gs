@@ -218,26 +218,19 @@ function guardarNuevoProveedor(form) {
 
 function subirImagenDrive(data, nombre, tipo) {
   try {
-    // 1. Buscamos (o creamos) la carpeta "Cesta_Imagenes"
-    const carpetas = DriveApp.getFoldersByName("Cesta_Imagenes");
-    let folder;
-    if (carpetas.hasNext()) {
-      folder = carpetas.next();
-    } else {
-      folder = DriveApp.createFolder("Cesta_Imagenes");
-      folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    }
+    // 1. Apuntamos DIRECTAMENTE a la carpeta específica por su ID
+    const idCarpeta = "1Wb4qNDOaII7w9Q1HueZyX7vTxuwNvSZs"; 
+    const folder = DriveApp.getFolderById(idCarpeta);
 
     // 2. Decodificar el archivo y crearlo en Drive
     const blob = Utilities.newBlob(Utilities.base64Decode(data), tipo, nombre);
     const archivo = folder.createFile(blob);
     
-    // 3. Permisos
+    // 3. Permisos (Hacemos público el archivo individual para que se pueda ver en la app)
     archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
-    // 4. CORRECCIÓN: Construimos la URL manualmente usando el ID
-    // Usamos el endpoint de 'thumbnail' que es muy rápido para previsualizaciones
-    // sz=w1000 indica que queremos la imagen hasta 1000px de ancho
+    // 4. Construimos la URL
+    // Usamos el endpoint de 'thumbnail' que es rápido y eficiente
     const urlImagen = "https://drive.google.com/thumbnail?id=" + archivo.getId() + "&sz=w1000";
     
     return urlImagen;
@@ -284,8 +277,31 @@ function guardarCompraCompleta(compra) {
     if (!shCab || !shDet) throw "Faltan hojas de base de datos.";
 
     const idCompra = Utilities.getUuid();
+    
+    // 2. Preparar Datos
     const fecha = new Date(compra.fecha + "T12:00:00");
-    const total = Number(compra.total);
+    
+    // --- LÓGICA DE VENCIMIENTO ---
+    // Ahora tomamos lo que viene del formulario. Si viene vacío, usamos la fecha normal.
+    let fechaVencimiento;
+    if (compra.vencimiento) {
+        fechaVencimiento = new Date(compra.vencimiento + "T12:00:00");
+    } else {
+        // Fallback por si acaso
+        fechaVencimiento = new Date(fecha); 
+    }
+
+    // -----------------------------
+
+    // RECALCULO DE TOTAL
+    let totalCalculado = 0;
+    compra.items.forEach(it => {
+        let costoFinal = Number(it.costo);
+        if (it.metodo_iva === 'EXCLUIDO') {
+            costoFinal = costoFinal * (1 + (Number(it.tasa_iva)/100));
+        }
+        totalCalculado += (costoFinal * Number(it.cantidad));
+    });
     
     // Estado y Saldo
     let estado = 'PAGADO';
@@ -294,13 +310,13 @@ function guardarCompraCompleta(compra) {
 
     if (compra.condicion === 'CREDITO') {
         estado = 'PENDIENTE';
-        saldo = total;
+        saldo = totalCalculado;
     } else {
         estado = 'PAGADO';
-        jsonPagos = JSON.stringify([{ metodo: 'EFECTIVO', monto: total, fecha: new Date() }]);
+        jsonPagos = JSON.stringify([{ metodo: 'EFECTIVO', monto: totalCalculado, fecha: new Date() }]);
     }
 
-    // --- RECUPERAR DATOS AUXILIARES PARA EL PDF ---
+    // --- PDF ---
     let nombreProveedor = "Proveedor General";
     let docProveedor = "";
     if (shProv) {
@@ -325,40 +341,33 @@ function guardarCompraCompleta(compra) {
          }
     }
 
-    // --- GENERAR PDF USANDO TU FUNCIÓN EXISTENTE ---
     let urlPdf = "";
     try {
         const datosParaPDF = {
             comprobante: compra.comprobante || "S/N",
-            fecha: fecha, // Pasamos objeto fecha
+            fecha: fecha.toISOString(),
             proveedor_nombre: nombreProveedor,
             proveedor_doc: docProveedor,
             condicion: compra.condicion,
-            deposito_nombre: nombreDeposito,
-            total: total
+            deposito_nombre: nombreDeposito
         };
-
-        // LLAMADA A TU FUNCIÓN (Le pasamos los datos y la lista de items cruda)
         urlPdf = crearPDFOrdenCompra(datosParaPDF, compra.items);
+    } catch(e) { console.error(e); }
 
-    } catch(e) {
-        console.error("Error generando PDF con plantilla: " + e);
-        urlPdf = "";
-    }
-
-    // 4. Guardar Cabecera
+    // 4. Guardar Cabecera (AGREGADO: fechaVencimiento al final)
     shCab.appendRow([
       idCompra,
       fecha,
       compra.id_proveedor,
       compra.id_deposito_destino,
-      total,
+      totalCalculado,
       estado,
-      urlPdf, // Guardamos la URL generada
+      urlPdf, 
       compra.comprobante, 
       compra.condicion,   
       saldo,              
-      jsonPagos           
+      jsonPagos,
+      fechaVencimiento // <--- NUEVA COLUMNA (L / Index 11)
     ]);
 
     // 5. Guardar Detalles y Movimientos
@@ -369,8 +378,8 @@ function guardarCompraCompleta(compra) {
          item.id_producto,
          item.cantidad,
          item.costo,
-         item.iva || 10,
-         item.cantidad * item.costo
+         item.tasa_iva || 10,
+         (item.metodo_iva === 'EXCLUIDO' ? item.costo * (1 + item.tasa_iva/100) : item.costo) * item.cantidad
        ]);
 
        shMov.appendRow([
@@ -394,7 +403,6 @@ function guardarCompraCompleta(compra) {
     lock.releaseLock();
   }
 }
-
 function obtenerHistorialCompras() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -604,64 +612,48 @@ function guardarVenta(venta) {
     }
 
     // 3. Cálculos e HTML
-    let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0, totalIVA10 = 0, totalIVA5 = 0;
+    let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0;
 
-    const htmlFilasItems = venta.items.map(it => {
+    // Preparamos la lista de items para el PDF (Array de objetos)
+    const itemsParaPdf = venta.items.map(it => {
         const precioUnitario = Number(it.precio); 
         const cantidad = Number(it.cantidad);
         const subtotal = cantidad * precioUnitario;
         const tasa = Number(it.tasa_iva || 10); 
         const nombreProducto = mapaNombres[it.id_producto] || "Producto";
 
-        let montoIVA = 0;
         if (tasa === 10) {
-            montoIVA = subtotal / 11;
             totalGrabada10 += subtotal;
-            totalIVA10 += montoIVA;
         } else if (tasa === 5) {
-            montoIVA = subtotal / 21;
             totalGrabada5 += subtotal;
-            totalIVA5 += montoIVA;
         } else {
             totalExenta += subtotal;
         }
 
-        return `
-        <tr class="item-row">
-            <td class="col-desc">${nombreProducto}</td>
-            <td class="col-iva">${tasa === 0 ? 'Exenta' : tasa + '%'}</td>
-            <td class="col-cant">${cantidad}</td>
-            <td class="col-money">${precioUnitario.toLocaleString('es-PY')}</td>
-            <td class="col-money fw-bold">${subtotal.toLocaleString('es-PY')}</td>
-        </tr>`;
-    }).join('');
+        return {
+            nombre_prod: nombreProducto, // Usamos nombre_prod para que coincida con la plantilla
+            cantidad: cantidad,
+            precio: precioUnitario,
+            tasa_iva: tasa
+        };
+    });
 
     const totalGeneral = totalGrabada10 + totalGrabada5 + totalExenta;
-    const totalLiquidacionIVA = totalIVA10 + totalIVA5;
-
-    const htmlBloqueTotales = `
-        <tr><td class="total-label">Total Exenta:</td><td>${Math.round(totalExenta).toLocaleString('es-PY')}</td></tr>
-        <tr><td class="total-label">Total IVA 5%:</td><td>${Math.round(totalGrabada5).toLocaleString('es-PY')}</td></tr>
-        <tr><td class="total-label">Total IVA 10%:</td><td>${Math.round(totalGrabada10).toLocaleString('es-PY')}</td></tr>
-        <tr><td class="total-label grand-total">TOTAL A PAGAR:</td><td class="grand-total">Gs. ${Math.round(totalGeneral).toLocaleString('es-PY')}</td></tr>
-        <tr><td colspan="2" style="font-size: 9px; color: #777; padding-top: 5px;">(Liq. IVA: 5%=${Math.round(totalIVA5).toLocaleString('es-PY')} | 10%=${Math.round(totalIVA10).toLocaleString('es-PY')} | Tot=${Math.round(totalLiquidacionIVA).toLocaleString('es-PY')})</td></tr>
-    `;
 
     // Generar PDF
-    const datosParaPDF = {
-        fecha: fechaSegura.toLocaleDateString('es-PY'),
-        nro_factura: nroFacturaFinal,
-        cliente_nombre: nombreCli,
-        cliente_doc: docCli,
-        cliente_dir: dirCli,
-        condicion: venta.condicion || "CONTADO",
-        html_items: htmlFilasItems,
-        html_totales: htmlBloqueTotales
-    };
-    
     let urlPdf = "";
     try {
-        urlPdf = crearPDFFactura(datosParaPDF); 
+        const datosParaPDF = {
+            fecha: fechaSegura.toLocaleDateString('es-PY'),
+            nro_factura: nroFacturaFinal,
+            cliente_nombre: nombreCli,
+            cliente_doc: docCli,
+            cliente_dir: dirCli,
+            condicion: venta.condicion || "CONTADO"
+        };
+        
+        // Pasamos datosParaPDF Y itemsParaPdf
+        urlPdf = crearPDFFactura(datosParaPDF, itemsParaPdf); 
     } catch(e) {
         console.error("Error PDF: " + e);
         urlPdf = "ERROR_PDF"; 
@@ -726,133 +718,27 @@ function guardarVenta(venta) {
 // GENERADOR DE PDF (DISEÑO PROFESIONAL)
 // ==========================================
 
-function crearPDFFactura(datos) {
-  // 1. Gestión de Carpeta (Igual que antes)
-  const nombreCarpeta = "CESTA_FACTURAS";
-  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
-  let carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(nombreCarpeta);
-  carpeta.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+function crearPDFFactura(datos, listaItems) {
+  // 1. Gestionar Carpeta por ID (FacturaVenta)
+  const idCarpeta = "1Ru3AduQ_jLHtETfp9Xy5kYitzuRuh3gG";
+  const carpeta = DriveApp.getFolderById(idCarpeta);
 
-  // 2. Plantilla HTML con CSS Profesional
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        @page { margin: 40px; }
-        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11px; color: #333; line-height: 1.4; }
-        
-        /* ENCABEZADO */
-        .header-table { width: 100%; border-bottom: 2px solid #E06920; padding-bottom: 10px; margin-bottom: 20px; }
-        .company-name { font-size: 20px; font-weight: bold; color: #E06920; text-transform: uppercase; }
-        .invoice-title { font-size: 18px; font-weight: bold; text-align: right; color: #444; }
-        .invoice-details { text-align: right; font-size: 12px; }
-
-        /* CLIENTE */
-        .client-box { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; border-radius: 4px; margin-bottom: 20px; }
-        .client-table { width: 100%; }
-        .label { font-weight: bold; color: #666; }
-
-        /* TABLA DE ITEMS */
-        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .items-table th { 
-            background-color: #333; 
-            color: #fff; 
-            padding: 8px; 
-            text-align: left; 
-            font-size: 10px; 
-            text-transform: uppercase; 
-        }
-        .items-table td { border-bottom: 1px solid #eee; padding: 8px 6px; vertical-align: top; }
-        
-        /* COLUMNAS Y ANCHOS */
-        .col-desc  { width: 45%; text-align: left; }
-        .col-iva   { width: 10%; text-align: center; }
-        .col-cant  { width: 10%; text-align: center; }
-        .col-money { width: 17.5%; text-align: right; white-space: nowrap; }
-        
-        /* TOTALES */
-        .totals-container { width: 100%; display: table; }
-        .totals-right { float: right; width: 45%; } /* Ocupa casi la mitad derecha */
-        .totals-table { width: 100%; border-collapse: collapse; }
-        .totals-table td { padding: 4px; text-align: right; }
-        .total-label { font-weight: bold; color: #555; }
-        .total-value { font-weight: bold; font-size: 12px; }
-        .grand-total { background-color: #E06920; color: white; font-size: 14px; padding: 8px !important; }
-
-        /* FOOTER */
-        .footer { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 9px; text-align: center; color: #777; }
-        .fw-bold { font-weight: bold; }
-      </style>
-    </head>
-    <body>
-
-      <table class="header-table">
-        <tr>
-          <td valign="top">
-            <div class="company-name">CESTA ERP</div>
-            <div>Gestión de Stock y Ventas</div>
-            <div>Asunción, Paraguay</div>
-          </td>
-          <td valign="top">
-            <div class="invoice-title">FACTURA DE VENTA</div>
-            <div class="invoice-details">
-              Nro: <strong>${datos.nro_factura}</strong><br>
-              Fecha: ${datos.fecha}<br>
-              Condición: ${datos.condicion}
-            </div>
-          </td>
-        </tr>
-      </table>
-
-      <div class="client-box">
-        <table class="client-table">
-          <tr>
-            <td width="60%"><span class="label">Cliente:</span> ${datos.cliente_nombre}</td>
-            <td width="40%" align="right"><span class="label">RUC/CI:</span> ${datos.cliente_doc}</td>
-          </tr>
-          <tr>
-            <td colspan="2"><span class="label">Dirección:</span> ${datos.cliente_dir || '---'}</td>
-          </tr>
-        </table>
-      </div>
-
-      <table class="items-table">
-        <thead>
-          <tr>
-            <th class="col-desc">Descripción</th>
-            <th class="col-iva">IVA</th>
-            <th class="col-cant">Cant.</th>
-            <th class="col-money">Precio Unit.</th>
-            <th class="col-money">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${datos.html_items} 
-        </tbody>
-      </table>
-
-      <div class="totals-container">
-        <div class="totals-right">
-          <table class="totals-table">
-             ${datos.html_totales}
-          </table>
-        </div>
-      </div>
-
-      <div class="footer">
-        Gracias por su preferencia. Documento generado electrónicamente por Cesta ERP.
-      </div>
-
-    </body>
-    </html>
-  `;
-
-  // 3. Generar y Guardar
-  const blob = Utilities.newBlob(html, "text/html", "Factura_temp.html");
-  const pdf = blob.getAs("application/pdf").setName("Factura " + datos.nro_factura + ".pdf");
+  // 2. Preparar Plantilla (Usamos el archivo FacturaVenta.html)
+  const template = HtmlService.createTemplateFromFile('FacturaVenta');
   
+  // Pasamos los datos a la plantilla
+  template.datos = datos;
+  template.items = listaItems || []; 
+
+  // 3. Generar HTML final
+  const html = template.evaluate().getContent();
+
+  // 4. Convertir a PDF
+  const nombreArchivo = "Factura_" + (datos.nro_factura || "SN").replace(/[^a-zA-Z0-9]/g, '_') + ".pdf";
+  const blob = Utilities.newBlob(html, "text/html", nombreArchivo);
+  const pdf = blob.getAs("application/pdf").setName(nombreArchivo);
+  
+  // 5. Guardar y retornar URL
   const archivo = carpeta.createFile(pdf);
   archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   
@@ -1546,6 +1432,7 @@ function generarUrlTicket(idVenta) {
   const sheetProd = ss.getSheetByName('PRODUCTOS');
   const sheetCli = ss.getSheetByName('CLIENTES');
 
+  // ... (Bloque de obtención de datos igual que antes) ...
   // 1. Obtener Datos de Cabecera
   const datosCab = sheetCab.getDataRange().getValues();
   let venta = null;
@@ -1576,11 +1463,9 @@ function generarUrlTicket(idVenta) {
   // 3. Obtener Detalles
   const items = [];
   const datosDet = sheetDet.getDataRange().getValues();
-  
-  // Mapa Productos para nombres
   const datosProd = sheetProd.getDataRange().getValues();
   const mapProd = {};
-  for(let i=1; i<datosProd.length; i++) mapProd[datosProd[i][0]] = datosProd[i][2]; // ID -> Nombre
+  for(let i=1; i<datosProd.length; i++) mapProd[datosProd[i][0]] = datosProd[i][2];
 
   for(let i=1; i<datosDet.length; i++) {
     if(datosDet[i][1] == idVenta) {
@@ -1593,7 +1478,7 @@ function generarUrlTicket(idVenta) {
     }
   }
 
-  // 4. Generar PDF Temporal
+  // 4. Generar PDF Temporal con Plantilla Ticket
   const template = HtmlService.createTemplateFromFile('Ticket');
   template.datos = {
     fecha: venta.fecha,
@@ -1608,24 +1493,19 @@ function generarUrlTicket(idVenta) {
   const blob = Utilities.newBlob(html, "text/html", "Ticket.html");
   const pdf = blob.getAs("application/pdf").setName("Ticket_" + venta.factura + ".pdf");
 
-  // 5. Guardar en carpeta temporal (o la misma de facturas)
-  // Usamos la misma carpeta CESTA_FACTURAS
-  const folders = DriveApp.getFoldersByName("CESTA_FACTURAS");
-  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder("CESTA_FACTURAS");
+  // 5. Guardar en carpeta Tickets_Ventas (por ID)
+  const idCarpeta = "1p0ta_bYQIIRwmVBYcoKexbd24aU8lvbZ";
+  const folder = DriveApp.getFolderById(idCarpeta);
   
   const file = folder.createFile(pdf);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   
-  // Opcional: Eliminar el archivo después de X tiempo (no implementado aquí para simplicidad)
-  
   return file.getUrl();
 }
-
 function crearPDFOrdenCompra(datosCompra, listaItems) {
-  // 1. Gestionar Carpeta
-  const nombreCarpeta = "CESTA_COMPRAS_PDF";
-  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
-  let carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(nombreCarpeta);
+  // 1. Gestionar Carpeta por ID (OrdenCompras)
+  const idCarpeta = "1XSDYJ4kKR2DChfUb0fAb9EqGzYuDd_EV"; 
+  const carpeta = DriveApp.getFolderById(idCarpeta);
 
   // 2. Preparar Plantilla
   const template = HtmlService.createTemplateFromFile('OrdenCompra');
@@ -1642,6 +1522,9 @@ function crearPDFOrdenCompra(datosCompra, listaItems) {
   
   // 4. Guardar y retornar URL
   const archivo = carpeta.createFile(pdf);
+  // Permisos para que se pueda ver en la web
+  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  
   return archivo.getUrl(); 
 }
 
@@ -1957,14 +1840,21 @@ function guardarTransferencia(datos) {
 }
 
 function crearPDFTransferencia(datos, items) {
-  const folder = DriveApp.getFoldersByName("CESTA_TRANSFERENCIAS").hasNext() ? DriveApp.getFoldersByName("CESTA_TRANSFERENCIAS").next() : DriveApp.createFolder("CESTA_TRANSFERENCIAS");
+  // 1. Gestionar Carpeta por ID (Transferencia)
+  const idCarpeta = "1G6TFnOLXiCPpKzGi_k8CaXmtazMugTlF";
+  const carpeta = DriveApp.getFolderById(idCarpeta);
+
   const template = HtmlService.createTemplateFromFile('Transferencia');
   template.datos = datos;
   template.items = items;
   
   const blob = Utilities.newBlob(template.evaluate().getContent(), "text/html", "TRF_" + datos.id_corto + ".html");
   const pdf = blob.getAs("application/pdf").setName("Transferencia_" + datos.fecha.replace(/\//g,'-') + "_" + datos.id_corto + ".pdf");
-  return folder.createFile(pdf).getUrl();
+  
+  const archivo = carpeta.createFile(pdf);
+  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  return archivo.getUrl();
 }
 
 function obtenerHistorialTransferencias() {
@@ -2324,28 +2214,29 @@ function facturarRemision(remision) {
 // 5. PDF Remisión (Actualizado con Precios)
 function crearPDFRemision(datos) {
   try {
-    // 1. Cargar la plantilla HTML
+    // 1. Gestionar Carpeta por ID (Remisión)
+    const idCarpeta = "148nTZ3zQcpdHrTD4GkT7zG2zYFjLDQoR";
+    const carpeta = DriveApp.getFolderById(idCarpeta);
+
+    // 2. Cargar la plantilla HTML
     const template = HtmlService.createTemplateFromFile('Remision');
-    
-    // 2. Pasar los datos a la plantilla (para que <?= datos.numero ?> funcione)
     template.datos = datos;
     
-    // 3. Evaluar la plantilla (convierte las variables en texto final HTML)
+    // 3. Evaluar la plantilla
     const htmlContenido = template.evaluate().getContent();
 
-    // 4. Crear el Blob y el PDF (Igual que antes)
+    // 4. Crear el Blob y el PDF
     const blob = Utilities.newBlob(htmlContenido, "text/html", "Remision.html");
     const pdf = blob.getAs("application/pdf").setName("Remision_" + datos.numero + ".pdf");
     
     // 5. Guardar en Drive
-    const carpetas = DriveApp.getFoldersByName("CESTA_REMISIONES");
-    const carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder("CESTA_REMISIONES");
+    const archivo = carpeta.createFile(pdf);
     
-    // Configurar permisos (Opcional, cuidado con Access.ANYONE si manejas datos sensibles)
-    carpeta.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    // Configurar permisos
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
     // 6. Retornar URL
-    return carpeta.createFile(pdf).getUrl();
+    return archivo.getUrl();
     
   } catch(e) { 
     return "ERROR_PDF: " + e.message; 
@@ -4069,6 +3960,156 @@ function obtenerHistorialCajas() {
 
   } catch (e) {
     throw "Error al obtener historial caja: " + e.toString();
+  }
+}
+
+// ==========================================
+// MÓDULO TESORERÍA (CUENTAS A PAGAR)
+// ==========================================
+
+function obtenerCuentasPorPagar() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('COMPRAS_CABECERA');
+    const shProv = ss.getSheetByName('PROVEEDORES');
+    
+    if (!sh || sh.getLastRow() <= 1) return [];
+
+    // Mapa Proveedores
+    const mapProv = {};
+    if (shProv) {
+       const d = shProv.getDataRange().getValues();
+       for(let i=1; i<d.length; i++) mapProv[String(d[i][0])] = d[i][1];
+    }
+
+    const data = sh.getDataRange().getValues();
+    const cuentas = [];
+    const hoy = new Date();
+    
+    // Indices:
+    // 0:id, 1:fecha, 2:prov, 4:total, 5:estado, 7:nro, 9:saldo, 11:vencimiento
+    
+    for (let i = 1; i < data.length; i++) {
+       const row = data[i];
+       const saldo = Number(row[9] || 0);
+       const estado = row[5];
+       
+       // Filtro: Solo mostramos lo que se debe y no está anulado
+       if (row[0] && estado !== 'ANULADO' && saldo > 0) {
+         
+         let vencimiento = row[11]; // Columna L (nueva)
+         // Si es una compra vieja sin vencimiento, usamos la fecha de emisión
+         if (!vencimiento || vencimiento === "") vencimiento = row[1];
+
+         // Calcular días restantes
+         const venc = new Date(vencimiento);
+         const diffTime = venc - hoy;
+         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+         
+         cuentas.push({
+           id_compra: row[0],
+           fecha_emision: new Date(row[1]).toLocaleDateString('es-PY'),
+           nombre_proveedor: mapProv[row[2]] || 'Prov. ' + row[2],
+           comprobante: row[7],
+           total_original: Number(row[4]),
+           saldo_pendiente: saldo,
+           fecha_vencimiento: venc.toLocaleDateString('es-PY'),
+           dias_restantes: diffDays,
+           estado_semaforo: diffDays < 0 ? 'ROJO' : (diffDays <= 7 ? 'AMARILLO' : 'VERDE')
+         });
+       }
+    }
+    
+    // Ordenar: Lo más urgente (menor días restantes) primero
+    return cuentas.sort((a, b) => a.dias_restantes - b.dias_restantes);
+    
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+function registrarPagoProveedor(datos) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+
+  try {
+    // 1. Verificar Caja si es Efectivo
+    const idUsuario = datos.usuario_id || "Sistema";
+    if (datos.metodo === 'EFECTIVO' && idUsuario !== "Sistema") {
+        const caja = verificarCajaAbierta(idUsuario);
+        if (!caja || !caja.exito) throw "⛔ Para pagar en EFECTIVO necesitas caja abierta.";
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shCab = ss.getSheetByName('COMPRAS_CABECERA');
+    const shPagos = ss.getSheetByName('PAGOS_PROVEEDORES');
+    
+    if(!shPagos) {
+        // Crear hoja si no existe (seguridad)
+        const nueva = ss.insertSheet('PAGOS_PROVEEDORES');
+        nueva.appendRow(["id_pago", "fecha_pago", "id_compra", "id_proveedor", "monto", "metodo", "referencia", "observacion", "usuario_responsable"]);
+    }
+
+    // 2. Buscar Compra y Validar Saldo
+    const data = shCab.getDataRange().getValues();
+    let filaEncontrada = -1;
+    let saldoActual = 0;
+    let idProveedor = "";
+
+    for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(datos.id_compra)) {
+            filaEncontrada = i + 1;
+            idProveedor = data[i][2];
+            saldoActual = Number(data[i][9]); // Columna J (Index 9)
+            break;
+        }
+    }
+
+    if (filaEncontrada === -1) throw "Compra no encontrada.";
+    
+    const montoPagar = Number(datos.monto);
+    if (montoPagar <= 0) throw "El monto debe ser mayor a 0.";
+    if (montoPagar > (saldoActual + 10)) throw "El monto excede el saldo de la deuda."; // +10 por redondeo
+
+    // 3. Registrar Pago
+    const idPago = Utilities.getUuid();
+    const shPagosFinal = ss.getSheetByName('PAGOS_PROVEEDORES');
+    
+    shPagosFinal.appendRow([
+        idPago,
+        new Date(),
+        datos.id_compra,
+        idProveedor,
+        montoPagar,
+        datos.metodo,
+        datos.referencia || "",
+        datos.observacion || "Pago de factura",
+        datos.usuario_nombre || "Sistema"
+    ]);
+
+    // 4. Actualizar Compra (Saldo y Estado)
+    const nuevoSaldo = saldoActual - montoPagar;
+    shCab.getRange(filaEncontrada, 10).setValue(nuevoSaldo); // Actualizar Saldo
+
+    if (nuevoSaldo <= 50) { // Tolerancia 50 Gs
+        shCab.getRange(filaEncontrada, 6).setValue("PAGADO"); // Actualizar Estado
+    } else {
+        shCab.getRange(filaEncontrada, 6).setValue("PARCIAL");
+    }
+
+    // 5. Registrar Egreso de Caja (Si corresponde)
+    // Opcional: Si quieres que reste de la caja de GASTOS automáticamente, 
+    // podrías insertar en la hoja GASTOS, pero usualmente PAGOS_PROVEEDORES se maneja aparte 
+    // para no duplicar en el arqueo si ya se descuenta por flujo.
+    // Por ahora lo dejamos solo en PAGOS_PROVEEDORES para no complicar el arqueo existente.
+
+    return { success: true, nuevo_saldo: nuevoSaldo };
+
+  } catch (e) {
+    throw e;
+  } finally {
+    lock.releaseLock();
   }
 }
 

@@ -54,11 +54,15 @@ function setupDatabase() {
     },
     {
       nombre: "COMPRAS_CABECERA",
-      cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf", "numero_factura", "condicion", "saldo_pendiente", "json_pagos"]
+      cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf", "numero_factura", "condicion", "saldo_pendiente", "json_pagos", "fecha_vencimiento"]
     },
     {
       nombre: "COMPRAS_DETALLE",
       cols: ["id_detalle", "id_compra", "id_producto", "cantidad", "costo_unitario", "iva_aplicado", "subtotal"]
+    },
+    {
+        nombre: "PAGOS_PROVEEDORES",
+        cols: ["id_pago", "fecha_pago", "id_compra", "id_proveedor", "monto", "metodo", "referencia", "observacion", "usuario_responsable"]
     },
     {
       nombre: "TRANSFERENCIAS_CABECERA",
@@ -179,49 +183,3 @@ function styleSheetHeader(sheet, numCols) {
   }
 }
 
-function TEST_MANUAL_EN_EDITOR() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('CAJA_SESIONES');
-  const data = sh.getDataRange().getValues();
-  
-  // ID que vamos a buscar (El de tu imagen)
-  const idBuscado = 1; 
-  
-  console.log("=== INICIO DEL DIAGNÓSTICO MANUAL ===");
-  console.log(`Buscando Usuario ID: ${idBuscado} (Tipo: ${typeof idBuscado})`);
-  console.log(`Total filas en hoja: ${data.length}`);
-
-  // Recorremos las últimas 5 filas para ver qué hay
-  const inicio = Math.max(1, data.length - 5);
-  
-  for (let i = inicio; i < data.length; i++) {
-    const celdaID = data[i][1];
-    const celdaEstado = data[i][8];
-    
-    console.log(`--- Fila ${i+1} ---`);
-    console.log(`   Valor Celda ID: [${celdaID}] (Tipo: ${typeof celdaID})`);
-    console.log(`   Valor Celda Estado: [${celdaEstado}]`);
-    
-    // PRUEBA 1: Comparación Estricta (===)
-    if (celdaID === idBuscado) {
-      console.log("   ✅ COINCIDENCIA EXACTA (===)");
-    } else {
-      console.log("   ❌ No coincide con ===");
-    }
-    
-    // PRUEBA 2: Comparación Flexible (==) - Esta suele arreglar problemas de Texto vs Numero
-    if (celdaID == idBuscado) {
-      console.log("   ✅ COINCIDENCIA FLEXIBLE (==)");
-    } else {
-      console.log("   ❌ No coincide con ==");
-    }
-
-    // PRUEBA 3: Estado
-    if (String(celdaEstado).trim() === 'ABIERTA') {
-      console.log("   ✅ ESTADO ABIERTA CORRECTO");
-    } else {
-      console.log(`   ❌ ESTADO DIFERENTE: '${celdaEstado}'`);
-    }
-  }
-  console.log("=== FIN ===");
-}
