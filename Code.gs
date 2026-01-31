@@ -718,7 +718,15 @@ function guardarVenta(venta) {
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   try {
-    // ✅ CORRECCIÓN 1: Usar hoja activa para evitar problemas de ID
+    
+      // 1. VALIDACIÓN DE CAJA
+    // Obtenemos el usuario (asegúrate de enviarlo desde el frontend como hicimos en remisión)
+    const idUsuario = venta.usuario_id || "Sistema"; // Necesitarás pasar el ID, no solo el nombre
+    if (idUsuario !== "Sistema") {
+        const caja = verificarCajaAbierta(idUsuario);
+        if (!caja) throw "⛔ CAJA CERRADA. Debes realizar la apertura de caja antes de vender.";
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
     const sheetProd = ss.getSheetByName('PRODUCTOS');
@@ -868,7 +876,8 @@ function guardarVenta(venta) {
       estadoVenta, 
       urlPdf,
       venta.condicion || 'CONTADO', 
-      saldoInicial                  
+      saldoInicial,
+      venta.json_pagos || "[]"                  
     ]);
 
     // 5. Guardar Detalle y Movimientos
@@ -2590,23 +2599,19 @@ function obtenerHistorialRemisiones() {
     for(let i=1; i<data.length; i++) {
       const fila = data[i];
       
-      // Validamos que exista ID de remisión
       if (fila[0] && String(fila[0]).trim() !== "") {
         
-        // 1. TRATAMIENTO SEGURO DE FECHA
         let fechaSegura = "";
         try {
           if (fila[1] instanceof Date) {
             fechaSegura = fila[1].toISOString();
           } else {
-            // Si es texto, intentamos convertirlo o dejarlo tal cual
             fechaSegura = String(fila[1]); 
           }
         } catch(e) {
-          fechaSegura = new Date().toISOString(); // Fallback si falla la fecha
+          fechaSegura = new Date().toISOString();
         }
 
-        // 2. OBTENCIÓN SEGURA DE VALORES (Todo a String para evitar errores)
         const idCliente = String(fila[3] || "").trim();
         const idDeposito = String(fila[4] || "").trim();
 
@@ -2616,14 +2621,16 @@ function obtenerHistorialRemisiones() {
           numero: String(fila[2] || "---"),
           id_cliente_raw: idCliente,
           id_deposito_raw: idDeposito,
-          cliente: mapCli[idCliente] || 'Cliente Desconocido', // Nombre visual
-          estado: String(fila[7] || "PENDIENTE"), // Estado
-          url_pdf: String(fila[8] || "")
+          cliente: mapCli[idCliente] || 'Cliente Desconocido', 
+          estado: String(fila[7] || "PENDIENTE"), 
+          url_pdf: String(fila[8] || ""),
+          // --- NUEVO: Agregamos el total (Columna J, índice 9) ---
+          total: Number(fila[9] || 0) 
         });
       }
     }
     
-    return result.reverse(); // Devolver lo más nuevo primero
+    return result.reverse(); 
 
   } catch (e) {
     Logger.log("ERROR EN HISTORIAL REMISIONES: " + e.toString());
@@ -3916,5 +3923,205 @@ function registrarEvento(usuario, accion, detalle) {
   
   // 2. Insertar el registro (appendRow es atómico y seguro)
   ws.appendRow([fechaStr, horaStr, usuario, accion, detalle]);
+}
+
+// ==========================================
+// MÓDULO DE CAJA Y TESORERÍA
+// ==========================================
+
+// 3. Obtener Resumen para el Cierre (Arqueo Teórico)
+function obtenerResumenCaja(idUsuario) {
+  const sesion = verificarCajaAbierta(idUsuario);
+  if (!sesion) throw "No hay caja abierta para auditar.";
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // A. Sumar Ventas en EFECTIVO desde la fecha de apertura
+  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
+  const dataVentas = shVentas.getDataRange().getValues();
+  let totalVentasEfectivo = 0;
+  
+  // Estructura Ventas: [2]=Fecha, [5]=Total, [6]=Estado, [9]=DetallePagos(JSON) o Metodo
+  // NOTA: Aquí asumiremos que implementaremos el desglose JSON en breve.
+  
+  const inicio = new Date(sesion.fecha_apertura);
+
+  for (let i = 1; i < dataVentas.length; i++) {
+    let fechaVenta = new Date(dataVentas[i][2]);
+    let estado = dataVentas[i][6]; // Pagado/Anulado
+    
+    // Si la venta es posterior a la apertura Y no está anulada
+    if (fechaVenta >= inicio && estado === 'PAGADO') {
+       // Lógica simple: Si no hay desglose, miramos condición.
+       // Si hay desglose (JSON), sumamos solo lo que dice "Efectivo".
+       // Por ahora, lógica simple:
+       // TODO: Aquí conectaremos el desglose del Paso 3
+       totalVentasEfectivo += Number(dataVentas[i][5]); 
+    }
+  }
+
+  // B. Calcular Teórico
+  const teorico = sesion.monto_inicial + totalVentasEfectivo; // - Gastos en efectivo
+
+  return {
+    inicio: sesion.monto_inicial,
+    ventas: totalVentasEfectivo,
+    gastos: 0, // Implementar suma de gastos si aplica
+    teorico: teorico,
+    id_sesion: sesion.id_sesion
+  };
+}
+
+// ==========================================
+// MÓDULO CAJA V3 (PROPERTIES SERVICE) - INFALIBLE
+// ==========================================
+
+// 1. VERIFICAR ESTADO (Lee la memoria RAM del servidor, no la hoja)
+function verificarCajaAbierta(idUsuario) {
+  try {
+    const idStr = String(idUsuario).trim();
+    
+    // A. PREGUNTAR A LA MEMORIA RÁPIDA (PropertiesService)
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const memoriaCaja = scriptProperties.getProperty('CAJA_ACTIVA_' + idStr);
+
+    if (memoriaCaja) {
+      // ¡Encontramos el "Post-it"! Retornamos eso directamente.
+      const datosMemoria = JSON.parse(memoriaCaja);
+      return {
+        exito: true,
+        id_sesion: datosMemoria.id_sesion,
+        fecha_apertura: datosMemoria.fecha,
+        monto_inicial: Number(datosMemoria.monto),
+        origen: "MEMORIA_RAPIDA"
+      };
+    }
+
+    // B. FALLBACK (Plan B): Si no está en memoria, buscamos en la hoja (Lento pero seguro)
+    // Esto solo pasa si se borró la memoria o es la primera vez tras mucho tiempo
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('CAJA_SESIONES');
+    if (!sh) return { debug_error: true, mensaje: "Falta hoja CAJA_SESIONES" };
+    
+    const data = sh.getDataRange().getValues();
+    // Buscamos de abajo hacia arriba
+    for (let i = data.length - 1; i >= 1; i--) {
+       // Col 1: ID Usuario, Col 8: Estado
+       if (String(data[i][1]).trim() === idStr && String(data[i][8]).trim().toUpperCase() === 'ABIERTA') {
+          // ENCONTRADO EN HOJA -> Lo guardamos en memoria para la próxima
+          const cacheData = {
+             id_sesion: data[i][0],
+             fecha: data[i][2],
+             monto: data[i][3]
+          };
+          scriptProperties.setProperty('CAJA_ACTIVA_' + idStr, JSON.stringify(cacheData));
+          
+          return {
+            exito: true,
+            id_sesion: data[i][0],
+            fecha_apertura: data[i][2],
+            monto_inicial: Number(data[i][3]),
+            origen: "HOJA_CALCULO"
+          };
+       }
+    }
+
+    return { exito: false, mensaje: "Caja cerrada" };
+
+  } catch (e) {
+    return { debug_error: true, mensaje: "Error V3: " + e.toString() };
+  }
+}
+
+// 2. ABRIR CAJA (Escribe en Hoja Y en Memoria)
+function abrirCaja(montoInicial, usuario) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(5000); } catch (e) { throw "Servidor ocupado."; }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('CAJA_SESIONES');
+    const idUserStr = String(usuario.id_usuario).trim();
+
+    // Validar si ya existe en memoria
+    const check = verificarCajaAbierta(idUserStr);
+    if (check && check.exito) {
+       throw "Ya tienes una caja abierta (Detectado en " + check.origen + ")";
+    }
+
+    const idSesion = Utilities.getUuid();
+    const fecha = new Date();
+
+    // 1. GUARDAR EN EXCEL (Histórico)
+    sh.appendRow([
+      idSesion,
+      idUserStr,
+      fecha,
+      Number(montoInicial),
+      "", 0, 0, 0, "ABIERTA"
+    ]);
+
+    // 2. GUARDAR EN MEMORIA RÁPIDA (El "Post-it")
+    const datosCache = {
+       id_sesion: idSesion,
+       fecha: fecha,
+       monto: Number(montoInicial)
+    };
+    PropertiesService.getScriptProperties().setProperty('CAJA_ACTIVA_' + idUserStr, JSON.stringify(datosCache));
+
+    // Log
+    if (typeof registrarEvento === 'function') registrarEvento(usuario.nombre, "APERTURA CAJA", "Monto: " + montoInicial);
+
+    return { success: true, id_sesion: idSesion };
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 3. CERRAR CAJA (Actualiza Excel Y Borra Memoria)
+function cerrarCaja(datos) {
+   const ss = SpreadsheetApp.getActiveSpreadsheet();
+   const sh = ss.getSheetByName('CAJA_SESIONES');
+   
+   // A. BORRAMOS EL "POST-IT" DE MEMORIA
+   // Para saber qué usuario es, necesitamos buscar la sesión primero o pasarlo desde el front.
+   // Buscaremos en la hoja la sesión para obtener el ID de usuario y borrar su memoria.
+   
+   const data = sh.getDataRange().getValues();
+   let filaEncontrada = -1;
+   let idUsuario = "";
+
+   for (let i = 1; i < data.length; i++) {
+     if (String(data[i][0]) === String(datos.id_sesion)) {
+       filaEncontrada = i + 1;
+       idUsuario = String(data[i][1]); // Guardamos el usuario para borrar su cache
+       break;
+     }
+   }
+
+   if (filaEncontrada === -1) throw "Sesión no encontrada en base de datos.";
+
+   // B. ACTUALIZAMOS EXCEL
+   const diferencia = Number(datos.monto_real) - Number(datos.monto_teorico);
+   sh.getRange(filaEncontrada, 5).setValue(new Date()); // Fecha Cierre
+   sh.getRange(filaEncontrada, 6).setValue(datos.monto_teorico);
+   sh.getRange(filaEncontrada, 7).setValue(datos.monto_real);
+   sh.getRange(filaEncontrada, 8).setValue(diferencia);
+   sh.getRange(filaEncontrada, 9).setValue("CERRADA");
+
+   // C. LIMPIAMOS LA MEMORIA RÁPIDA
+   if (idUsuario) {
+      PropertiesService.getScriptProperties().deleteProperty('CAJA_ACTIVA_' + idUsuario.trim());
+   }
+
+   return { success: true };
+}
+
+// 4. FORZAR CIERRE DE EMERGENCIA (Por si algo se queda trabado en memoria)
+function forzarResetCaja(idUsuario) {
+   const idStr = String(idUsuario).trim();
+   PropertiesService.getScriptProperties().deleteProperty('CAJA_ACTIVA_' + idStr);
+   return "Memoria de caja reiniciada para usuario " + idStr;
 }
 

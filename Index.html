@@ -327,11 +327,15 @@
                 </a>
                 
                 <a v-if="tengoPermiso('ventas')" class="nav-link-desktop" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas')">
-                    <i class="bi bi-receipt me-2"></i> Ventas / Caja
+                    <i class="bi bi-receipt me-2"></i> Ventas
+                </a>
+
+                <a v-if="tengoPermiso('caja')" class="nav-link-desktop" :class="{active: vistaActual === 'caja'}" @click="cambiarVista('caja')">
+                    <i class="bi bi-receipt me-2"></i> Caja
                 </a>
                 
                 <a v-if="tengoPermiso('compras')" class="nav-link-desktop" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras')">
-                    <i class="bi bi-cart-plus me-2"></i> Compras / Stock
+                    <i class="bi bi-cart-plus me-2"></i> Compras
                 </a>
                 
                 <a v-if="tengoPermiso('gastos')" class="nav-link-desktop" :class="{active: vistaActual === 'gastos'}" @click="cambiarVista('gastos')">
@@ -352,7 +356,7 @@
                 </small>
                 
                 <a v-if="tengoPermiso('productos')" class="nav-link-desktop" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos')">
-                    <i class="bi bi-box-seam me-2"></i> Inventario
+                    <i class="bi bi-box-seam me-2"></i> Productos
                 </a>
                 
                 <a v-if="tengoPermiso('clientes')" class="nav-link-desktop" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes')">
@@ -415,7 +419,7 @@
                 
                 <div v-if="vistaActual === 'ventas'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas / Caja</h3>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-receipt text-brand"></i> Ventas</h3>
                         <div class="btn-group shadow-sm">
                             <button class="btn" :class="subVistaVentas === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaVentas = 'nueva'"><i class="bi bi-plus-lg"></i> Nueva Venta</button>
                             <button class="btn" :class="subVistaVentas === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="cargarHistorialVentas"><i class="bi bi-clock-history"></i> Historial</button>
@@ -448,14 +452,6 @@
                                     </div>
 
                                     <div class="col-md-2">
-                                        <label class="form-label fw-bold">Condición</label>
-                                        <select class="form-select" v-model="formVenta.condicion">
-                                            <option value="CONTADO">Contado</option>
-                                            <option value="CREDITO">Crédito</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="col-md-2">
                                         <label class="form-label fw-bold">Fecha</label>
                                         <input type="date" class="form-control" v-model="formVenta.fecha">
                                     </div>
@@ -466,6 +462,51 @@
                                                class="form-control" 
                                                v-model="formVenta.nro_factura" 
                                                placeholder="Automático">
+                                    </div>
+                                                                        <div class="card bg-light border-0 mb-3">
+                                        <div class="card-body">
+                                            
+                                            <div class="d-flex justify-content-between mb-3">
+                                                <div style="width: 48%;">
+                                                    <label class="fw-bold small">Condición</label>
+                                                    <select class="form-select" v-model="formVenta.condicion" @change="pagosVenta=[]">
+                                                        <option value="CONTADO">CONTADO</option>
+                                                        <option value="CREDITO">CRÉDITO</option>
+                                                    </select>
+                                                </div>
+                                                <div style="width: 48%;">
+                                                    <label class="fw-bold small">Total a Pagar</label>
+                                                    <div class="h4 fw-bold text-primary text-end">{{ totalCarrito.toLocaleString('es-PY') }}</div>
+                                                </div>
+                                            </div>
+
+                                            <div v-if="formVenta.condicion === 'CONTADO'">
+                                                <hr>
+                                                
+                                                <ul class="list-group mb-2" v-if="pagosVenta.length > 0">
+                                                    <li v-for="(p, i) in pagosVenta" :key="i" class="list-group-item d-flex justify-content-between p-2">
+                                                        <span><small>{{ p.metodo }}:</small> <b>{{ Number(p.monto).toLocaleString() }}</b></span>
+                                                        <i class="bi bi-x-circle text-danger" style="cursor:pointer" @click="quitarPagoLista(i)"></i>
+                                                    </li>
+                                                </ul>
+
+                                                <div class="input-group mb-2" v-if="saldoRestanteVenta > 0">
+                                                    <select class="form-select" v-model="pagoInput.metodo" style="flex: 0 0 110px;">
+                                                        <option value="EFECTIVO">Efectivo</option>
+                                                        <option value="QR">QR</option>
+                                                        <option value="TARJETA">Tarjeta</option>
+                                                        <option value="TRANSFERENCIA">Transf.</option>
+                                                    </select>
+                                                    <input type="number" class="form-control" v-model="pagoInput.monto">
+                                                    <button class="btn btn-secondary" @click="agregarPagoLista"><i class="bi bi-plus"></i></button>
+                                                </div>
+
+                                                <div class="text-end small fw-bold" :class="saldoRestanteVenta > 0 ? 'text-danger' : 'text-success'">
+                                                    {{ saldoRestanteVenta > 0 ? 'Falta: ' + saldoRestanteVenta.toLocaleString() : '¡Cubierto!' }}
+                                                </div>
+                                            </div>
+
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -620,6 +661,108 @@
                         </div>
                     </div>
                 </div>
+
+                <div v-if="vistaActual === 'caja'" class="animate__animated animate__fadeIn">
+                
+                <h3 class="fw-bold mb-4 text-secondary"><i class="bi bi-wallet2"></i> Gestión de Caja</h3>
+
+                <div v-if="datosCaja.estado === 'CERRADA' || datosCaja.estado === 'PENDIENTE'" class="row justify-content-center">
+                    <div class="col-md-6 col-lg-5">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body p-5 text-center">
+                                <div class="mb-4">
+                                    <span class="display-1 text-secondary"><i class="bi bi-safe"></i></span>
+                                </div>
+                                <h4 class="card-title fw-bold mb-3">Apertura de Turno</h4>
+                                <p class="text-muted mb-4">Ingresa el monto de dinero (sencillo) con el que inicias la caja.</p>
+                                
+                                <div class="form-floating mb-4">
+                                    <input type="number" class="form-control form-control-lg text-center fw-bold fs-3" 
+                                           id="montoInicial" v-model="datosCaja.monto_inicial" placeholder="0">
+                                    <label for="montoInicial">Monto Inicial (Gs.)</label>
+                                </div>
+
+                                <button class="btn btn-success btn-lg w-100 py-3 fw-bold" @click="ejecutarAperturaCaja">
+                                    <i class="bi bi-unlock-fill me-2"></i> ABRIR CAJA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="datosCaja.estado === 'ABIERTA'" class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="alert alert-success d-flex align-items-center mb-4 shadow-sm" role="alert">
+                            <i class="bi bi-check-circle-fill fs-3 me-3"></i>
+                            <div>
+                                <h5 class="alert-heading fw-bold mb-0">Caja Abierta</h5>
+                                <p class="mb-0 small">El turno está activo. Puedes realizar ventas.</p>
+                            </div>
+                        </div>
+
+                        <div class="card shadow border-0 mb-4">
+                            <div class="card-body p-4">
+                                <div class="row text-center">
+                                    <div class="col-md-6 mb-3 mb-md-0 border-end">
+                                        <small class="text-muted text-uppercase fw-bold">Hora Apertura</small>
+                                        <h3 class="text-secondary my-2">{{ formatoFechaHora(datosCaja.fecha_apertura) }}</h3>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted text-uppercase fw-bold">Fondo Inicial</small>
+                                        <h3 class="text-success my-2">{{ Number(datosCaja.monto_inicial).toLocaleString('es-PY') }} Gs.</h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-danger btn-lg py-3 fw-bold shadow-sm" @click="prepararCierreCaja">
+                                <i class="bi bi-lock-fill me-2"></i> REALIZAR ARQUEO Y CERRAR
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="modal fade" id="modalCierreCaja" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title fw-bold"><i class="bi bi-calculator"></i> Arqueo de Caja</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-4">
+                            <div class="alert alert-warning small">
+                                <i class="bi bi-info-circle-fill"></i> Cuenta todo el dinero en efectivo que tienes en el cajón e ingrésalo abajo.
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-muted">Total Esperado (Sistema)</label>
+                                <div class="form-control bg-light fs-5 text-end text-muted">
+                                    {{ Number(datosCaja.resumen_teorico).toLocaleString('es-PY') }} Gs.
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Total Real (En Efectivo)</label>
+                                <input type="number" class="form-control form-control-lg text-end fw-bold fs-3 border-danger" 
+                                       v-model="datosCaja.monto_real" placeholder="0">
+                                <div class="form-text text-end" 
+                                     :class="{'text-danger': (datosCaja.monto_real - datosCaja.resumen_teorico) < 0, 'text-success': (datosCaja.monto_real - datosCaja.resumen_teorico) >= 0}">
+                                     Diferencia: {{ (datosCaja.monto_real - datosCaja.resumen_teorico).toLocaleString('es-PY') }}
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button class="btn btn-danger btn-lg fw-bold" @click="confirmarCierreCaja">
+                                    CONFIRMAR CIERRE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
                 <div v-if="vistaActual === 'perfil'">
                     <div class="row justify-content-center g-4">
@@ -1195,59 +1338,98 @@
                     </div>
 
                     <div v-if="subVistaRemision === 'historial'">
-                      <div class="row mb-3">
-                          <div class="col-md-6">
-                              <div class="input-group shadow-sm">
-                                  <span class="input-group-text bg-white border-end-0">
-                                      <i class="bi bi-search text-muted"></i>
-                                  </span>
-                                  <input type="text" class="form-control border-start-0 ps-0" 
-                                        v-model="busquedaRemision" 
-                                        placeholder="Buscar por cliente o número de remisión...">
-                                  <button v-if="busquedaRemision" class="btn btn-outline-secondary" @click="busquedaRemision = ''">
-                                      <i class="bi bi-x-lg"></i>
-                                  </button>
+                      <div class="card border-0 shadow-sm mb-3">
+                          <div class="card-body p-3 bg-light rounded">
+                              <div class="row g-2 align-items-center">
+                                  
+                                  <div class="col-md-3">
+                                      <div class="input-group input-group-sm">
+                                          <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                          <input type="text" class="form-control border-start-0 ps-0" v-model="busquedaRemision" placeholder="Buscar Nro o Cliente...">
+                                          <button v-if="busquedaRemision" class="btn btn-outline-secondary border-start-0" @click="busquedaRemision = ''"><i class="bi bi-x"></i></button>
+                                      </div>
+                                  </div>
+
+                                  <div class="col-md-3">
+                                      <select class="form-select form-select-sm" v-model="filtroRemisionCliente">
+                                          <option value="">Todos los Clientes</option>
+                                          <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}</option>
+                                      </select>
+                                  </div>
+
+                                  <div class="col-md-3">
+                                      <select class="form-select form-select-sm" v-model="filtroRemisionEstado">
+                                          <option value="">Todos los Estados</option>
+                                          <option value="PENDIENTE_FACTURAR">PENDIENTE FACTURAR</option>
+                                          <option value="FACTURADO">FACTURADO</option>
+                                          <option value="ANULADO">ANULADO</option>
+                                      </select>
+                                  </div>
+
+                                  <div class="col-md-3 text-end border-start ps-3">
+                                      <small class="text-muted d-block lh-1" style="font-size: 0.7rem;">TOTAL FILTRADO</small>
+                                      <span class="fw-bold text-dark fs-5">{{ formatoMoneda(totalRemisionesFiltradas) }}</span>
+                                  </div>
                               </div>
                           </div>
                       </div>
+
                       <div class="card border-0 shadow-sm">
                           <div class="table-responsive">
                               <table class="table table-hover align-middle mb-0">
-                                  <thead class="table-light"><tr><th class="ps-3">Fecha</th><th>Nro</th><th>Cliente</th><th>Estado</th><th class="text-end pe-3">Acciones</th></tr></thead>
+                                  <thead class="table-light">
+                                      <tr>
+                                          <th class="ps-3">Fecha</th>
+                                          <th>Nro</th>
+                                          <th>Cliente</th>
+                                          <th class="text-end">Total</th>
+                                          <th class="text-center">Estado</th>
+                                          <th class="text-end pe-3">Acciones</th>
+                                      </tr>
+                                  </thead>
                                   <tbody>
                                       <tr v-for="h in remisionesFiltradas" :key="h.id_remision">
                                           <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td>
                                           <td><span class="badge bg-light text-dark border">{{ h.numero }}</span></td>
-                                          <td class="fw-bold">{{ h.cliente }}</td>
-                                            <td class="text-center">
+                                          <td class="fw-bold text-truncate" style="max-width: 200px;">{{ h.cliente }}</td>
+                                          
+                                          <td class="text-end fw-bold text-secondary">{{ formatoMoneda(h.total) }}</td>
+
+                                          <td class="text-center">
                                               <span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span>
                                               <span v-else-if="h.estado === 'FACTURADO'" class="badge bg-success">FACTURADO</span>
-                                              <span v-else class="badge bg-warning text-dark border">PENDIENTE</span>
-                                            </td>
-                                            <td class="text-end pe-3">
-                                                <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver PDF">
-                                                    <i class="bi bi-file-earmark-pdf"></i>
-                                                </a>
-                                                
-                                                <button v-if="h.estado === 'PENDIENTE_FACTURAR' || h.estado === 'ENTREGADO'" class="btn btn-sm btn-success text-white fw-bold me-1" @click="facturarDesdeRemision(h)" title="Facturar esta remisión">
-                                                    <i class="bi bi-receipt"></i>
-                                                </button>
+                                              <span v-else class="badge bg-warning text-dark border">{{ h.estado }}</span>
+                                          </td>
+                                          <td class="text-end pe-3">
+                                              <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver PDF">
+                                                  <i class="bi bi-file-earmark-pdf"></i>
+                                              </a>
+                                              
+                                              <button v-if="h.estado === 'PENDIENTE_FACTURAR' || h.estado === 'ENTREGADO' || h.estado === 'PENDIENTE'" 
+                                                      class="btn btn-sm btn-success text-white fw-bold me-1" 
+                                                      @click="facturarDesdeRemision(h)" 
+                                                      title="Facturar esta remisión">
+                                                  <i class="bi bi-receipt"></i>
+                                              </button>
 
-                                                <button v-if="h.estado !== 'ANULADO' && h.estado !== 'FACTURADO'" class="btn btn-sm btn-outline-danger" @click="anularRemision(h)" title="Anular y devolver stock">
-                                                    <i class="bi bi-slash-circle"></i>
-                                                </button>
-                                            </td>
+                                              <button v-if="h.estado !== 'ANULADO' && h.estado !== 'FACTURADO'" 
+                                                      class="btn btn-sm btn-outline-danger" 
+                                                      @click="anularRemision(h)" 
+                                                      title="Anular y devolver stock">
+                                                  <i class="bi bi-slash-circle"></i>
+                                              </button>
+                                          </td>
                                       </tr>
-                                      <tr v-if="remisionesFiltradas && remisionesFiltradas.length === 0">
-                                          <td colspan="5" class="text-center py-4 text-muted">
-                                              <i class="bi bi-filter-circle me-2"></i> No se encontraron resultados.
+                                      <tr v-if="remisionesFiltradas.length === 0">
+                                          <td colspan="6" class="text-center py-4 text-muted">
+                                              <i class="bi bi-filter-circle me-2"></i> No se encontraron resultados con estos filtros.
                                           </td>
                                       </tr>
                                   </tbody>
                               </table>
                           </div>
                       </div>
-                    </div>
+                  </div>
                 </div>
 
                 <div v-if="vistaActual === 'usuarios'">
@@ -1359,11 +1541,11 @@
                                                         </div>
                                                         <div class="form-check mb-2">
                                                             <input class="form-check-input" type="checkbox" value="ventas" v-model="usuarioForm.permisos">
-                                                            <label class="form-check-label small">Ventas / Caja</label>
+                                                            <label class="form-check-label small">Ventas</label>
                                                         </div>
                                                         <div class="form-check mb-2">
                                                             <input class="form-check-input" type="checkbox" value="compras" v-model="usuarioForm.permisos">
-                                                            <label class="form-check-label small">Compras / Stock</label>
+                                                            <label class="form-check-label small">Compras</label>
                                                         </div>
                                                         <div class="form-check mb-2">
                                                             <input class="form-check-input" type="checkbox" value="gastos" v-model="usuarioForm.permisos">
@@ -1382,7 +1564,7 @@
                                                         </div>
                                                         <div class="form-check mb-2">
                                                             <input class="form-check-input" type="checkbox" value="productos" v-model="usuarioForm.permisos">
-                                                            <label class="form-check-label small">Inventario</label>
+                                                            <label class="form-check-label small">Productos</label>
                                                         </div>
                                                         <div class="form-check mb-2">
                                                             <input class="form-check-input" type="checkbox" value="clientes" v-model="usuarioForm.permisos">
@@ -1549,7 +1731,7 @@
 
                 <div v-if="vistaActual === 'compras'">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras / Stock</h3>
+                        <h3 class="fw-bold text-dark mb-0"><i class="bi bi-cart-plus text-brand"></i> Compras</h3>
                           <div class="btn-group shadow-sm">
                               <button class="btn" :class="subVistaCompras === 'nueva' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" @click="subVistaCompras = 'nueva'">
                                   <i class="bi bi-plus-lg"></i> Nueva Compra
@@ -1688,97 +1870,207 @@
                 </div>
 
                 <div v-if="vistaActual === 'productos'">
-                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
-                        <div><h3 class="fw-bold mb-0 text-dark">Inventario</h3><small class="text-muted">{{ productos.length }} productos activos</small></div>
-                        <button class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalProducto(null)"><i class="bi bi-plus-lg me-1"></i> Nuevo Producto</button>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-12 col-sm-6 col-lg-3" v-for="item in productos" :key="item.id_producto"> 
-                            <div class="card h-100 shadow-sm">
-                                
-                                <div class="img-producto-card">
-                                    <img v-if="item.url_imagen" :src="item.url_imagen" alt="Producto">
-                                    <i v-else class="bi bi-camera-fill fs-1 text-muted opacity-25"></i>
-                                    <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
-                                </div>
+                  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                      <div>
+                          <h3 class="fw-bold mb-0 text-dark">
+                              <i class="bi bi-box-seam text-brand me-2"></i>Productos
+                          </h3>
+                          <small class="text-muted" v-if="subVistaProductos === 'lista'">{{ productos.length }} productos activos</small>
+                          <small class="text-muted" v-else>Corrección manual de existencias</small>
+                      </div>
 
-                                <div class="card-body d-flex flex-column">
-                                    
-                                    <div class="mb-2">
-                                        <h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6>
-                                        <small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small>
-                                    </div>
-                                    
-                                    <div class="row g-0 mb-3 small bg-light rounded border p-1">
-                                        <div class="col-6 border-end pe-2 text-center">
-                                            <span class="d-block text-muted" style="font-size: 0.7rem;">Stock Total</span>
-                                            <span class="fw-bold fs-5" :class="(item.stock_actual || 0) <= (item.stock_minimo || 5) ? 'text-danger' : 'text-success'">
-                                                {{ item.stock_actual || 0 }} 
-                                            </span>
-                                            <span class="d-block text-muted" style="font-size: 0.6rem;">{{ item.unidad_medida }}</span>
-                                        </div>
-                                        <div class="col-6 ps-2 text-center d-flex flex-column justify-content-center">
-                                            <span class="d-block text-muted" style="font-size: 0.7rem;">Costo Prom.</span>
-                                            <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
-                                        </div>
-                                    </div>
+                      <button v-if="subVistaProductos === 'lista'" class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalProducto(null)"><i class="bi bi-plus-lg -fill me-1"></i> Nuevo Producto</button>
 
-                                    <div class="mt-auto">
-                                        <div class="d-flex justify-content-between align-items-end mb-2">
-                                            <div>
-                                                <div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div>
-                                                <small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small>
-                                            </div>
-                                        </div>
-                                        
-                                        <a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1 mb-2" 
-                                           data-bs-toggle="collapse" 
-                                           :href="'#collapse' + item.id_producto" 
-                                           role="button" 
-                                           aria-expanded="false">
-                                           <i class="bi bi-info-circle"></i> Ver detalles
-                                        </a>
-                                    </div>
+                      <div class="d-flex gap-2">
+                          <div class="btn-group shadow-sm">
+                              <button class="btn" 
+                                  :class="subVistaProductos === 'lista' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
+                                  @click="subVistaProductos = 'lista'">
+                                  <i class="bi bi-grid-fill me-1"></i> Catálogo
+                              </button>
+                              <button class="btn" 
+                                  :class="subVistaProductos === 'ajustes' ? 'btn-brand' : 'btn-white bg-white text-secondary border'" 
+                                  @click="subVistaProductos = 'ajustes'">
+                                  <i class="bi bi-arrow-down-up me-1"></i> Ajustes
+                              </button>
+                          </div>
+                      </div>
+                  </div>
 
-                                    <div class="collapse" :id="'collapse' + item.id_producto">
-                                        <div class="bg-light p-2 rounded small border shadow-sm mb-3">
-                                            
-                                            <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2" style="font-size: 0.7rem;">📍 Ubicación del Stock</h6>
-                                            <div v-if="item.stocks && item.stocks.length > 0">
-                                                <table class="table table-sm table-borderless mb-0">
-                                                    <tbody>
-                                                        <tr v-for="st in item.stocks" :key="st.nombre_deposito">
-                                                            <td class="text-start ps-0 text-muted py-0">{{ st.nombre_deposito }}</td>
-                                                            <td class="text-end fw-bold pe-0 py-0">{{ st.cantidad }}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            <div v-else class="text-center text-muted fst-italic mb-2">Sin stock registrado</div>
+                  <div v-if="subVistaProductos === 'lista'" class="animate__animated animate__fadeIn">
+                      <div class="row g-3">
+                          <div class="col-12 col-sm-6 col-lg-3" v-for="item in productos" :key="item.id_producto"> 
+                              <div class="card h-100 shadow-sm">
+                                  
+                                  <div class="img-producto-card">
+                                      <img v-if="item.url_imagen" :src="item.url_imagen" alt="Producto">
+                                      <i v-else class="bi bi-camera-fill fs-1 text-muted opacity-25"></i>
+                                      <span class="position-absolute top-0 end-0 m-2 badge bg-brand bg-opacity-75 rounded-pill small">{{ obtenerNombreCategoria(item.id_categoria) }}</span>
+                                  </div>
 
-                                            <div v-if="tieneDatosValidos(item)">
-                                                <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2 mt-3" style="font-size: 0.7rem;">ℹ️ Info Adicional</h6>
-                                                <div v-for="(val, key) in item.datos_adicionales">
-                                                    <div v-if="val && val.toString().trim() !== ''" class="mb-1 d-flex justify-content-between">
-                                                        <span class="text-muted">{{ obtenerEtiquetaCampo(key) }}:</span> 
-                                                        <span class="fw-bold text-dark">{{ val }}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                  <div class="card-body d-flex flex-column">
+                                      
+                                      <div class="mb-2">
+                                          <h6 class="card-title fw-bold text-truncate mb-0" :title="item.nombre">{{ item.nombre }}</h6>
+                                          <small class="text-muted" style="font-size: 0.8rem;">SKU: {{ item.sku }}</small>
+                                      </div>
+                                      
+                                      <div class="row g-0 mb-3 small bg-light rounded border p-1">
+                                          <div class="col-6 border-end pe-2 text-center">
+                                              <span class="d-block text-muted" style="font-size: 0.7rem;">Stock Total</span>
+                                              <span class="fw-bold fs-5" :class="(item.stock_actual || 0) <= (item.stock_minimo || 5) ? 'text-danger' : 'text-success'">
+                                                  {{ item.stock_actual || 0 }} 
+                                              </span>
+                                              <span class="d-block text-muted" style="font-size: 0.6rem;">{{ item.unidad_medida }}</span>
+                                          </div>
+                                          <div class="col-6 ps-2 text-center d-flex flex-column justify-content-center">
+                                              <span class="d-block text-muted" style="font-size: 0.7rem;">Costo Prom.</span>
+                                              <span class="fw-bold text-secondary">{{ formatoMoneda(item.costo_promedio || item.costo || 0) }}</span>
+                                          </div>
+                                      </div>
 
-                                        </div>
-                                    </div>
+                                      <div class="mt-auto">
+                                          <div class="d-flex justify-content-between align-items-end mb-2">
+                                              <div>
+                                                  <div class="text-brand fw-bold fs-4 line-height-1">{{ formatoMoneda(item.precio_venta_base) }}</div>
+                                                  <small class="text-muted" style="font-size: 0.75rem;">Precio Venta</small>
+                                              </div>
+                                          </div>
+                                          
+                                          <a class="text-decoration-none small text-brand fw-bold d-flex align-items-center gap-1 mb-2" 
+                                            data-bs-toggle="collapse" 
+                                            :href="'#collapse' + item.id_producto" 
+                                            role="button" 
+                                            aria-expanded="false">
+                                            <i class="bi bi-info-circle"></i> Ver detalles
+                                          </a>
 
-                                    <div class="d-flex gap-2 pt-2 border-top">
-                                        <button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button>
-                                        <button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button>
-                                    </div>
+                                          <div class="collapse" :id="'collapse' + item.id_producto">
+                                              <div class="bg-light p-2 rounded small border shadow-sm mb-3">
+                                                  
+                                                  <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2" style="font-size: 0.7rem;">📍 Ubicación del Stock</h6>
+                                                  <div v-if="item.stocks && item.stocks.length > 0">
+                                                      <table class="table table-sm table-borderless mb-0">
+                                                          <tbody>
+                                                              <tr v-for="st in item.stocks" :key="st.nombre_deposito">
+                                                                  <td class="text-start ps-0 text-muted py-0">{{ st.nombre_deposito }}</td>
+                                                                  <td class="text-end fw-bold pe-0 py-0">{{ st.cantidad }}</td>
+                                                              </tr>
+                                                          </tbody>
+                                                      </table>
+                                                  </div>
+                                                  <div v-else class="text-center text-muted fst-italic mb-2">Sin stock registrado</div>
 
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                                  <div v-if="tieneDatosValidos(item)">
+                                                      <h6 class="fw-bold text-secondary border-bottom pb-1 mb-2 mt-3" style="font-size: 0.7rem;">ℹ️ Info Adicional</h6>
+                                                      <div v-for="(val, key) in item.datos_adicionales">
+                                                          <div v-if="val && val.toString().trim() !== ''" class="mb-1 d-flex justify-content-between">
+                                                              <span class="text-muted">{{ obtenerEtiquetaCampo(key) }}:</span> 
+                                                              <span class="fw-bold text-dark">{{ val }}</span>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+
+                                              </div>
+                                          </div>
+
+                                          <div class="d-flex gap-2 pt-2 border-top">
+                                              <button class="btn btn-sm btn-outline-brand flex-grow-1" @click="abrirModalProducto(item)"><i class="bi bi-pencil"></i> Editar</button>
+                                              <button class="btn btn-sm btn-outline-danger" @click="eliminarProducto(item)"><i class="bi bi-trash"></i></button>
+                                          </div>
+
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div v-if="productos.length === 0" class="text-center py-5">
+                          <i class="bi bi-box-seam text-muted display-1 opacity-25"></i>
+                          <p class="text-muted mt-3">No hay productos registrados.</p>
+                          <button class="btn btn-brand" @click="abrirModalProducto(null)">Crear el primero</button>
+                      </div>
+                  </div>
+
+                  <div v-if="subVistaProductos === 'ajustes'" class="animate__animated animate__fadeIn">
+                      <div class="row justify-content-center">
+                          <div class="col-md-8 col-lg-7">
+                              <div class="card border-0 shadow-sm">
+                                  <div class="card-header bg-white py-3">
+                                      <h5 class="fw-bold m-0 text-center"><i class="bi bi-tools me-2 text-warning"></i>Ajustes de Stock</h5>
+                                  </div>
+                                  <div class="card-body p-4 bg-light bg-opacity-25">
+                                      
+                                      <form @submit.prevent="guardarAjuste">
+                                          
+                                          <div class="mb-4 text-center">
+                                              <label class="form-label d-block fw-bold mb-2 text-muted small">TIPO DE OPERACIÓN</label>
+                                              <div class="btn-group w-100 shadow-sm" role="group">
+                                                  <input type="radio" class="btn-check" name="tipoAjuste" id="tipoEntrada" value="ENTRADA" v-model="formAjuste.tipo">
+                                                  <label class="btn btn-outline-success fw-bold py-3" for="tipoEntrada">
+                                                      <i class="bi bi-plus-circle fs-5 d-block mb-1"></i> ENTRADA / FABRICACIÓN
+                                                  </label>
+
+                                                  <input type="radio" class="btn-check" name="tipoAjuste" id="tipoSalida" value="SALIDA" v-model="formAjuste.tipo">
+                                                  <label class="btn btn-outline-danger fw-bold py-3" for="tipoSalida">
+                                                      <i class="bi bi-dash-circle fs-5 d-block mb-1"></i> SALIDA / MERMA
+                                                  </label>
+                                              </div>
+                                          </div>
+
+                                          <div class="row g-3">
+                                              <div class="col-md-6">
+                                                  <label class="form-label fw-bold small">Depósito Afectado</label>
+                                                  <select class="form-select bg-white" v-model="formAjuste.id_deposito" required>
+                                                      <option value="" disabled>Seleccionar...</option>
+                                                      <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                                  </select>
+                                              </div>
+
+                                              <div class="col-md-6">
+                                                  <label class="form-label fw-bold small">Producto</label>
+                                                  <select class="form-select bg-white" v-model="formAjuste.id_producto" required>
+                                                      <option value="" disabled>Buscar producto...</option>
+                                                      <option v-for="p in productos" :value="p.id_producto">
+                                                          {{ p.nombre }} (Stock: {{ p.stock_actual }})
+                                                      </option>
+                                                  </select>
+                                              </div>
+
+                                              <div class="col-md-4">
+                                                  <label class="form-label fw-bold small">Cantidad</label>
+                                                  <input type="number" class="form-control fw-bold fs-5 text-center" v-model.number="formAjuste.cantidad" min="0.01" step="0.01" required placeholder="0">
+                                              </div>
+
+                                              <div class="col-md-8">
+                                                  <label class="form-label fw-bold small">Motivo / Justificación</label>
+                                                  <input type="text" class="form-control" v-model="formAjuste.motivo" required placeholder="Ej: Rotura en almacén, Producción del día...">
+                                              </div>
+                                          </div>
+
+                                          <hr class="my-4">
+
+                                          <div class="d-grid">
+                                              <button type="submit" class="btn btn-lg fw-bold shadow-sm text-white" 
+                                                  :class="formAjuste.tipo === 'ENTRADA' ? 'btn-success' : 'btn-danger'">
+                                                  <i class="bi bi-save me-2"></i> 
+                                                  CONFIRMAR {{ formAjuste.tipo }}
+                                              </button>
+                                          </div>
+
+                                      </form>
+                                  </div>
+                              </div>
+                              
+                              <div class="alert alert-info mt-3 small shadow-sm border-0">
+                                  <i class="bi bi-info-circle-fill me-2"></i>
+                                  <strong>Nota:</strong> Los ajustes impactan inmediatamente en el stock del depósito seleccionado y quedan registrados en el reporte de Movimientos.
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+              </div>
 
                 <div v-if="vistaActual === 'clientes'">
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -1949,69 +2241,6 @@
                                     </tr>
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm border-0 mb-4 border-top border-4 border-primary">
-                        <div class="card-header bg-white py-3">
-                            <h6 class="fw-bold m-0"><i class="bi bi-tools me-2 text-primary"></i>Mantenimiento de Inventario</h6>
-                        </div>
-                        <div class="card-body bg-light bg-opacity-25">
-                            <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i> Utiliza esta herramienta para correcciones manuales de stock (roturas, mermas, obsequios o producción interna).</p>
-                            
-                            <form @submit.prevent="guardarAjuste">
-                                <div class="row g-3 align-items-end">
-                                    
-                                    <div class="col-md-12 mb-2 text-center">
-                                        <div class="btn-group bg-white shadow-sm" role="group">
-                                            <input type="radio" class="btn-check" name="tipoAjusteCfg" id="adjEntradaCfg" value="ENTRADA" v-model="formAjuste.tipo">
-                                            <label class="btn btn-outline-success btn-sm fw-bold px-4" for="adjEntradaCfg">
-                                                <i class="bi bi-plus-lg"></i> Entrada / Fabricación
-                                            </label>
-
-                                            <input type="radio" class="btn-check" name="tipoAjusteCfg" id="adjSalidaCfg" value="SALIDA" v-model="formAjuste.tipo">
-                                            <label class="btn btn-outline-danger btn-sm fw-bold px-4" for="adjSalidaCfg">
-                                                <i class="bi bi-dash-lg"></i> Salida / Merma
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-bold text-muted">Depósito</label>
-                                        <select class="form-select form-select-sm bg-white" v-model="formAjuste.id_deposito" required>
-                                            <option value="" disabled>Seleccionar...</option>
-                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="col-md-4">
-                                        <label class="form-label small fw-bold text-muted">Producto</label>
-                                        <select class="form-select form-select-sm bg-white" v-model="formAjuste.id_producto" required>
-                                            <option value="" disabled>Buscar...</option>
-                                            <option v-for="p in productos" :value="p.id_producto">
-                                                {{ p.nombre }} (Global: {{ p.stock_actual }})
-                                            </option>
-                                        </select>
-                                    </div>
-
-                                    <div class="col-md-2">
-                                        <label class="form-label small fw-bold text-muted">Cantidad</label>
-                                        <input type="number" class="form-control form-control-sm text-center fw-bold" v-model.number="formAjuste.cantidad" min="0.01" step="0.01" required>
-                                    </div>
-
-                                    <div class="col-md-3">
-                                        <label class="form-label small fw-bold text-muted">Motivo</label>
-                                        <div class="input-group input-group-sm">
-                                            <input type="text" class="form-control" v-model="formAjuste.motivo" placeholder="Ej: Rotura, Ajuste..." required>
-                                            <button type="submit" class="btn fw-bold shadow-sm" 
-                                                :class="formAjuste.tipo === 'ENTRADA' ? 'btn-success' : 'btn-danger'">
-                                                Aplicar Ajuste
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </form>
                         </div>
                     </div>
 
@@ -2363,11 +2592,15 @@
                 </button>
 
                 <button v-if="tengoPermiso('ventas')" class="nav-mobile-btn" :class="{active: vistaActual === 'ventas'}" @click="cambiarVista('ventas'); cerrarMenuMovil()">
-                    <i class="bi bi-receipt"></i> Ventas / Caja
+                    <i class="bi bi-receipt"></i> Ventas
+                </button>
+
+                <button v-if="tengoPermiso('caja')" class="nav-mobile-btn" :class="{active: vistaActual === 'caja'}" @click="cambiarVista('caja'); cerrarMenuMovil()">
+                    <i class="bi bi-receipt"></i> Caja
                 </button>
                 
                 <button v-if="tengoPermiso('compras')" class="nav-mobile-btn" :class="{active: vistaActual === 'compras'}" @click="cambiarVista('compras'); cerrarMenuMovil()">
-                    <i class="bi bi-cart-plus"></i> Compras / Stock
+                    <i class="bi bi-cart-plus"></i> Compras
                 </button>
 
                 <button v-if="tengoPermiso('gastos')" class="nav-mobile-btn" :class="{active: vistaActual === 'gastos'}" @click="cambiarVista('gastos'); cerrarMenuMovil()">
@@ -2388,7 +2621,7 @@
                 </small>
                 
                 <button v-if="tengoPermiso('productos')" class="nav-mobile-btn" :class="{active: vistaActual === 'productos'}" @click="cambiarVista('productos'); cerrarMenuMovil()">
-                    <i class="bi bi-box-seam"></i> Inventario
+                    <i class="bi bi-box-seam"></i> Productos
                 </button>
                 
                 <button v-if="tengoPermiso('clientes')" class="nav-mobile-btn" :class="{active: vistaActual === 'clientes'}" @click="cambiarVista('clientes'); cerrarMenuMovil()">
@@ -2784,7 +3017,7 @@
               </div>
           </div>
       </div>
-
+</div>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -2830,7 +3063,31 @@
                 confirmacion: ''
             },
 
+            subVistaProductos: 'lista',
+
+            filtroRemisionCliente: '', 
+            filtroRemisionEstado: '',  
+
+            // VARIABLES PARA CAJA
+            datosCaja: {
+                estado: 'PENDIENTE', // 'ABIERTA', 'CERRADA', 'PENDIENTE'
+                id_sesion: null,
+                fecha_apertura: null,
+                monto_inicial: 0,
+                // Para el cierre
+                resumen_teorico: 0,
+                monto_real: 0
+            },
+            modalCierre: null, // Referencia al modal de Bootstrap
+
+            pagosVenta: [],     
+                pagoInput: {        
+                    metodo: 'EFECTIVO',
+                    monto: 0
+                },
+
             fechaHoy: new Date().toLocaleDateString(),
+
             dashboardData: {
                 kpi: {
                     ventasHoy: 0,
@@ -2920,7 +3177,7 @@
             formCategoria: { id_categoria: '', nombre: '' },
             modalCat: null, // Referencia al modal
 
-            formVenta: { id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: '' },
+            formVenta: { id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: '', metodos_pago: [], total_pagado: 0 },
             lineaVenta: { id_producto:'', cantidad:1, precio:0 },
             carritoVenta: [], 
             busquedaVenta: '',
@@ -2985,6 +3242,19 @@
                 return !sinFecha.includes(this.reporteForm.tipo);
             },
 
+            totalPagadoAcumulado() {
+                if (!this.pagosVenta) return 0;
+                return this.pagosVenta.reduce((acc, item) => acc + Number(item.monto), 0);
+            },
+            
+            saldoRestanteVenta() {
+                // También blindamos este cálculo
+                const total = this.totalCarrito || 0;
+                const pagado = this.totalPagadoAcumulado || 0;
+                const saldo = total - pagado;
+                return saldo < 10 ? 0 : saldo;
+            },
+
             totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); },
             cobranzasFiltradas() {
                 if (!this.historialCobranzas) return [];
@@ -3018,6 +3288,10 @@
               });
           },
 
+          totalCarrito() {
+                return this.totalVenta || 0;
+          },
+
           // Suma el total de lo que se ve en pantalla
           totalGastosFiltrados() {
               return this.gastosFiltrados.reduce((sum, item) => sum + item.monto, 0);
@@ -3044,27 +3318,33 @@
                   return cliente.includes(texto) || factura.includes(texto);
               });
            },
-        
-          remisionesFiltradas() {
-              // 1. Si no existe la lista, devolvemos array vacío (evita el error undefined)
-              if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) {
-                  return [];
-              }
 
-              // 2. Si no hay búsqueda, devolvemos todo
-              if (!this.busquedaRemision) {
-                  return this.historialRemisiones;
-              }
-              
-              // 3. Filtrado seguro
-              const texto = this.busquedaRemision.toLowerCase().trim();
+          remisionesFiltradas() {
+              if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) return [];
+
+              // Filtro de Texto (Búsqueda general)
+              const texto = this.busquedaRemision ? this.busquedaRemision.toLowerCase().trim() : '';
+
               return this.historialRemisiones.filter(item => {
-                  // Forzamos conversión a string por si viene un número o null
+                  // 1. Coincidencia de Texto
                   const n = String(item.numero || '').toLowerCase();
                   const c = String(item.cliente || '').toLowerCase();
-                  return n.includes(texto) || c.includes(texto);
+                  const coincideTexto = !texto || n.includes(texto) || c.includes(texto);
+
+                  // 2. Filtro de Cliente (Dropdown)
+                  const coincideCliente = !this.filtroRemisionCliente || item.id_cliente_raw == this.filtroRemisionCliente;
+
+                  // 3. Filtro de Estado (Dropdown)
+                  const coincideEstado = !this.filtroRemisionEstado || item.estado == this.filtroRemisionEstado;
+
+                  return coincideTexto && coincideCliente && coincideEstado;
               });
-            }
+          },
+
+          // Nueva computada para la sumatoria
+          totalRemisionesFiltradas() {
+              return this.remisionesFiltradas.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
+          }
       },
       mounted() {
             // 1. Inicializar TODOS los componentes de Bootstrap (Modales)
@@ -3175,23 +3455,199 @@
             notificar(icono, titulo) {
                 Toast.fire({ icon: icono, title: titulo });
             },
+            
             formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
             cambiarVista(v) { 
-                // 1. Si la vista es la misma, salimos
                 if(this.vistaActual === v) return;
-
-                // 2. Cambiamos la vista y subimos el scroll
                 this.vistaActual = v; 
                 window.scrollTo(0,0);
-                
-                // 3. Guardamos en el historial (Tu código actual)
                 window.history.pushState({ vista: v }, null, '');
 
-                // 4. --- CARGA DE DATOS ESPECÍFICA (LO NUEVO) ---
-                // Si la vista a la que vamos es 'usuarios', cargamos la lista
                 if (v === 'usuarios') {
                     this.cargarUsuarios();
                 }
+                if (v === 'caja') {
+                    this.verificarEstadoCaja();
+                }
+            },
+
+            // --- MÓDULO CAJA ---
+
+            verificarEstadoCaja() {
+                if (!this.usuarioLogueado) return;
+                
+                const idParaEnviar = this.usuarioLogueado.id_usuario;
+
+                google.script.run
+                    .withSuccessHandler(res => {
+                        // Ahora 'res' tiene una propiedad 'exito' clara
+                        if (res && res.exito) {
+                            // CAJA ABIERTA
+                            this.datosCaja.estado = 'ABIERTA';
+                            this.datosCaja.id_sesion = res.id_sesion;
+                            this.datosCaja.fecha_apertura = res.fecha_apertura;
+                            this.datosCaja.monto_inicial = res.monto_inicial;
+                        } else {
+                            // CAJA CERRADA
+                            this.datosCaja.estado = 'CERRADA';
+                            this.datosCaja.monto_inicial = 0;
+                            // Si hubo error de debug, lo mostramos en consola silenciosamente
+                            if (res && res.debug_error) console.warn(res.mensaje);
+                        }
+                    })
+                    .withFailureHandler(error => {
+                        console.error("Error red:", error);
+                        // En caso de duda, dejamos estado pendiente o mostramos alerta suave
+                    })
+                    .verificarCajaAbierta(idParaEnviar);
+            },
+
+            // Agrega esto en tus methods:
+            formatoFechaHora(fecha) {
+                if (!fecha) return '---';
+                try {
+                    const fechaObj = (fecha instanceof Date) ? fecha : new Date(fecha);
+                    // Formato: 31/01/2026 09:30
+                    return fechaObj.toLocaleString('es-PY', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false // O true si prefieres AM/PM
+                    });
+                } catch (e) {
+                    return fecha;
+                }
+            },
+
+            // 2. Ejecutar Apertura
+            ejecutarAperturaCaja() {
+                if (this.datosCaja.monto_inicial < 0) return this.notificar('warning', 'El monto no puede ser negativo');
+                
+                this.cargando = true;
+                
+                // Guardamos el monto en una variable local por si acaso
+                const montoGuardado = this.datosCaja.monto_inicial;
+
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        
+                        if (res && res.success) { // El backend devuelve { success: true, id_sesion: ... }
+                            this.notificar('success', 'Caja abierta correctamente');
+                            
+                            // --- CAMBIO IMPORTANTE: ASIGNACIÓN MANUAL ---
+                            // No llamamos a verificarEstadoCaja() para evitar que la latencia nos cierre la caja.
+                            // Confiamos en que la operación fue exitosa.
+                            
+                            this.datosCaja.estado = 'ABIERTA';
+                            this.datosCaja.id_sesion = res.id_sesion;
+                            this.datosCaja.fecha_apertura = new Date(); // Fecha visual actual
+                            this.datosCaja.monto_inicial = montoGuardado;
+                            
+                            //Opcional: Redirigir a ventas si quieres
+                            //this.cambiarVista('ventas');
+                        } else {
+                            this.notificar('error', 'El servidor respondió pero no confirmó la apertura.');
+                        }
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        this.notificar('error', e);
+                    })
+                    .abrirCaja(this.datosCaja.monto_inicial, {
+                        id_usuario: this.usuarioLogueado.id_usuario,
+                        nombre: this.usuarioLogueado.nombre
+                    });
+            },
+
+            // 3. Preparar Cierre (Traer resumen)
+            prepararCierreCaja() {
+                this.cargando = true;
+                google.script.run
+                    .withSuccessHandler(resumen => {
+                        this.cargando = false;
+                        // Cargamos los datos teóricos
+                        this.datosCaja.resumen_teorico = resumen.teorico; 
+                        this.datosCaja.monto_real = 0; // Limpiar input
+                        this.datosCaja.id_sesion = resumen.id_sesion;
+                        
+                        // Abrir Modal
+                        this.modalCierre = new bootstrap.Modal(document.getElementById('modalCierreCaja'));
+                        this.modalCierre.show();
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        this.notificar('error', "Error al obtener resumen: " + e);
+                    })
+                    .obtenerResumenCaja(this.usuarioLogueado.id_usuario);
+            },
+
+            // 4. Confirmar Cierre Final
+            confirmarCierreCaja() {
+                this.cargando = true;
+                const paquete = {
+                    id_sesion: this.datosCaja.id_sesion,
+                    monto_teorico: this.datosCaja.resumen_teorico,
+                    monto_real: this.datosCaja.monto_real
+                };
+
+                google.script.run
+                    .withSuccessHandler(res => {
+                        this.cargando = false;
+                        this.modalCierre.hide();
+                        
+                        Swal.fire({
+                            title: 'Caja Cerrada',
+                            text: 'El turno se ha cerrado correctamente.',
+                            icon: 'success'
+                        });
+
+                        this.verificarEstadoCaja(); // Volverá a estado 'CERRADA'
+                    })
+                    .withFailureHandler(e => {
+                        this.cargando = false;
+                        this.notificar('error', "Error al cerrar: " + e);
+                    })
+                    .cerrarCaja(paquete);
+            },
+
+            // --- LOGICA DE PAGO MULTIPLE ---
+            agregarPagoLista() {
+                const monto = Number(this.pagoInput.monto);
+                const total = this.totalCarrito;
+                const pagado = this.totalPagadoAcumulado;
+
+                if (monto <= 0) return this.notificar('warning', 'El monto debe ser mayor a 0');
+                if ((pagado + monto) > (total + 500)) return this.notificar('warning', 'El monto supera el total');
+
+                this.pagosVenta.push({
+                    metodo: this.pagoInput.metodo,
+                    monto: monto
+                });
+
+                // Calcular sugerencia para el siguiente pago
+                let restante = total - (pagado + monto);
+                this.pagoInput.monto = restante > 0 ? restante : 0;
+            },
+
+            quitarPagoLista(index) {
+                this.pagosVenta.splice(index, 1);
+                // Recalcular sugerencia
+                this.pagoInput.monto = this.saldoRestanteVenta;
+            },
+
+            agregarPago(metodo, monto) {
+              this.formVenta.metodos_pago.push({ metodo, monto });
+              this.calcularTotalPagado();
+            },
+
+            validarVenta() {
+              if (this.formVenta.total_pagado < this.totalCarrito) {
+                  alert("Falta cubrir el total de la venta");
+                  return false;
+              } 
             },
 
             abrirEscaner() {
@@ -3619,13 +4075,6 @@
                 return this.permisos.includes(modulo);
             },
 
-            // Función auxiliar para verificar permisos en el HTML
-            tengoPermiso(modulo) {
-                if (!this.usuarioLogueado) return false;
-                if (this.usuarioLogueado.rol === 'ADMIN') return true;
-                return this.permisos.includes(modulo);
-            },
-
             logout() {
                 Swal.fire({
                     title: '¿Cerrar Sesión?',
@@ -3859,7 +4308,8 @@
                     // 👇 3. APLICAMOS EL DEFAULT AL FORMULARIO DE VENTA
                     // Si existe un default configurado, lo pre-seleccionamos.
                     // Si no, forzamos "1" (Depósito Central) como respaldo.
-                    this.formVenta.id_deposito = this.depositoDefault || '1';
+                    this.formVenta.id_deposito = this.depositoDefault || '169169';
+                    this.verificarEstadoCaja();
 
                     this.cargando = false;
                 });
@@ -4558,13 +5008,52 @@
             limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
 
             guardarVentaFinal() {
+                // 1. Validaciones básicas
                 if(!this.formVenta.id_cliente) return this.notificar('warning', "Selecciona Cliente");
                 if(this.carritoVenta.length === 0) return this.notificar('warning', "Carrito vacío");
+
+                // Calculamos el total aquí para usarlo en las validaciones
+                const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
+
+                // 2. VALIDACIÓN DE PAGO MULTIMÉTODO
+                // Si la venta es al CONTADO, el usuario debe haber cubierto el saldo
+                if (this.formVenta.condicion === 'CONTADO' && this.saldoRestanteVenta > 0) {
+                     return this.notificar('warning', `Falta cubrir ${this.saldoRestanteVenta.toLocaleString('es-PY')} Gs. para completar el pago.`);
+                }
+
+                // 3. Lógica de asignación de pagos
+                if (this.formVenta.condicion === 'CREDITO') {
+                    // Si es Crédito, no hay pagos inmediatos (se va a Ctas. por Cobrar)
+                    this.pagosVenta = []; 
+                } else {
+                    // Si es Contado y el usuario NO usó el botón de "Agregar Pago" (lista vacía),
+                    // asumimos comportamiento clásico: Todo el monto es EFECTIVO.
+                    if (this.pagosVenta.length === 0) {
+                        this.pagosVenta.push({ metodo: 'EFECTIVO', monto: total });
+                    }
+                }
                 
                 this.cargando = true;
-                const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
-                const paquete = { id_cliente: this.formVenta.id_cliente, id_deposito: this.formVenta.id_deposito, fecha: this.formVenta.fecha, nro_factura: this.formVenta.nro_factura, condicion: this.formVenta.condicion, total: total, items: this.carritoVenta };
                 
+                // 4. Armado del Paquete
+                const paquete = { 
+                    id_cliente: this.formVenta.id_cliente, 
+                    id_deposito: this.formVenta.id_deposito, 
+                    fecha: this.formVenta.fecha, 
+                    nro_factura: this.formVenta.nro_factura, 
+                    condicion: this.formVenta.condicion, 
+                    total: total, 
+                    items: this.carritoVenta,
+                    
+                    // --- NUEVOS CAMPOS ---
+                    // Enviamos la lista de pagos como Texto JSON para guardarlo en la BD
+                    json_pagos: JSON.stringify(this.pagosVenta),
+                    // Enviamos el usuario para que el Backend verifique si tiene CAJA ABIERTA
+                    usuario_id: this.usuarioLogueado ? this.usuarioLogueado.id_usuario : null,
+                    usuario_nombre: this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Sistema'
+                };
+                
+                // 5. Envío al Backend
                 google.script.run.withSuccessHandler((res) => { 
                     this.cargando = false; 
                     if(res.pdf_url) {
@@ -4581,7 +5070,10 @@
                     } else {
                         this.notificar('success', "Venta registrada.");
                     }
-                    this.carritoVenta = []; 
+                    
+                    // Limpieza
+                    this.carritoVenta = [];
+                    this.pagosVenta = []; // Limpiamos también los pagos temporales
                     this.cargarDatosIniciales(); 
                 })
                 .withFailureHandler(err => { 
