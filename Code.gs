@@ -278,17 +278,16 @@ function guardarCompraCompleta(compra) {
     const shCab = ss.getSheetByName('COMPRAS_CABECERA');
     const shDet = ss.getSheetByName('COMPRAS_DETALLE');
     const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+    const shProv = ss.getSheetByName('PROVEEDORES');
+    const shDep = ss.getSheetByName('DEPOSITOS'); 
 
-    if (!shCab || !shDet) throw "Faltan hojas de base de datos de compras.";
+    if (!shCab || !shDet) throw "Faltan hojas de base de datos.";
 
     const idCompra = Utilities.getUuid();
-    
-    // 2. Preparar Datos
-    // Fecha segura (Mediodía para evitar problemas de zona horaria)
     const fecha = new Date(compra.fecha + "T12:00:00");
     const total = Number(compra.total);
     
-    // Lógica de Estado y Saldo
+    // Estado y Saldo
     let estado = 'PAGADO';
     let saldo = 0;
     let jsonPagos = '[]';
@@ -297,30 +296,73 @@ function guardarCompraCompleta(compra) {
         estado = 'PENDIENTE';
         saldo = total;
     } else {
-        // Si es Contado, generamos un pago automático de EFECTIVO
         estado = 'PAGADO';
         jsonPagos = JSON.stringify([{ metodo: 'EFECTIVO', monto: total, fecha: new Date() }]);
     }
 
-    // 3. Guardar Cabecera (Nueva Estructura)
-    // Cols: [id, fecha, prov, dep, total, estado, url, nro, cond, saldo, json]
+    // --- RECUPERAR DATOS AUXILIARES PARA EL PDF ---
+    let nombreProveedor = "Proveedor General";
+    let docProveedor = "";
+    if (shProv) {
+         const datosP = shProv.getDataRange().getValues();
+         for(let i=1; i<datosP.length; i++){
+             if(String(datosP[i][0]) == String(compra.id_proveedor)){
+                 nombreProveedor = datosP[i][1];
+                 docProveedor = datosP[i][2];
+                 break;
+             }
+         }
+    }
+
+    let nombreDeposito = "Depósito Principal";
+    if (shDep) {
+         const datosD = shDep.getDataRange().getValues();
+         for(let i=1; i<datosD.length; i++){
+             if(String(datosD[i][0]) == String(compra.id_deposito_destino)){
+                 nombreDeposito = datosD[i][1];
+                 break;
+             }
+         }
+    }
+
+    // --- GENERAR PDF USANDO TU FUNCIÓN EXISTENTE ---
+    let urlPdf = "";
+    try {
+        const datosParaPDF = {
+            comprobante: compra.comprobante || "S/N",
+            fecha: fecha, // Pasamos objeto fecha
+            proveedor_nombre: nombreProveedor,
+            proveedor_doc: docProveedor,
+            condicion: compra.condicion,
+            deposito_nombre: nombreDeposito,
+            total: total
+        };
+
+        // LLAMADA A TU FUNCIÓN (Le pasamos los datos y la lista de items cruda)
+        urlPdf = crearPDFOrdenCompra(datosParaPDF, compra.items);
+
+    } catch(e) {
+        console.error("Error generando PDF con plantilla: " + e);
+        urlPdf = "";
+    }
+
+    // 4. Guardar Cabecera
     shCab.appendRow([
       idCompra,
       fecha,
       compra.id_proveedor,
-      compra.id_deposito_destino, // Nuevo: Depósito Físico
+      compra.id_deposito_destino,
       total,
       estado,
-      "", // URL PDF (Pendiente)
+      urlPdf, // Guardamos la URL generada
       compra.comprobante, 
-      compra.condicion,   // Nuevo: CONTADO/CREDITO
-      saldo,              // Nuevo: Deuda actual
-      jsonPagos           // Nuevo: Historial de pagos
+      compra.condicion,   
+      saldo,              
+      jsonPagos           
     ]);
 
-    // 4. Guardar Detalles y Mover Stock
+    // 5. Guardar Detalles y Movimientos
     compra.items.forEach(item => {
-       // A. Insertar en Detalle
        shDet.appendRow([
          Utilities.getUuid(),
          idCompra,
@@ -331,22 +373,20 @@ function guardarCompraCompleta(compra) {
          item.cantidad * item.costo
        ]);
 
-       // B. Movimiento de Stock (ENTRADA POSITIVA)
        shMov.appendRow([
          Utilities.getUuid(),
          new Date(),
          "ENTRADA_COMPRA",
          item.id_producto,
-         compra.id_deposito_destino, // Afecta al depósito seleccionado
+         compra.id_deposito_destino, 
          Number(item.cantidad),      
          idCompra
        ]);
 
-       // C. Actualizar Caché Visual
        actualizarStockDeposito(item.id_producto, compra.id_deposito_destino, Number(item.cantidad));
     });
 
-    return { success: true };
+    return { success: true, pdf_url: urlPdf };
 
   } catch (e) {
     throw e;
@@ -817,18 +857,6 @@ function crearPDFFactura(datos) {
   archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   
   return archivo.getUrl(); 
-}
-
-// Función auxiliar para PDF (si no la tienes separada, agrégala aquí)
-function crearPDFFactura1(datos, items) {
-  const folder = DriveApp.getFoldersByName("CESTA_FACTURAS").hasNext() ? DriveApp.getFoldersByName("CESTA_FACTURAS").next() : DriveApp.createFolder("CESTA_FACTURAS");
-  const template = HtmlService.createTemplateFromFile('Factura');
-  template.datos = datos;
-  template.items = items;
-  
-  const blob = Utilities.newBlob(template.evaluate().getContent(), "text/html", "Factura_" + datos.nro_factura + ".html");
-  const pdf = blob.getAs("application/pdf").setName("Factura_" + datos.nro_factura + ".pdf");
-  return folder.createFile(pdf).getUrl();
 }
 
 function obtenerHistorialVentas() {

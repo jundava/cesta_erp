@@ -2,87 +2,84 @@
 <html>
 <head>
   <style>
-    body { font-family: 'Helvetica', sans-serif; color: #333; padding: 20px; }
-    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2055E0; /* Azul para compras */ padding-bottom: 10px; margin-bottom: 20px; }
-    .logo { font-size: 24px; font-weight: bold; color: #2055E0; }
-    .info-empresa { text-align: right; font-size: 12px; color: #666; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; padding: 40px; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #E06920; padding-bottom: 20px; margin-bottom: 30px; }
+    .company-name { font-size: 24px; font-weight: bold; color: #E06920; }
+    .doc-title { font-size: 28px; font-weight: bold; text-align: right; color: #555; }
     
-    .datos-doc { display: flex; justify-content: space-between; margin-bottom: 30px; }
-    .caja { width: 45%; }
-    .titulo-seccion { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 5px; color: #2055E0; }
-    
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-    th { background-color: #f0f4ff; border-bottom: 2px solid #aec1ff; padding: 8px; text-align: left; }
-    td { border-bottom: 1px solid #eee; padding: 8px; }
+    .info-section { display: flex; justify-content: space-between; margin-bottom: 30px; }
+    .info-box { width: 45%; }
+    .label { font-weight: bold; font-size: 12px; color: #777; text-transform: uppercase; }
+    .value { font-size: 14px; margin-bottom: 8px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background-color: #f8f9fa; color: #333; padding: 12px 8px; text-align: left; border-bottom: 2px solid #ddd; font-weight: bold; }
+    td { padding: 10px 8px; border-bottom: 1px solid #eee; }
     .text-right { text-align: right; }
     .text-center { text-align: center; }
-    
-    .totales { float: right; width: 300px; }
-    .fila-total { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
-    .total-final { font-size: 18px; font-weight: bold; color: #2055E0; border-top: 2px solid #2055E0; padding-top: 5px; }
-    
-    .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+
+    .totals { margin-top: 30px; text-align: right; }
+    .total-row { font-size: 14px; margin-bottom: 5px; }
+    .grand-total { font-size: 20px; font-weight: bold; color: #E06920; margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px; display: inline-block;}
   </style>
 </head>
 <body>
 
   <div class="header">
-    <div class="logo">ORDEN DE COMPRA</div>
-    <div class="info-empresa">
-      CESTA ERP<br>
-      Depto. de Compras<br>
-      compras@cesta.com
+    <div class="company-name">CESTA ERP</div>
+    <div>
+      <div class="doc-title">ORDEN DE COMPRA</div>
+      <div style="text-align: right; color: #777;">Ref: <?= datos.comprobante ?></div>
     </div>
   </div>
 
-  <div class="datos-doc">
-    <div class="caja">
-      <div class="titulo-seccion">PROVEEDOR</div>
-      <div><strong><?= datos.proveedor_nombre ?></strong></div>
-      <div>RUC/DOC: <?= datos.proveedor_doc ?></div>
-      <div>Contacto: <?= datos.proveedor_contacto ?></div>
+  <div class="info-section">
+    <div class="info-box">
+      <div class="label">Proveedor</div>
+      <div class="value" style="font-size: 16px; font-weight: bold;"><?= datos.proveedor_nombre ?></div>
+      <div class="value">RUC/CI: <?= datos.proveedor_doc ?></div>
     </div>
-    <div class="caja text-right">
-      <div class="titulo-seccion">DETALLES</div>
-      <div style="font-size: 14px;">Ref: <?= datos.comprobante ?></div>
-      <div>Fecha: <?= datos.fecha ?></div>
-      <div>Estado: <?= datos.estado ?></div>
+    <div class="info-box" style="text-align: right;">
+      <div class="label">Detalles</div>
+      <div class="value">Fecha: <strong><?= new Date(datos.fecha).toLocaleDateString('es-PY') ?></strong></div>
+      <div class="value">Condición: <?= datos.condicion ?></div>
+      <div class="value">Depósito Destino: <?= datos.deposito_nombre ?></div>
     </div>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th width="50%">Producto</th>
-        <th width="15%" class="text-center">Cant.</th>
-        <th width="15%" class="text-right">Costo Unit.</th>
-        <th width="20%" class="text-right">Subtotal</th>
+        <th width="50%">Producto / Descripción</th>
+        <th class="text-center">Cant.</th>
+        <th class="text-right">Costo Unit.</th>
+        <th class="text-right">Subtotal</th>
       </tr>
     </thead>
     <tbody>
-      <? for (var i = 0; i < items.length; i++) { ?>
+      <? 
+         var totalG = 0;
+         for(var i = 0; i < items.length; i++) { 
+           var it = items[i];
+           var sub = Number(it.cantidad) * Number(it.costo);
+           totalG += sub;
+      ?>
       <tr>
-        <td><?= items[i].producto ?></td>
-        <td class="text-center"><?= items[i].cantidad ?></td>
-        <td class="text-right"><?= parseInt(items[i].costo).toLocaleString('es-PY') ?></td>
-        <td class="text-right"><?= parseInt(items[i].subtotal).toLocaleString('es-PY') ?></td>
+        <td><?= it.nombre || 'Producto ' + it.id_producto ?></td>
+        <td class="text-center"><?= it.cantidad ?></td>
+        <td class="text-right"><?= Number(it.costo).toLocaleString('es-PY') ?></td>
+        <td class="text-right"><strong><?= sub.toLocaleString('es-PY') ?></strong></td>
       </tr>
       <? } ?>
     </tbody>
   </table>
 
-  <div class="totales">
-    <div class="fila-total total-final">
-      <span>TOTAL:</span>
-      <span>Gs. <?= parseInt(datos.total).toLocaleString('es-PY') ?></span>
-    </div>
+  <div class="totals">
+    <div class="grand-total">TOTAL: Gs. <?= totalG.toLocaleString('es-PY') ?></div>
   </div>
 
-  <div style="clear: both;"></div>
-
-  <div class="footer">
-    Documento de control interno.<br>
-    Favor enviar factura original con la mercadería.
+  <div style="margin-top: 50px; border-top: 1px dashed #ccc; padding-top: 10px; text-align: center; font-size: 11px; color: #999;">
+    Documento generado electrónicamente por Sistema CESTA ERP.
   </div>
 
 </body>

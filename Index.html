@@ -554,7 +554,7 @@
                                     <form @submit.prevent="agregarAlCarritoVenta">
                                         <div class="row g-2 align-items-end">
                                             <div class="col-md-6">
-                                                <label class="form-label small fw-bold">Producto</label>
+                                                <label class="form-label small">Producto</label>
                                                 <div class="input-group">
                                                     <button class="btn btn-dark" type="button" @click="abrirEscaner"
                                                         title="Escanear Código de Barras">
@@ -2174,7 +2174,6 @@
 
                         <div class="card border-0 shadow-sm mb-4 no-hover border-brand border-top border-3">
                             <div class="card-body bg-light">
-                                <h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6>
                                 <form @submit.prevent="agregarAlCarrito">
                                     <div class="row g-2 align-items-end">
                                         <div class="col-md-5">
@@ -2289,8 +2288,17 @@
                                                     <span v-else class="badge bg-success bg-opacity-10 text-success border border-success">PAGADO</span>
                                                 </td>
                                                 <td class="text-end pe-3">
-                                                    <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)"><i class="bi bi-eye"></i></button>
-                                                    <button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)"><i class="bi bi-slash-circle"></i></button>
+                                                    <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver Comprobante">
+                                                        <i class="bi bi-file-earmark-pdf"></i>
+                                                    </a>
+                                                    
+                                                    <button class="btn btn-sm btn-outline-primary me-1" @click="verDetalleCompra(h)">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                    
+                                                    <button v-if="h.estado !== 'ANULADO'" class="btn btn-sm btn-outline-danger" @click="anularCompra(h)">
+                                                        <i class="bi bi-slash-circle"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                             <tr v-if="historialCompras.length === 0">
@@ -5855,7 +5863,7 @@
                 if(!this.formCompra.comprobante) return this.notificar('warning', "Ingresa el Nro de Factura.");
                 if(this.carritoCompra.length === 0) return this.notificar('warning', "Agrega productos al carrito.");
                 
-                // 2. Validación de Caja Visual (Solo si es Contado)
+                // 2. Validación de Caja
                 if (this.formCompra.condicion === 'CONTADO' && this.datosCaja.estado !== 'ABIERTA') {
                     return this.notificar('error', "⛔ Caja Cerrada. Para compras al contado abre la caja primero.");
                 }
@@ -5863,9 +5871,6 @@
                 this.cargando = true; 
                 
                 const total = this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); 
-                
-                // 3. Armar Paquete (BLINDAJE DE USUARIO)
-                // Usamos un operador ternario para evitar error si usuarioLogueado es null
                 const idUsuario = this.usuarioLogueado ? this.usuarioLogueado.id_usuario : '';
 
                 const pkg = { 
@@ -5877,11 +5882,30 @@
                 
                 google.script.run.withSuccessHandler((res)=>{
                     this.cargando = false; 
+                    
                     if(res.success) {
-                        this.notificar('success', "Compra registrada correctamente.");
+                        // --- AQUÍ ESTÁ LA MAGIA DEL PDF ---
+                        if (res.pdf_url) {
+                            Swal.fire({
+                                title: 'Compra Registrada',
+                                text: "¿Deseas ver el comprobante PDF?",
+                                icon: 'success',
+                                showCancelButton: true,
+                                confirmButtonColor: '#E06920',
+                                confirmButtonText: 'Sí, ver PDF',
+                                cancelButtonText: 'Cerrar'
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    window.open(res.pdf_url, '_blank');
+                                }
+                            });
+                        } else {
+                            this.notificar('success', "Compra registrada correctamente.");
+                        }
+                        
                         this.limpiarCarrito(); 
-                        this.cargarDatosIniciales(); // Recargar stock y compras
-                        this.cargarHistorialCompras(); // Refrescar tabla historial
+                        this.cargarDatosIniciales(); 
+                        this.cargarHistorialCompras(); 
                     }
                 })
                 .withFailureHandler(e => {
