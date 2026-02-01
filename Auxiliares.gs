@@ -86,7 +86,7 @@ function setupDatabase() {
     },
     {
       nombre: "USUARIOS",
-      cols: ["id_usuario", "nombre", "email", "password", "rol", "modulos_permitidos", "activo", "avatar"]
+      cols: ["id_usuario", "nombre", "email", "password", "rol", "modulos_permitidos", "activo", "avatar", "id_deposito"]
     },
     {
       nombre: "GASTOS",
@@ -97,8 +97,8 @@ function setupDatabase() {
       cols: ["token", "id_usuario", "fecha_creacion", "fecha_ultimo_uso"]
     },
     {
-      nombre: "CAJA_SESIONES",
-      cols: ["id_sesion", "id_usuario", "fecha_apertura", "monto_inicial", "fecha_cierre", "total_sistema", "total_real", "diferencia", "estado"]
+        nombre: "CAJA_SESIONES",
+        cols: ["id_sesion", "id_usuario", "fecha_apertura", "monto_inicial", "fecha_cierre", "total_sistema", "total_real", "diferencia", "estado", "id_deposito"]
     },
     {
       nombre: "BITACORA",

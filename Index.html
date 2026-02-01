@@ -4,7 +4,7 @@
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Cesta Control de Stock</title>
+    <title>Cesta ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -254,7 +254,7 @@
 
                     <div class="mt-4 text-center border-top pt-3">
                         <small class="text-muted d-block" style="font-size: 0.75rem;">
-                            © 2024 Cesta ERP • Control de Stock
+                            © 2026 Cesta ERP • Ringo EAS
                         </small>
                     </div>
                 </div>
@@ -312,8 +312,7 @@
                     @click="vistaActual = 'dashboard'; cargarDashboard()">
 
                     <img src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w900"
-                        alt="CESTA Logo" class="logo-img me-2"> <span class="fw-bold text-white fs-5">CESTA Control de
-                        Stock</span>
+                        alt="CESTA Logo" class="logo-img me-2"> <span class="fw-bold text-white fs-5">Cesta ERP</span>
                 </div>
 
             </div>
@@ -411,7 +410,7 @@
                         </a>
                     </div>
 
-                    <div class="mt-4 pt-3 border-top">
+                    <div class="mt-4 pt-3 border-top" v-if="usuarioLogueado">
                         <div class="d-flex align-items-center justify-content-between px-2 mb-2">
 
                             <div class="d-flex align-items-center overflow-hidden" style="cursor: pointer;"
@@ -419,21 +418,29 @@
 
                                 <div class="user-icon-brand text-white rounded-circle d-flex align-items-center justify-content-center me-2 overflow-hidden"
                                     style="width: 32px; height: 32px; min-width: 32px;">
-
-                                    <img v-if="usuarioLogueado && usuarioLogueado.avatar" :src="usuarioLogueado.avatar"
+                                    <img v-if="usuarioLogueado.avatar" :src="usuarioLogueado.avatar"
                                         style="width: 100%; height: 100%; object-fit: cover;">
-
                                     <i v-else class="bi bi-person-fill"></i>
                                 </div>
 
-                                <div class="small fw-bold text-truncate" v-if="usuarioLogueado">
-                                    {{ usuarioLogueado.nombre }}
+                                <div class="d-flex flex-column justify-content-center overflow-hidden">
+                                    
+                                    <div class="small fw-bold text-truncate" style="line-height: 1.2;">
+                                        {{ usuarioLogueado.nombre }}
+                                    </div>
+
+                                    <small v-if="indicadorCaja" :class="indicadorCaja.clase" style="font-size: 10px; line-height: 1.2;">
+                                        <i class="bi me-1" :class="indicadorCaja.icono" style="font-size: 9px;"></i>
+                                        {{ indicadorCaja.texto }}
+                                    </small>
+
                                 </div>
                             </div>
 
                             <button class="btn btn-sm btn-outline-danger border-0" @click="logout" title="Cerrar Sesión">
                                 <i class="bi bi-box-arrow-right fs-6"></i>
                             </button>
+                            
                         </div>
                     </div>
                 </div>
@@ -892,33 +899,34 @@
                                         en el cajón e ingrésalo abajo.
                                     </div>
 
-                                    <div class="bg-light p-3 rounded mb-4 border">
-                                        <h6 class="text-muted fw-bold small text-uppercase mb-3">Detalle del Sistema (Solo
-                                            Efectivo)</h6>
+                                        <div class="bg-light p-3 rounded mb-4 border" v-if="datosCaja.detalle">
+                                            
+                                            <h6 class="text-muted fw-bold small text-uppercase mb-3">Detalle del Sistema (Solo Efectivo)</h6>
 
-                                        <div class="d-flex justify-content-between mb-1 small">
-                                            <span>(+) Fondo Inicial</span>
-                                            <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.inicial) }}</span>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-1 small text-success">
-                                            <span>(+) Ventas Efectivo</span>
-                                            <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.ventas) }}</span>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-1 small text-success">
-                                            <span>(+) Cobranzas Efectivo</span>
-                                            <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.cobros) }}</span>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2 small text-danger">
-                                            <span>(-) Gastos Efectivo</span>
-                                            <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.gastos) }}</span>
-                                        </div>
+                                            <div class="d-flex justify-content-between mb-1 small">
+                                                <span>(+) Fondo Inicial</span>
+                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.inicial) }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-1 small text-success">
+                                                <span>(+) Ventas Efectivo</span>
+                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.ventas) }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-1 small text-success">
+                                                <span>(+) Cobranzas Efectivo</span>
+                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.cobros) }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2 small text-danger">
+                                                <span>(-) Gastos Efectivo</span>
+                                                <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.gastos) }}</span>
+                                            </div>
 
-                                        <div class="border-top pt-2 d-flex justify-content-between align-items-center">
-                                            <span class="fw-bold text-dark">(=) TOTAL ESPERADO</span>
-                                            <span class="fs-5 fw-bold text-primary">{{
-                                                formatoMoneda(datosCaja.resumen_teorico) }}</span>
+                                            <div class="border-top pt-2 d-flex justify-content-between align-items-center">
+                                                <span class="fw-bold text-dark">(=) TOTAL ESPERADO</span>
+                                                <span class="fs-5 fw-bold text-primary">
+                                                    {{ formatoMoneda(datosCaja.resumen_teorico) }}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
 
                                     <div class="mb-4">
                                         <label class="form-label fw-bold">Total Real (En Efectivo)</label>
@@ -1832,7 +1840,18 @@
                                                     </select>
                                                 </div>
                                             </div>
-
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold small">Asignar Depósito Base</label>
+                                                <select class="form-select" v-model="usuarioForm.id_deposito" required>
+                                                    <option value="">Seleccione un depósito...</option>
+                                                    <option v-for="d in listaDepositos" :value="d.id_deposito">
+                                                        {{ d.nombre }}
+                                                    </option>
+                                                </select>
+                                                <div class="form-text small text-muted">
+                                                    Este usuario abrirá caja y descontará stock de este depósito por defecto.
+                                                </div>
+                                            </div>
                                             <div class="mb-4" v-if="usuarioForm.rol === 'OPERADOR'">
                                                 <label class="form-label small fw-bold mb-2">Permisos de Acceso</label>
                                                 <div class="bg-light p-3 rounded border">
@@ -3216,6 +3235,84 @@
                     </div>
                 </div>
 
+                <div class="modal fade" id="modalPagoProveedor" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content border-0 shadow">
+                            <div class="modal-header bg-success text-white">
+                                
+                                <div class="card-header bg-success text-white fw-bold">Registrar Pago</div>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body bg-light">
+                                
+                                <div class="card border-0 shadow-sm mb-3">
+                                    <div class="card-body">
+                                        <h6 class="text-muted small fw-bold text-uppercase">Proveedor</h6>
+                                        <div class="fw-bold fs-5 text-dark mb-2">{{ formPagoProv.proveedor_nombre }}</div>
+                                        <div class="d-flex justify-content-between border-top pt-2">
+                                            <span>Factura Nro:</span>
+                                            <span class="fw-bold">{{ formPagoProv.nro_factura }}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mt-1 text-danger">
+                                            <span>Saldo Pendiente:</span>
+                                            <span class="fw-bold fs-5">{{ formatoMoneda(formPagoProv.saldo_pendiente) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <form @submit.prevent="confirmarPagoProveedor">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small fw-bold">Método</label>
+                                            <select class="form-select" v-model="formPagoProv.metodo" required>
+                                                <option value="EFECTIVO">Efectivo (Caja)</option>
+                                                <option value="TRANSFERENCIA">Transferencia</option>
+                                                <option value="CHEQUE">Cheque</option>
+                                                <option value="TARJETA">Tarjeta Corp.</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="col-6">
+                                            <label class="form-label small fw-bold">Monto a Pagar</label>
+                                            <input type="number" class="form-control fw-bold text-success" 
+                                                  v-model.number="formPagoProv.monto" 
+                                                  min="1" :max="formPagoProv.saldo_pendiente" required>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label small fw-bold">Referencia / Nro. Op.</label>
+                                            <input type="text" class="form-control" v-model="formPagoProv.referencia" 
+                                                  placeholder="Ej: Nro Transferencia o Recibo...">
+                                        </div>
+                                        
+                                        <div class="col-12">
+                                            <label class="form-label small fw-bold">Observación (Opcional)</label>
+                                            <input type="text" class="form-control" v-model="formPagoProv.observacion" 
+                                                  placeholder="Nota interna...">
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-warning mt-3 py-2 small d-flex align-items-center" 
+                                        v-if="formPagoProv.metodo === 'EFECTIVO' && datosCaja.estado !== 'ABIERTA'">
+                                        <i class="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
+                                        <div>
+                                            <strong>¡Atención!</strong> La caja está cerrada. No podrás registrar salidas de efectivo.
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid mt-4">
+                                        <button type="submit" class="btn btn-success btn-lg fw-bold px-5 shadow"
+                                            :disabled="cargando || (formPagoProv.metodo === 'EFECTIVO' && datosCaja.estado !== 'ABIERTA')">
+                                            <span v-if="cargando"><span class="spinner-border spinner-border-sm me-2"></span>Procesando...</span>
+                                            <span v-else><i class="bi bi-check-circle-fill me-2"></i>{{ datosCaja.estado === 'ABIERTA' ? 'CONFIRMAR PAGO' : 'CAJA CERRADA' }}</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -3807,6 +3904,13 @@
                     gastos: 0 
                 } 
             },
+
+            indicadorCaja: { 
+                texto: 'Cargando...', 
+                clase: 'text-muted', 
+                icono: 'bi-circle' 
+            },
+
             modalCierre: null, // Referencia al modal de Bootstrap
 
             pagosVenta: [],     
@@ -3875,15 +3979,17 @@
             busquedaRemision: '',
 
             listaUsuarios: [],
+
             usuarioForm: {
-                id_usuario: '',
+                id_usuario: null,
                 nombre: '',
                 email: '',
                 password: '',
                 rol: 'OPERADOR',
-                permisos: [],
+                activo: 'SI',
+                id_deposito: '', 
                 avatar: '',
-                activo: 'SI'
+                permisos: []
             },
 
             historialCobranzas: [], // 
@@ -4099,7 +4205,7 @@
             this.modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
             this.modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
             this.modalCat = new bootstrap.Modal(document.getElementById('modalCategoria'));
-            
+                       
             // Referencia al modal del escáner (Importante para el fix de cámara)
             const scannerElement = document.getElementById('modalScanner');
             this.modalScanner = new bootstrap.Modal(scannerElement);
@@ -4138,6 +4244,7 @@
                             
                             // Solo cargamos datos si hay sesión
                             this.cargarDatosIniciales();
+                            this.actualizarIndicadorVisualCaja();
                             
                             // --- LÓGICA DE NAVEGACIÓN (CORREGIDA) ---
                             
@@ -4212,9 +4319,44 @@
                 }
                 if (v === 'caja') {
                     this.verificarEstadoCaja();
+                    this.actualizarIndicadorVisualCaja();
                 }
             },
 
+            actualizarIndicadorVisualCaja() {
+                if (!this.usuarioLogueado) return;
+
+                google.script.run.withSuccessHandler(res => {
+                    // 1. Rescatamos el detalle actual (o creamos uno vacío si no existe)
+                    const detalleSeguro = this.datosCaja.detalle || { inicial: 0, ventas: 0, cobros: 0, gastos: 0 };
+
+                    if (res && res.exito) {
+                        this.indicadorCaja = {
+                            texto: 'Caja Abierta',
+                            clase: 'text-success',
+                            icono: 'bi-circle-fill'
+                        };
+                        
+                        // 2. CORRECCIÓN AQUÍ: Mezclamos los datos sin borrar 'detalle'
+                        this.datosCaja = { 
+                            detalle: detalleSeguro, // <--- MANTENEMOS EL DETALLE
+                            estado: 'ABIERTA', 
+                            ...res 
+                        };
+                    } else {
+                        this.indicadorCaja = {
+                            texto: 'Caja Cerrada',
+                            clase: 'text-danger',
+                            icono: 'bi-circle-fill'
+                        };
+                        // En caso de cerrada, también mantenemos la estructura segura
+                        this.datosCaja = { 
+                            estado: 'CERRADA',
+                            detalle: detalleSeguro 
+                        };
+                    }
+                }).verificarCajaAbierta(this.usuarioLogueado.id_usuario);
+            },
             cargarHistorialCajas() {
                 this.subVistaCaja = 'historial';
                 this.cargando = true;
@@ -4233,18 +4375,23 @@
             },
 
             abrirModalPagoProv(item) {
-                // Rellenamos el formulario con los datos de la factura seleccionada
                 this.formPagoProv = {
                     id_compra: item.id_compra,
-                    id_proveedor: item.id_proveedor || '', 
+                    id_proveedor: item.id_proveedor || '',
                     proveedor_nombre: item.nombre_proveedor,
                     nro_factura: item.comprobante,
-                    saldo_pendiente: item.saldo_pendiente,
-                    monto: item.saldo_pendiente, // Por defecto sugerimos pagar todo lo que debe
+                    saldo_pendiente: Number(item.saldo_pendiente), // Asegurar número
+                    monto: Number(item.saldo_pendiente), // Sugerir el total
                     metodo: 'EFECTIVO',
                     referencia: '',
                     observacion: ''
                 };
+                
+                var el = document.getElementById('modalPagoProveedor');
+                if (el) {
+                    this.modalPagoProv = new bootstrap.Modal(el);
+                    this.modalPagoProv.show();
+                }
                 
                 // Inicializamos el modal de Bootstrap si no existe aún en memoria
                 if (!this.modalPagoProv) {
@@ -4269,50 +4416,40 @@
             },
 
             confirmarPagoProveedor() {
-                // A. Validaciones básicas
-                if (this.formPagoProv.monto <= 0) {
-                    return this.notificar('warning', "El monto debe ser mayor a 0.");
-                }
-                // Permitimos un pequeño margen de error (100 Gs) por redondeos
-                if (this.formPagoProv.monto > (this.formPagoProv.saldo_pendiente + 100)) {
-                    return this.notificar('warning', "El monto excede la deuda pendiente.");
-                }
-                
-                // B. Validación de Caja (Si paga en efectivo)
+                // Validaciones Frontend
+                if (this.formPagoProv.monto <= 0) return this.notificar('warning', "El monto debe ser mayor a 0");
+                if (this.formPagoProv.monto > (this.formPagoProv.saldo_pendiente + 100)) return this.notificar('warning', "El monto excede la deuda");
+
+                // Validar Caja si es efectivo
                 if (this.formPagoProv.metodo === 'EFECTIVO' && this.datosCaja.estado !== 'ABIERTA') {
-                    return this.notificar('error', "⛔ Caja Cerrada. Abre la caja para pagar en efectivo.");
+                    return this.notificar('error', "La caja está cerrada. Abre caja o usa otro medio de pago.");
                 }
 
                 this.cargando = true;
 
-                // Preparar paquete para enviar
-                const pkg = {
+                // Preparar objeto para enviar
+                const paquete = {
                     ...this.formPagoProv,
-                    usuario_id: this.usuarioLogueado ? this.usuarioLogueado.id_usuario : "Sistema",
-                    usuario_nombre: this.usuarioLogueado ? this.usuarioLogueado.nombre : "Sistema"
+                    usuario_id: this.usuarioLogueado.id_usuario,
+                    usuario_nombre: this.usuarioLogueado.nombre
                 };
 
-                // C. Llamada al Google Apps Script
                 google.script.run.withSuccessHandler(res => {
                     this.cargando = false;
                     if(res.success) {
-                        this.notificar('success', "Pago registrado correctamente.");
-                        
-                        // Ocultar modal
+                        this.notificar('success', "Pago registrado correctamente");
                         if(this.modalPagoProv) this.modalPagoProv.hide();
                         
-                        // Recargar la lista de deudas para ver el saldo actualizado
-                        this.cargarCuentasPagar(); 
-                        
-                        // Recargar datos globales (por si bajó el saldo de caja)
-                        this.cargarDatosIniciales(); 
+                        // Recargar lista y caja
+                        this.cargarCuentasPagar();
+                        this.cargarDatosIniciales(); // Para actualizar saldo de caja visualmente
                     }
                 })
                 .withFailureHandler(e => {
                     this.cargando = false;
-                    this.notificar('error', "Error al pagar: " + e);
+                    this.notificar('error', "Error: " + e);
                 })
-                .registrarPagoProveedor(pkg);
+                .registrarPagoProveedor(paquete);
             },
 
             getClaseSemaforo(estado) {
@@ -4426,6 +4563,7 @@
                             this.datosCaja.fecha_apertura = new Date(); // Fecha visual actual
                             this.datosCaja.monto_inicial = montoGuardado;
                             
+                            this.actualizarIndicadorVisualCaja();
                             //Opcional: Redirigir a ventas si quieres
                             //this.cambiarVista('ventas');
                         } else {
@@ -4487,6 +4625,7 @@
                         });
 
                         this.verificarEstadoCaja(); // Volverá a estado 'CERRADA'
+                        this.actualizarIndicadorVisualCaja();
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
@@ -4835,16 +4974,6 @@
                 });
             },
 
-            editarUsuario(u) {
-                this.usuarioForm = {
-                    // ... otros campos ...
-                    rol: u.rol,
-                    permisos: this.parsearPermisos(u.modulos),
-                    activo: u.activo,
-                    avatar: u.avatar || '' 
-                };
-            },
-
             // Función auxiliar para ocultar títulos de sección vacíos
             tengoAlgunPermiso(listaPermisos) {
                 // Recorre la lista y si tiene permiso AL MENOS para uno, devuelve TRUE
@@ -4894,21 +5023,24 @@
                     email: '',
                     password: '',
                     rol: 'OPERADOR',
-                    permisos: [], // Array vacío para checkboxes
-                    activo: 'SI'
+                    activo: 'SI',
+                    id_deposito: '',
+                    avatar:'',
+                    permisos: []
                 };
             },
 
             editarUsuario(u) {
-                // Clonamos el objeto para no editar la lista directamente antes de guardar
                 this.usuarioForm = {
                     id_usuario: u.id_usuario,
                     nombre: u.nombre,
                     email: u.email,
                     password: u.password,
                     rol: u.rol,
-                    permisos: this.parsearPermisos(u.modulos), // Convertir string JSON a Array
-                    activo: u.activo
+                    activo: u.activo,                    
+                    id_deposito: u.id_deposito || '',
+                    avatar: u.avatar || '',
+                    permisos: this.parsearPermisos(u.modulos)
                 };
             },
 

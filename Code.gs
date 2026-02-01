@@ -2791,7 +2791,8 @@ function obtenerUsuarios() {
         rol: data[i][4],
         modulos: data[i][5], // String JSON
         activo: data[i][6],
-        avatar: data[i][7] || ''
+        avatar: data[i][7] || '',
+        id_deposito: data[i][8] || ''
       });
     }
   }
@@ -2817,12 +2818,13 @@ function guardarUsuario(usuario) {
         sh.getRange(i + 1, 6).setValue(modulosStr);
         sh.getRange(i + 1, 7).setValue(usuario.activo);
         sh.getRange(i + 1, 8).setValue(usuario.avatar);
+        sh.getRange(i + 1, 9).setValue(idDeposito);
         return { success: true };
       }
     }
   } else {
     // NUEVO
-    sh.appendRow([id, usuario.nombre, usuario.email, usuario.password, usuario.rol, modulosStr, usuario.activo, usuario.avatar]);
+    sh.appendRow([id, usuario.nombre, usuario.email, usuario.password, usuario.rol, modulosStr, usuario.activo, usuario.avatar, idDeposito]);
   }
   return { success: true };
 }
@@ -3764,57 +3766,53 @@ function obtenerResumenCaja(idUsuario) {
 // 1. VERIFICAR ESTADO (Lee la memoria RAM del servidor, no la hoja)
 function verificarCajaAbierta(idUsuario) {
   try {
-    const idStr = String(idUsuario).trim();
-    
-    // A. PREGUNTAR A LA MEMORIA RÁPIDA (PropertiesService)
+    // 1. Saber el depósito del usuario
+    const idDeposito = obtenerDepositoDeUsuario(idUsuario);
+    const CLAVE_MEMORIA = 'CAJA_ACTIVA_DEP_' + idDeposito;
+
+    // 2. Preguntar a MEMORIA
     const scriptProperties = PropertiesService.getScriptProperties();
-    const memoriaCaja = scriptProperties.getProperty('CAJA_ACTIVA_' + idStr);
+    const memoriaCaja = scriptProperties.getProperty(CLAVE_MEMORIA);
 
     if (memoriaCaja) {
-      // ¡Encontramos el "Post-it"! Retornamos eso directamente.
-      const datosMemoria = JSON.parse(memoriaCaja);
+      const datos = JSON.parse(memoriaCaja);
       return {
         exito: true,
-        id_sesion: datosMemoria.id_sesion,
-        fecha_apertura: datosMemoria.fecha,
-        monto_inicial: Number(datosMemoria.monto),
-        origen: "MEMORIA_RAPIDA"
+        id_sesion: datos.id_sesion,
+        fecha_apertura: datos.fecha,
+        monto_inicial: Number(datos.monto),
+        id_deposito: idDeposito,
+        origen: "MEMORIA"
       };
     }
 
-    // B. FALLBACK (Plan B): Si no está en memoria, buscamos en la hoja (Lento pero seguro)
-    // Esto solo pasa si se borró la memoria o es la primera vez tras mucho tiempo
+    // 3. Preguntar a HOJA (Fallback)
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sh = ss.getSheetByName('CAJA_SESIONES');
-    if (!sh) return { debug_error: true, mensaje: "Falta hoja CAJA_SESIONES" };
+    if (!sh) return { exito: false };
     
     const data = sh.getDataRange().getValues();
+    
     // Buscamos de abajo hacia arriba
     for (let i = data.length - 1; i >= 1; i--) {
-       // Col 1: ID Usuario, Col 8: Estado
-       if (String(data[i][1]).trim() === idStr && String(data[i][8]).trim().toUpperCase() === 'ABIERTA') {
-          // ENCONTRADO EN HOJA -> Lo guardamos en memoria para la próxima
-          const cacheData = {
-             id_sesion: data[i][0],
-             fecha: data[i][2],
-             monto: data[i][3]
-          };
-          scriptProperties.setProperty('CAJA_ACTIVA_' + idStr, JSON.stringify(cacheData));
+       // Columna 8 (Index 8) = Estado ('ABIERTA')
+       // Columna 9 (Index 9) = ID Depósito (NUEVO CAMPO)
+       
+       // Verificamos que sea "ABIERTA" y que coincida el DEPÓSITO
+       if (String(data[i][8]) === 'ABIERTA' && String(data[i][9]) === String(idDeposito)) {
           
-          return {
-            exito: true,
-            id_sesion: data[i][0],
-            fecha_apertura: data[i][2],
-            monto_inicial: Number(data[i][3]),
-            origen: "HOJA_CALCULO"
-          };
+          // Restauramos memoria si la encontramos en la hoja
+          const cacheData = { id_sesion: data[i][0], fecha: data[i][2], monto: data[i][3], id_deposito: idDeposito };
+          scriptProperties.setProperty(CLAVE_MEMORIA, JSON.stringify(cacheData));
+          
+          return { exito: true, id_sesion: data[i][0], id_deposito: idDeposito, origen: "HOJA" };
        }
     }
 
     return { exito: false, mensaje: "Caja cerrada" };
 
   } catch (e) {
-    return { debug_error: true, mensaje: "Error V3: " + e.toString() };
+    return { debug_error: true, mensaje: e.toString() };
   }
 }
 
@@ -3824,44 +3822,44 @@ function abrirCaja(montoInicial, usuario) {
   try { lock.waitLock(5000); } catch (e) { throw "Servidor ocupado."; }
 
   try {
+    const idUsuarioStr = String(usuario.id_usuario);
+    
+    // 1. Obtenemos el depósito del usuario (función que creamos antes)
+    const idDeposito = obtenerDepositoDeUsuario(idUsuarioStr);
+    const CLAVE_MEMORIA = 'CAJA_ACTIVA_DEP_' + idDeposito;
+
+    // 2. Verificar en memoria si YA hay caja abierta en este depósito
+    const check = verificarCajaAbierta(idUsuarioStr);
+    if (check && check.exito) throw "La caja de este depósito ya está abierta.";
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sh = ss.getSheetByName('CAJA_SESIONES');
-    const idUserStr = String(usuario.id_usuario).trim();
-
-    // Validar si ya existe en memoria
-    const check = verificarCajaAbierta(idUserStr);
-    if (check && check.exito) {
-       throw "Ya tienes una caja abierta (Detectado en " + check.origen + ")";
-    }
-
     const idSesion = Utilities.getUuid();
     const fecha = new Date();
 
-    // 1. GUARDAR EN EXCEL (Histórico)
+    // 3. GUARDAR EN HOJA CON LA NUEVA ESTRUCTURA
     sh.appendRow([
-      idSesion,
-      idUserStr,
-      fecha,
-      Number(montoInicial),
-      "", 0, 0, 0, "ABIERTA"
+      idSesion,           // 0. ID Sesión
+      idUsuarioStr,       // 1. ID Usuario (Auditoría)
+      fecha,              // 2. Fecha Apertura
+      Number(montoInicial), // 3. Monto Inicial
+      "",                 // 4. Fecha Cierre (Vacío)
+      0,                  // 5. Total Sistema
+      0,                  // 6. Total Real
+      0,                  // 7. Diferencia
+      "ABIERTA",          // 8. Estado
+      idDeposito          // 9. ID DEPOSITO (Nuevo campo) <--- AQUÍ
     ]);
 
-    // 2. GUARDAR EN MEMORIA RÁPIDA (El "Post-it")
-    const datosCache = {
-       id_sesion: idSesion,
-       fecha: fecha,
-       monto: Number(montoInicial)
-    };
-    PropertiesService.getScriptProperties().setProperty('CAJA_ACTIVA_' + idUserStr, JSON.stringify(datosCache));
+    // 4. GUARDAR EN MEMORIA
+    const datosCache = { id_sesion: idSesion, fecha: fecha, monto: Number(montoInicial), id_deposito: idDeposito };
+    PropertiesService.getScriptProperties().setProperty(CLAVE_MEMORIA, JSON.stringify(datosCache));
 
-    // Log
-    if (typeof registrarEvento === 'function') registrarEvento(usuario.nombre, "APERTURA CAJA", "Monto: " + montoInicial);
+    registrarEvento(usuario.nombre, "APERTURA CAJA DEP " + idDeposito, "Monto: " + montoInicial);
 
     return { success: true, id_sesion: idSesion };
 
-  } finally {
-    lock.releaseLock();
-  }
+  } finally { lock.releaseLock(); }
 }
 
 // 3. CERRAR CAJA (Actualiza Excel Y Borra Memoria)
@@ -3869,35 +3867,33 @@ function cerrarCaja(datos) {
    const ss = SpreadsheetApp.getActiveSpreadsheet();
    const sh = ss.getSheetByName('CAJA_SESIONES');
    
-   // A. BORRAMOS EL "POST-IT" DE MEMORIA
-   // Para saber qué usuario es, necesitamos buscar la sesión primero o pasarlo desde el front.
-   // Buscaremos en la hoja la sesión para obtener el ID de usuario y borrar su memoria.
-   
    const data = sh.getDataRange().getValues();
    let filaEncontrada = -1;
-   let idUsuario = "";
+   let idDeposito = ""; 
 
+   // Buscar sesión por ID
    for (let i = 1; i < data.length; i++) {
      if (String(data[i][0]) === String(datos.id_sesion)) {
        filaEncontrada = i + 1;
-       idUsuario = String(data[i][1]); // Guardamos el usuario para borrar su cache
+       idDeposito = String(data[i][9]); // <--- Leemos el ID Depósito de la Columna J (Index 9)
        break;
      }
    }
 
-   if (filaEncontrada === -1) throw "Sesión no encontrada en base de datos.";
+   if (filaEncontrada === -1) throw "Sesión no encontrada.";
 
-   // B. ACTUALIZAMOS EXCEL
+   // Actualizar datos de cierre
    const diferencia = Number(datos.monto_real) - Number(datos.monto_teorico);
-   sh.getRange(filaEncontrada, 5).setValue(new Date()); // Fecha Cierre
+   sh.getRange(filaEncontrada, 5).setValue(new Date()); 
    sh.getRange(filaEncontrada, 6).setValue(datos.monto_teorico);
    sh.getRange(filaEncontrada, 7).setValue(datos.monto_real);
    sh.getRange(filaEncontrada, 8).setValue(diferencia);
    sh.getRange(filaEncontrada, 9).setValue("CERRADA");
 
-   // C. LIMPIAMOS LA MEMORIA RÁPIDA
-   if (idUsuario) {
-      PropertiesService.getScriptProperties().deleteProperty('CAJA_ACTIVA_' + idUsuario.trim());
+   // Borrar memoria específica de ESE depósito
+   if (idDeposito) {
+      const CLAVE_MEMORIA = 'CAJA_ACTIVA_DEP_' + idDeposito;
+      PropertiesService.getScriptProperties().deleteProperty(CLAVE_MEMORIA);
    }
 
    return { success: true };
@@ -4029,82 +4025,105 @@ function obtenerCuentasPorPagar() {
   }
 }
 
-function registrarPagoProveedor(datos) {
+
+// Busca el ID del depósito asignado a un usuario
+function obtenerDepositoDeUsuario(idUsuario) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('USUARIOS');
+  const data = sh.getDataRange().getValues();
+  
+  for(let i=1; i<data.length; i++) {
+    // Columna A (0) es ID Usuario
+    if(String(data[i][0]) == String(idUsuario)) {
+       // Asumimos que la Columna I (índice 8) es el ID_DEPOSITO
+       const idDep = data[i][8]; 
+       if(!idDep) throw "El usuario no tiene un depósito asignado.";
+       return String(idDep).trim();
+    }
+  }
+  throw "Usuario no encontrado.";
+}
+
+function registrarPagoProveedor(pago) {
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
+  try { lock.waitLock(10000); } catch (e) { throw "El sistema está ocupado."; }
 
   try {
-    // 1. Verificar Caja si es Efectivo
-    const idUsuario = datos.usuario_id || "Sistema";
-    if (datos.metodo === 'EFECTIVO' && idUsuario !== "Sistema") {
-        const caja = verificarCajaAbierta(idUsuario);
-        if (!caja || !caja.exito) throw "⛔ Para pagar en EFECTIVO necesitas caja abierta.";
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shCab = ss.getSheetByName('COMPRAS_CABECERA');
-    const shPagos = ss.getSheetByName('PAGOS_PROVEEDORES');
-    
-    if(!shPagos) {
-        // Crear hoja si no existe (seguridad)
-        const nueva = ss.insertSheet('PAGOS_PROVEEDORES');
-        nueva.appendRow(["id_pago", "fecha_pago", "id_compra", "id_proveedor", "monto", "metodo", "referencia", "observacion", "usuario_responsable"]);
+    const sheetPagos = ss.getSheetByName('PAGOS_PROVEEDORES');
+    const sheetCompras = ss.getSheetByName('COMPRAS_CABECERA');
+
+    // ---------------------------------------------------------
+    // 1. VALIDACIÓN DE CAJA (Solo si es Efectivo)
+    // ---------------------------------------------------------
+    if (pago.metodo === 'EFECTIVO') {
+       const checkCaja = verificarCajaAbierta(pago.usuario_id); 
+       if (!checkCaja || !checkCaja.exito) {
+          throw "⛔ ERROR DE CAJA: Debes tener la caja ABIERTA para pagar en efectivo.";
+       }
+       // Aquí podríamos validar si hay suficiente saldo en caja, 
+       // pero por ahora solo validamos que esté abierta.
     }
 
-    // 2. Buscar Compra y Validar Saldo
-    const data = shCab.getDataRange().getValues();
-    let filaEncontrada = -1;
-    let saldoActual = 0;
-    let idProveedor = "";
-
-    for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === String(datos.id_compra)) {
-            filaEncontrada = i + 1;
-            idProveedor = data[i][2];
-            saldoActual = Number(data[i][9]); // Columna J (Index 9)
-            break;
-        }
-    }
-
-    if (filaEncontrada === -1) throw "Compra no encontrada.";
-    
-    const montoPagar = Number(datos.monto);
-    if (montoPagar <= 0) throw "El monto debe ser mayor a 0.";
-    if (montoPagar > (saldoActual + 10)) throw "El monto excede el saldo de la deuda."; // +10 por redondeo
-
-    // 3. Registrar Pago
+    // ---------------------------------------------------------
+    // 2. GUARDAR EN LA HOJA 'PAGOS_PROVEEDORES'
+    // ---------------------------------------------------------
     const idPago = Utilities.getUuid();
-    const shPagosFinal = ss.getSheetByName('PAGOS_PROVEEDORES');
-    
-    shPagosFinal.appendRow([
+    const fechaHoy = new Date();
+
+    // Estructura: ["id_pago", "fecha_pago", "id_compra", "id_proveedor", "monto", "metodo", "referencia", "observacion", "usuario_responsable"]
+    sheetPagos.appendRow([
         idPago,
-        new Date(),
-        datos.id_compra,
-        idProveedor,
-        montoPagar,
-        datos.metodo,
-        datos.referencia || "",
-        datos.observacion || "Pago de factura",
-        datos.usuario_nombre || "Sistema"
+        fechaHoy,
+        pago.id_compra,
+        pago.id_proveedor, // Asegúrate de enviar esto desde el frontend
+        pago.monto,
+        pago.metodo,
+        pago.referencia || "",
+        pago.observacion || "",
+        pago.usuario_nombre
     ]);
 
-    // 4. Actualizar Compra (Saldo y Estado)
-    const nuevoSaldo = saldoActual - montoPagar;
-    shCab.getRange(filaEncontrada, 10).setValue(nuevoSaldo); // Actualizar Saldo
+    // ---------------------------------------------------------
+    // 3. ACTUALIZAR SALDO EN 'COMPRAS_CABECERA'
+    // ---------------------------------------------------------
+    const data = sheetCompras.getDataRange().getValues();
+    let compraEncontrada = false;
 
-    if (nuevoSaldo <= 50) { // Tolerancia 50 Gs
-        shCab.getRange(filaEncontrada, 6).setValue("PAGADO"); // Actualizar Estado
-    } else {
-        shCab.getRange(filaEncontrada, 6).setValue("PARCIAL");
+    // CONFIGURACIÓN DE COLUMNAS (Ajusta estos índices según tu hoja real)
+    // A=0, B=1, C=2... J=9 (Saldo), G=6 (Estado)
+    const COL_ID_COMPRA = 0; 
+    const COL_ESTADO = 6;    // Índice de la columna "Estado"
+    const COL_SALDO = 9;     // Índice de la columna "Saldo Pendiente"
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][COL_ID_COMPRA]) === String(pago.id_compra)) {
+        compraEncontrada = true;
+        
+        const saldoActual = Number(data[i][COL_SALDO] || 0);
+        
+        // Validación de seguridad
+        if (pago.monto > (saldoActual + 500)) { // 500 gs tolerancia
+             throw "El monto a pagar supera la deuda pendiente.";
+        }
+
+        let nuevoSaldo = saldoActual - pago.monto;
+        if (nuevoSaldo < 0) nuevoSaldo = 0;
+
+        // Determinar nuevo estado
+        const nuevoEstado = nuevoSaldo <= 100 ? 'PAGADO' : 'PENDIENTE';
+
+        // Actualizar celdas (fila i+1)
+        sheetCompras.getRange(i + 1, COL_SALDO + 1).setValue(nuevoSaldo);
+        sheetCompras.getRange(i + 1, COL_ESTADO + 1).setValue(nuevoEstado);
+        
+        break;
+      }
     }
 
-    // 5. Registrar Egreso de Caja (Si corresponde)
-    // Opcional: Si quieres que reste de la caja de GASTOS automáticamente, 
-    // podrías insertar en la hoja GASTOS, pero usualmente PAGOS_PROVEEDORES se maneja aparte 
-    // para no duplicar en el arqueo si ya se descuenta por flujo.
-    // Por ahora lo dejamos solo en PAGOS_PROVEEDORES para no complicar el arqueo existente.
+    if (!compraEncontrada) throw "No se encontró la compra original para descontar el saldo.";
 
-    return { success: true, nuevo_saldo: nuevoSaldo };
+    return { success: true };
 
   } catch (e) {
     throw e;
