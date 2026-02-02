@@ -890,53 +890,91 @@
                             <div class="modal-content">
                                 <div class="modal-header bg-danger text-white">
                                     <h5 class="modal-title fw-bold"><i class="bi bi-calculator"></i> Arqueo de Caja</h5>
-                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                                        aria-label="Close"></button>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
+                                
                                 <div class="modal-body p-4">
                                     <div class="alert alert-warning small">
                                         <i class="bi bi-info-circle-fill"></i> Cuenta todo el dinero en efectivo que tienes
                                         en el cajón e ingrésalo abajo.
                                     </div>
 
-                                        <div class="bg-light p-3 rounded mb-4 border" v-if="datosCaja.detalle">
-                                            
-                                            <h6 class="text-muted fw-bold small text-uppercase mb-3">Detalle del Sistema (Solo Efectivo)</h6>
+                                    <div class="card border-start border-4 border-primary shadow-sm mb-3" v-if="datosCaja.detalle">
+                                        <div class="card-body py-2">
+                                            <h6 class="fw-bold text-primary mb-2 small text-uppercase"><i class="bi bi-cash-stack me-2"></i>Caja Física (Efectivo)</h6>
 
                                             <div class="d-flex justify-content-between mb-1 small">
                                                 <span>(+) Fondo Inicial</span>
-                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.inicial) }}</span>
+                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.inicial || 0) }}</span>
                                             </div>
                                             <div class="d-flex justify-content-between mb-1 small text-success">
                                                 <span>(+) Ventas Efectivo</span>
-                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.ventas) }}</span>
+                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.ventas_efectivo || 0) }}</span>
                                             </div>
                                             <div class="d-flex justify-content-between mb-1 small text-success">
                                                 <span>(+) Cobranzas Efectivo</span>
-                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.cobros) }}</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between mb-2 small text-danger">
-                                                <span>(-) Gastos Efectivo</span>
-                                                <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.gastos) }}</span>
+                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.cobros_efectivo || 0) }}</span>
                                             </div>
 
-                                            <div class="border-top pt-2 d-flex justify-content-between align-items-center">
-                                                <span class="fw-bold text-dark">(=) TOTAL ESPERADO</span>
+                                            <hr class="my-1">
+
+                                            <div class="d-flex justify-content-between mb-1 small text-danger" v-if="(datosCaja.detalle.gastos_efectivo || 0) > 0">
+                                                <span>(-) Gastos Varios</span>
+                                                <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.gastos_efectivo || 0) }}</span>
+                                            </div>
+                                            
+                                            <div class="d-flex justify-content-between mb-1 small text-danger" v-if="(datosCaja.detalle.compras_efectivo || 0) > 0">
+                                                <span>(-) Compras Mercadería</span>
+                                                <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.compras_efectivo || 0) }}</span>
+                                            </div>
+                                            
+                                            <div class="d-flex justify-content-between mb-1 small text-danger" v-if="(datosCaja.detalle.pagos_prov_efectivo || 0) > 0">
+                                                <span>(-) Pagos a Proveedores</span>
+                                                <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.pagos_prov_efectivo || 0) }}</span>
+                                            </div>
+
+                                            <hr class="my-2">
+
+                                            <div class="d-flex justify-content-between align-items-center bg-light p-2 rounded">
+                                                <span class="fw-bold text-dark">(=) TOTAL EN CAJÓN</span>
                                                 <span class="fs-5 fw-bold text-primary">
-                                                    {{ formatoMoneda(datosCaja.resumen_teorico) }}
+                                                    {{ formatoMoneda(datosCaja.detalle.total_sistema_efectivo || 0) }}
                                                 </span>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    <div class="card border-start border-4 border-info shadow-sm mb-4 bg-light" v-if="datosCaja.detalle">
+                                        <div class="card-body py-2">
+                                            <h6 class="fw-bold text-info mb-2 small text-uppercase"><i class="bi bi-bank me-2"></i>Otros Medios (Informativo)</h6>
+                                            <div class="row g-2 small text-muted">
+                                                <div class="col-4 border-end text-center">
+                                                    <div class="fw-bold text-dark">{{ formatoMoneda(datosCaja.detalle.total_tarjeta || 0) }}</div>
+                                                    <div>Tarjetas</div>
+                                                </div>
+                                                <div class="col-4 border-end text-center">
+                                                    <div class="fw-bold text-dark">{{ formatoMoneda(datosCaja.detalle.total_transferencia || 0) }}</div>
+                                                    <div>Transf.</div>
+                                                </div>
+                                                <div class="col-4 text-center">
+                                                    <div class="fw-bold text-dark">{{ formatoMoneda(datosCaja.detalle.total_cheque || 0) }}</div>
+                                                    <div>Cheques</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <div class="mb-4">
-                                        <label class="form-label fw-bold">Total Real (En Efectivo)</label>
-                                        <input type="number"
-                                            class="form-control form-control-lg text-end fw-bold fs-3 border-danger"
-                                            v-model="datosCaja.monto_real" placeholder="0">
-                                        <div class="form-text text-end"
-                                            :class="{'text-danger': (datosCaja.monto_real - datosCaja.resumen_teorico) < 0, 'text-success': (datosCaja.monto_real - datosCaja.resumen_teorico) >= 0}">
-                                            Diferencia: {{ (datosCaja.monto_real -
-                                            datosCaja.resumen_teorico).toLocaleString('es-PY') }}
+                                        <label class="form-label fw-bold">Total Real Contado (Billetes)</label>
+                                        <input type="number" 
+                                              class="form-control form-control-lg text-end fw-bold fs-3 border-danger"
+                                              v-model.number="datosCaja.monto_real" 
+                                              placeholder="0">
+                                        
+                                        <div class="form-text text-end fw-bold"
+                                            v-if="datosCaja.detalle"
+                                            :class="(datosCaja.monto_real - (datosCaja.detalle.total_sistema_efectivo || 0)) >= 0 ? 'text-success' : 'text-danger'">
+                                            Diferencia: {{ formatoMoneda(datosCaja.monto_real - (datosCaja.detalle.total_sistema_efectivo || 0)) }}
                                         </div>
                                     </div>
 
@@ -2009,7 +2047,7 @@
                                                                     <tr>
                                                                         <th>Fecha</th>
                                                                         <th>Nro. Factura</th>
-                                                                        <th class="text-end">Importe Orig.</th>
+                                                                        <th class="text-end">Importe Origen</th>
                                                                         <th class="text-end text-danger">Saldo</th>
                                                                         <th class="text-center" style="width: 100px;">Acción
                                                                         </th>
@@ -2027,7 +2065,7 @@
                                                                             formatoMoneda(f.saldo) }}</td>
                                                                         <td class="text-center"><button
                                                                                 class="btn btn-sm btn-outline-success fw-bold"
-                                                                                @click="abrirCobro(f, c)">Pagar</button>
+                                                                                @click="abrirCobro(f, c)">Cobrar</button>
                                                                         </td>
                                                                     </tr>
                                                                 </tbody>
