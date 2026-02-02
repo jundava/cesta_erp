@@ -2233,11 +2233,11 @@
                                             <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-1">
+                                    <div class="col-md-2">
                                         <label class="form-label fw-bold small">Fecha Emisión</label>
                                         <input type="date" class="form-control" v-model="formCompra.fecha">
                                     </div>
-                                    <div class="col-md-1">
+                                    <div class="col-md-2">
                                         <label class="form-label small fw-bold text-danger">Vencimiento</label>
                                         <input type="date" class="form-control border-danger" v-model="formCompra.vencimiento">
                                     </div>
@@ -2454,7 +2454,7 @@
                                           <th class="ps-3">Vencimiento</th>
                                           <th>Proveedor</th>
                                           <th>Factura</th>
-                                          <th class="text-end">Total Orig.</th>
+                                          <th class="text-end">Total Inicial</th>
                                           <th class="text-end">Saldo Pendiente</th>
                                           <th class="text-center">Estado</th>
                                           <th class="text-end pe-3">Acción</th>
@@ -5568,10 +5568,6 @@
                             console.log("=== LOGS DEL SERVIDOR ===");
                             console.log(paquete.logs.join("\n"));
                             
-                            // Si no hay datos, mostrar alerta con los logs para diagnosticar
-                            if (!paquete.datos || paquete.datos.length === 0) {
-                                this.notificar('error', "ALERTA DE DEBUG:\n" + paquete.logs.join("\n"));
-                            }
 
                             // 2. ASIGNAR DATOS
                             this.clientesDeudores = paquete.datos || [];

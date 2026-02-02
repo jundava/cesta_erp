@@ -1,4 +1,3 @@
-/*** INICIALIZACIÓN DE LA BASE DE DATOS * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes. */
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(SS_ID); 
 
