@@ -1,3 +1,4 @@
+/*** INICIALIZACIÓN DE LA BASE DE DATOS * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes. */
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(SS_ID); 
 
@@ -98,11 +99,6 @@ function setupDatabase() {
     {
         nombre: "CAJA_SESIONES",
         cols: ["id_sesion", "id_usuario", "fecha_apertura", "monto_inicial", "fecha_cierre", "total_sistema", "total_real", "diferencia", "estado", "id_deposito"]
-    },
-        {
-        nombre: "MOVIMIENTOS_CAJA",
-        cols: [
-        "id_movimiento", "fecha", "id_sesion", "id_deposito", "tipo", "categoria", "metodo", "monto", "descripcion",  "id_referencia", "usuario"]
     },
     {
       nombre: "BITACORA",
