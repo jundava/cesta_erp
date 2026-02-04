@@ -887,62 +887,85 @@
 
                     <div class="modal fade" id="modalCierreCaja" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
                         <div class="modal-dialog modal-dialog-centered">
-                            <div class="modal-content">
+                            <div class="modal-content border-0 shadow-lg">
                                 <div class="modal-header bg-danger text-white">
-                                    <h5 class="modal-title fw-bold"><i class="bi bi-calculator"></i> Arqueo de Caja</h5>
-                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                                        aria-label="Close"></button>
+                                    <h5 class="modal-title fw-bold">
+                                        <i class="bi bi-calculator-fill me-2"></i>Arqueo y Cierre de Caja
+                                    </h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <div class="modal-body p-4">
-                                    <div class="alert alert-warning small">
-                                        <i class="bi bi-info-circle-fill"></i> Cuenta todo el dinero en efectivo que tienes
-                                        en el cajón e ingrésalo abajo.
+                                    <div class="alert alert-warning border-0 shadow-sm small mb-4">
+                                        <i class="bi bi-info-circle-fill me-2"></i>
+                                        <strong>Instrucciones:</strong> Cuenta todo el dinero físico (billetes, monedas bauchers) disponible en caja e ingrésalo en el campo "Total Real".
                                     </div>
 
-                                        <div class="bg-light p-3 rounded mb-4 border" v-if="datosCaja.detalle">
-                                            
-                                            <h6 class="text-muted fw-bold small text-uppercase mb-3">Detalle del Sistema (Solo Efectivo)</h6>
+                                    <div class="bg-light p-3 rounded mb-4 border shadow-sm" v-if="datosCaja.detalle">
+                                        <h6 class="text-muted fw-bold small text-uppercase mb-3 border-bottom pb-2">
+                                            Resumen de Movimientos (Valores)
+                                        </h6>
 
-                                            <div class="d-flex justify-content-between mb-1 small">
-                                                <span>(+) Fondo Inicial</span>
-                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.inicial) }}</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between mb-1 small text-success">
-                                                <span>(+) Ventas Efectivo</span>
-                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.ventas) }}</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between mb-1 small text-success">
-                                                <span>(+) Cobranzas Efectivo</span>
-                                                <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.cobros) }}</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between mb-2 small text-danger">
-                                                <span>(-) Gastos Efectivo</span>
-                                                <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.gastos) }}</span>
-                                            </div>
-
-                                            <div class="border-top pt-2 d-flex justify-content-between align-items-center">
-                                                <span class="fw-bold text-dark">(=) TOTAL ESPERADO</span>
-                                                <span class="fs-5 fw-bold text-primary">
-                                                    {{ formatoMoneda(datosCaja.resumen_teorico) }}
-                                                </span>
-                                            </div>
+                                        <div class="d-flex justify-content-between mb-1 small">
+                                            <span>(+) Fondo Inicial</span>
+                                            <span class="fw-bold">{{ formatoMoneda(datosCaja.monto_inicial) }}</span>
                                         </div>
+                                        <div class="d-flex justify-content-between mb-1 small text-success">
+                                            <span>(+) Ventas Contado</span>
+                                            <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.ventas) }}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2 small text-success border-bottom pb-2">
+                                            <span>(+) Cobranzas Recibidas</span>
+                                            <span class="fw-bold">{{ formatoMoneda(datosCaja.detalle.cobros) }}</span>
+                                        </div>
+
+                                        <div class="d-flex justify-content-between mb-1 small text-danger">
+                                            <span>(-) Compras Contado</span>
+                                            <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.compras) }}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small text-danger">
+                                            <span>(-) Pagos a Proveedores</span>
+                                            <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.pagos) }}</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2 small text-danger">
+                                            <span>(-) Gastos Operativos</span>
+                                            <span class="fw-bold">- {{ formatoMoneda(datosCaja.detalle.gastos) }}</span>
+                                        </div>
+
+                                        <div class="border-top border-2 pt-2 d-flex justify-content-between align-items-center">
+                                            <span class="fw-bold text-dark">(=) SALDO TEÓRICO</span>
+                                            <span class="fs-4 fw-bold text-primary">
+                                                {{ formatoMoneda(datosCaja.resumen_teorico) }}
+                                            </span>
+                                        </div>
+                                    </div>
 
                                     <div class="mb-4">
-                                        <label class="form-label fw-bold">Total Real (En Efectivo)</label>
-                                        <input type="number"
-                                            class="form-control form-control-lg text-end fw-bold fs-3 border-danger"
-                                            v-model="datosCaja.monto_real" placeholder="0">
-                                        <div class="form-text text-end"
-                                            :class="{'text-danger': (datosCaja.monto_real - datosCaja.resumen_teorico) < 0, 'text-success': (datosCaja.monto_real - datosCaja.resumen_teorico) >= 0}">
-                                            Diferencia: {{ (datosCaja.monto_real -
-                                            datosCaja.resumen_teorico).toLocaleString('es-PY') }}
+                                        <label class="form-label fw-bold text-secondary">Total Real en Efectivo (Conteo Físico)</label>
+                                        <div class="input-group input-group-lg">
+                                            <span class="input-group-text bg-white border-danger text-danger fw-bold">Gs.</span>
+                                            <input type="number"
+                                                  class="form-control text-end fw-bold fs-3 border-danger shadow-sm"
+                                                  v-model.number="datosCaja.monto_real" 
+                                                  placeholder="0"
+                                                  @focus="$event.target.select()">
+                                        </div>
+                                        
+                                        <div class="mt-2 p-2 rounded text-center fw-bold"
+                                            :class="[(datosCaja.monto_real - datosCaja.resumen_teorico) < 0 ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success']">
+                                            Diferencia de Arqueo: {{ formatoMoneda(datosCaja.monto_real - datosCaja.resumen_teorico) }}
+                                            <i v-if="(datosCaja.monto_real - datosCaja.resumen_teorico) < 0" class="bi bi-exclamation-triangle-fill ms-1"></i>
                                         </div>
                                     </div>
 
-                                    <div class="d-grid">
-                                        <button class="btn btn-danger btn-lg fw-bold" @click="confirmarCierreCaja">
-                                            CONFIRMAR CIERRE
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-danger btn-lg fw-bold py-3 shadow" 
+                                                @click="confirmarCierreCaja"
+                                                :disabled="cargando">
+                                            <span v-if="cargando" class="spinner-border spinner-border-sm me-2"></span>
+                                            <i v-else class="bi bi-lock-fill me-2"></i>PROCESAR CIERRE DEFINITIVO
+                                        </button>
+                                        <button class="btn btn-link text-muted btn-sm border-0" data-bs-dismiss="modal">
+                                            Cancelar y revisar movimientos
                                         </button>
                                     </div>
                                 </div>
@@ -1092,12 +1115,12 @@
                                         </select>
                                     </div>
 
-                                    <div class="col-md-3" v-if="usaFiltroFecha">
+                                    <div class="col-md-3" v-if="!['stock_deposito', 'productos_categoria', 'clientes', 'proveedores'].includes(reporteForm.tipo)">
                                         <label class="form-label small fw-bold">Desde</label>
                                         <input type="date" class="form-control" v-model="reporteForm.fechaInicio" required>
                                     </div>
 
-                                    <div class="col-md-3" v-if="usaFiltroFecha">
+                                    <div class="col-md-3" v-if="!['stock_deposito', 'productos_categoria', 'clientes', 'proveedores'].includes(reporteForm.tipo)">
                                         <label class="form-label small fw-bold">Hasta</label>
                                         <input type="date" class="form-control" v-model="reporteForm.fechaFin" required>
                                     </div>
@@ -1114,13 +1137,18 @@
                         <div v-if="reporteData.filas.length > 0">
 
                             <div class="mb-3 text-center">
-                                <h4 class="fw-bold text-uppercase mb-1">Reporte de {{ reporteForm.tipo.replace('_', ' ') }}
+                                <h4 class="fw-bold text-uppercase mb-1">
+                                    Reporte de {{ reporteForm.tipo.replace('_', ' ') }}
                                 </h4>
-                                <p class="text-muted small mb-0" v-if="usaFiltroFecha">
-                                    Del {{ formatoFecha(reporteForm.fechaInicio) }} al {{ formatoFecha(reporteForm.fechaFin)
-                                    }}
+                                
+                                <p class="text-muted small mb-0" 
+                                  v-if="!['stock_deposito', 'productos_categoria', 'clientes', 'proveedores'].includes(reporteForm.tipo)">
+                                    Del {{ formatoFecha(reporteForm.fechaInicio) }} al {{ formatoFecha(reporteForm.fechaFin) }}
                                 </p>
-                                <p class="text-muted small mb-0" v-else>Generado el {{ formatoFecha(new Date()) }}</p>
+                                
+                                <p class="text-muted small mb-0" v-else>
+                                    Generado el {{ formatoFecha(new Date()) }}
+                                </p>
                             </div>
 
                             <div class="d-flex justify-content-end gap-2 mb-3 d-print-none">
@@ -2027,7 +2055,7 @@
                                                                             formatoMoneda(f.saldo) }}</td>
                                                                         <td class="text-center"><button
                                                                                 class="btn btn-sm btn-outline-success fw-bold"
-                                                                                @click="abrirCobro(f, c)">Pagar</button>
+                                                                                @click="abrirCobro(f, c)">Cobrar</button>
                                                                         </td>
                                                                     </tr>
                                                                 </tbody>
@@ -2073,6 +2101,7 @@
                                                 <option>Transferencia</option>
                                                 <option>Cheque</option>
                                                 <option>Tarjeta</option>
+                                                <option>QR</option>
                                             </select></div>
                                         <div class="mb-3"><label class="form-label">Observación</label><input type="text"
                                                 class="form-control" v-model="formCobro.observacion"
@@ -3890,18 +3919,19 @@
 
             // VARIABLES PARA CAJA
             datosCaja: {
-                estado: 'PENDIENTE',
+                estado: 'CERRADA',
                 id_sesion: null,
                 fecha_apertura: null,
                 monto_inicial: 0,
                 resumen_teorico: 0,
                 monto_real: 0,
-                // 👇 AGREGA ESTO: Inicializamos el objeto detalle
                 detalle: { 
                     inicial: 0, 
                     ventas: 0, 
                     cobros: 0, 
-                    gastos: 0 
+                    gastos: 0,
+                    compras: 0, 
+                    pagos: 0    
                 } 
             },
 
@@ -4087,22 +4117,18 @@
                 }, 0);
             },
 
-            usaFiltroFecha() {
-                const sinFecha = ['stock_deposito', 'productos_categoria', 'clientes', 'proveedores'];
-                return !sinFecha.includes(this.reporteForm.tipo);
-            },
+            diferenciaArqueo() {return (Number(this.datosCaja.monto_real) || 0) - (Number(this.datosCaja.resumen_teorico) || 0);},
 
             totalPagadoAcumulado() {
-                if (!this.pagosVenta) return 0;
-                return this.pagosVenta.reduce((acc, item) => acc + Number(item.monto), 0);
+                if (!this.pagosVenta || !Array.isArray(this.pagosVenta)) return 0;
+                return this.pagosVenta.reduce((acc, item) => acc + Number(item.monto || 0), 0);
             },
             
             saldoRestanteVenta() {
-                // También blindamos este cálculo
-                const total = this.totalCarrito || 0;
-                const pagado = this.totalPagadoAcumulado || 0;
+                const total = Number(this.totalCarrito) || 0;
+                const pagado = Number(this.totalPagadoAcumulado) || 0;
                 const saldo = total - pagado;
-                return saldo < 10 ? 0 : saldo;
+                return saldo < 10 ? 0 : saldo; // Evita decimales molestos
             },
 
             totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); },
@@ -4119,83 +4145,83 @@
                     return cliente.includes(texto) || obs.includes(texto) || metodo.includes(texto);
                 });
             },
-          aniosDisponibles() {
-              const actual = new Date().getFullYear();
-              const anios = [];
-              for(let i = 2023; i <= actual + 1; i++) anios.push(i);
-              return anios.reverse(); // El más reciente primero
-          },
+            aniosDisponibles() {
+                const actual = new Date().getFullYear();
+                const anios = [];
+                for(let i = 2023; i <= actual + 1; i++) anios.push(i);
+                return anios.reverse(); // El más reciente primero
+            },
 
-          // Filtra la lista completa según los selectores
-          gastosFiltrados() {
-              if (!this.listaGastos) return [];
-              return this.listaGastos.filter(g => {
-                  // Convertimos la fecha del gasto (string ISO) a objeto Date
-                  // Agregamos "T12:00:00" si viene solo fecha para evitar problemas de zona horaria
-                  const fechaG = new Date(g.fecha);
-                  return fechaG.getMonth() === this.filtroGastoMes && 
-                        fechaG.getFullYear() === this.filtroGastoAnio;
-              });
-          },
+            // Filtra la lista completa según los selectores
+            gastosFiltrados() {
+                if (!this.listaGastos) return [];
+                return this.listaGastos.filter(g => {
+                    // Convertimos la fecha del gasto (string ISO) a objeto Date
+                    // Agregamos "T12:00:00" si viene solo fecha para evitar problemas de zona horaria
+                    const fechaG = new Date(g.fecha);
+                    return fechaG.getMonth() === this.filtroGastoMes && 
+                          fechaG.getFullYear() === this.filtroGastoAnio;
+                });
+            },
 
-          totalCarrito() {
-                return this.totalVenta || 0;
-          },
+            totalCarrito() {
+                  return this.totalVenta || 0;
+            },
 
-          // Suma el total de lo que se ve en pantalla
-          totalGastosFiltrados() {
-              return this.gastosFiltrados.reduce((sum, item) => sum + item.monto, 0);
-          },
+            // Suma el total de lo que se ve en pantalla
+            totalGastosFiltrados() {
+                return this.gastosFiltrados.reduce((sum, item) => sum + item.monto, 0);
+            },
 
-          ventasFiltradas() {
-              // 1. Blindaje contra errores (Airbag)
-              if (!this.historialVentas || !Array.isArray(this.historialVentas)) {
-                  return [];
-              }
+            ventasFiltradas() {
+                // 1. Blindaje contra errores (Airbag)
+                if (!this.historialVentas || !Array.isArray(this.historialVentas)) {
+                    return [];
+                }
 
-              // 2. Si no escriben nada, devolvemos todo
-              if (!this.busquedaVenta) {
-                  return this.historialVentas;
-              }
-              
-              // 3. Filtrado (Cliente o Factura)
-              const texto = this.busquedaVenta.toLowerCase().trim();
-              
-              return this.historialVentas.filter(item => {
-                  const cliente = String(item.nombre_cliente || '').toLowerCase();
-                  const factura = String(item.factura || '').toLowerCase();
-                  
-                  return cliente.includes(texto) || factura.includes(texto);
-              });
-           },
+                // 2. Si no escriben nada, devolvemos todo
+                if (!this.busquedaVenta) {
+                    return this.historialVentas;
+                }
+                
+                // 3. Filtrado (Cliente o Factura)
+                const texto = this.busquedaVenta.toLowerCase().trim();
+                
+                return this.historialVentas.filter(item => {
+                    const cliente = String(item.nombre_cliente || '').toLowerCase();
+                    const factura = String(item.factura || '').toLowerCase();
+                    
+                    return cliente.includes(texto) || factura.includes(texto);
+                });
+            },
 
-          remisionesFiltradas() {
-              if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) return [];
+            remisionesFiltradas() {
+                if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) return [];
 
-              // Filtro de Texto (Búsqueda general)
-              const texto = this.busquedaRemision ? this.busquedaRemision.toLowerCase().trim() : '';
+                // Filtro de Texto (Búsqueda general)
+                const texto = this.busquedaRemision ? this.busquedaRemision.toLowerCase().trim() : '';
 
-              return this.historialRemisiones.filter(item => {
-                  // 1. Coincidencia de Texto
-                  const n = String(item.numero || '').toLowerCase();
-                  const c = String(item.cliente || '').toLowerCase();
-                  const coincideTexto = !texto || n.includes(texto) || c.includes(texto);
+                return this.historialRemisiones.filter(item => {
+                    // 1. Coincidencia de Texto
+                    const n = String(item.numero || '').toLowerCase();
+                    const c = String(item.cliente || '').toLowerCase();
+                    const coincideTexto = !texto || n.includes(texto) || c.includes(texto);
 
-                  // 2. Filtro de Cliente (Dropdown)
-                  const coincideCliente = !this.filtroRemisionCliente || item.id_cliente_raw == this.filtroRemisionCliente;
+                    // 2. Filtro de Cliente (Dropdown)
+                    const coincideCliente = !this.filtroRemisionCliente || item.id_cliente_raw == this.filtroRemisionCliente;
 
-                  // 3. Filtro de Estado (Dropdown)
-                  const coincideEstado = !this.filtroRemisionEstado || item.estado == this.filtroRemisionEstado;
+                    // 3. Filtro de Estado (Dropdown)
+                    const coincideEstado = !this.filtroRemisionEstado || item.estado == this.filtroRemisionEstado;
 
-                  return coincideTexto && coincideCliente && coincideEstado;
-              });
-          },
+                    return coincideTexto && coincideCliente && coincideEstado;
+                });
+            },
 
-          // Nueva computada para la sumatoria
-          totalRemisionesFiltradas() {
-              return this.remisionesFiltradas.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
-          }
-      },
+            // Nueva computada para la sumatoria
+            totalRemisionesFiltradas() {
+                return this.remisionesFiltradas.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
+            }
+        },
       mounted() {
             // 1. Inicializar TODOS los componentes de Bootstrap (Modales)
             this.modalDep = new bootstrap.Modal(document.getElementById('modalDeposito'));
@@ -4590,9 +4616,15 @@
                         this.datosCaja.resumen_teorico = resumen.teorico;
                         this.datosCaja.id_sesion = resumen.id_sesion;
                         this.datosCaja.monto_real = 0; 
-                        
-                        // 👇 AGREGA ESTA LÍNEA (Capturamos el desglose)
-                        this.datosCaja.detalle = resumen.detalle || { inicial:0, ventas:0, cobros:0, gastos:0 };
+
+                        this.datosCaja.detalle = {
+                            inicial: resumen.detalle.inicial || 0,
+                            ventas: resumen.detalle.ventas || 0,
+                            cobros: resumen.detalle.cobros || 0,
+                            gastos: resumen.detalle.gastos || 0,
+                            compras: resumen.detalle.compras || 0,
+                            pagos: resumen.detalle.pagos || 0
+                        };
                         
                         this.modalCierre = new bootstrap.Modal(document.getElementById('modalCierreCaja'));
                         this.modalCierre.show();
@@ -4610,7 +4642,8 @@
                 const paquete = {
                     id_sesion: this.datosCaja.id_sesion,
                     monto_teorico: this.datosCaja.resumen_teorico,
-                    monto_real: this.datosCaja.monto_real
+                    monto_real: this.datosCaja.monto_real,
+                    usuario_nombre: this.usuarioLogueado.nombre // Para la bitácora
                 };
 
                 google.script.run
@@ -4620,8 +4653,8 @@
                         
                         Swal.fire({
                             title: 'Caja Cerrada',
-                            text: 'El turno se ha cerrado correctamente.',
-                            icon: 'success'
+                            text: `Turno finalizado. Diferencia: ${this.formatoMoneda(res.diferencia)}`,
+                            icon: res.diferencia === 0 ? 'success' : 'warning'
                         });
 
                         this.verificarEstadoCaja(); // Volverá a estado 'CERRADA'
@@ -4632,25 +4665,45 @@
                         this.notificar('error', "Error al cerrar: " + e);
                     })
                     .cerrarCaja(paquete);
-            },
+              },
 
-            // --- LOGICA DE PAGO MULTIPLE ---
+              // --- LOGICA DE PAGO MULTIPLE ---
             agregarPagoLista() {
-                const monto = Number(this.pagoInput.monto);
-                const total = this.totalCarrito;
-                const pagado = this.totalPagadoAcumulado;
+                // 1. Capturamos valores actuales
+                const monto = Number(this.pagoInput.monto) || 0;
+                const total = Number(this.totalCarrito) || 0;
+                
+                // Al ser 'totalPagadoAcumulado' una computed property, 
+                // accedemos a ella como una variable simple.
+                const pagadoYa = this.totalPagadoAcumulado; 
 
-                if (monto <= 0) return this.notificar('warning', 'El monto debe ser mayor a 0');
-                if ((pagado + monto) > (total + 500)) return this.notificar('warning', 'El monto supera el total');
+                // 2. Validaciones de seguridad
+                if (monto <= 0) {
+                    return this.notificar('warning', 'El monto debe ser mayor a 0');
+                }
 
+                // Permitimos un margen de 500 Gs por redondeos técnicos
+                if ((pagadoYa + monto) > (total + 500)) {
+                    return this.notificar('warning', 'El monto ingresado supera el saldo de la venta');
+                }
+
+                // 3. Acción: Agregamos el pago al listado reactivo
                 this.pagosVenta.push({
                     metodo: this.pagoInput.metodo,
                     monto: monto
                 });
 
-                // Calcular sugerencia para el siguiente pago
-                let restante = total - (pagado + monto);
-                this.pagoInput.monto = restante > 0 ? restante : 0;
+                // 4. Sugerencia para el próximo pago
+                // Usamos $nextTick para esperar a que Vue actualice el 'totalPagadoAcumulado'
+                // y luego seteamos el input con el nuevo saldo restante.
+                this.$nextTick(() => {
+                    this.pagoInput.monto = this.saldoRestanteVenta;
+                    
+                    // Opcional: Si el saldo es 0, podemos avisar que la venta está cubierta
+                    if (this.saldoRestanteVenta <= 0) {
+                        console.log("Venta lista para ser procesada");
+                    }
+                });
             },
 
             quitarPagoLista(index) {
@@ -5117,34 +5170,53 @@
             },
 
             guardarGasto() {
-
+                // 1. Validaciones previas de UI
                 if (this.formGasto.monto <= 0) return this.notificar('error', "El monto debe ser mayor a 0.");
-                this.cargando = true;
+                
+                // 2. Validación de Estado de Caja Local
                 if (this.datosCaja.estado !== 'ABIERTA') {
                     return this.notificar('error', '⛔ La caja está cerrada. No puedes registrar gastos.');
                 }
+
+                // 3. Validación de Sesión de Usuario
+                if (!this.usuarioLogueado || !this.usuarioLogueado.id_usuario) {
+                    Swal.fire('Error', 'Sesión de usuario no detectada. Por favor, reingrese al sistema.', 'error');
+                    return;
+                }
+
+                this.cargando = true;
+
+                // 🚀 CORRECCIÓN CLAVE: Asignar el ID del usuario al objeto que viaja al servidor
+                // Usamos el operador spread (...) para no perder los datos del formulario
+                const datosParaEnviar = {
+                    ...this.formGasto,
+                    usuario_id: this.usuarioLogueado.id_usuario // <--- AQUÍ se soluciona el error
+                };
+
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        this.notificar('success', "Gasto registrado.");
+                        this.notificar('success', "Gasto registrado correctamente.");
 
-                        // Reset del formulario
+                        // Reset del formulario a estado inicial
                         this.formGasto = { 
                             fecha: new Date().toISOString().split('T')[0], 
                             categoria: '', 
                             descripcion: '', 
                             monto: 0, 
-                            metodo: 'Efectivo' 
+                            metodo: 'Efectivo',
+                            usuario_id: ''
                         };
 
-                        // Recargar lista
+                        // Recargar lista para ver el nuevo gasto reflejado
                         this.cargarGastos();
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
+                        // El error "Falta el ID de usuario" o "Caja Cerrada" del servidor llegará aquí
                         this.notificar('error', "Error: " + e);
                     })
-                    .guardarGasto(this.formGasto);
+                    .guardarGasto(datosParaEnviar); // Enviamos el objeto con el ID ya inyectado
             },
 
             cargarGastos() {
@@ -5549,15 +5621,21 @@
                     .obtenerClientesConDeuda();
             },
             abrirCobro(factura, cliente) {
+                // 🛡️ Validación preventiva de Cesta Expert
+                if (!this.usuarioLogueado || !this.usuarioLogueado.id_usuario) {
+                    return Swal.fire('Error', 'No se detectó sesión de usuario. Reingrese al sistema.', 'error');
+                }
+
                 this.formCobro = { 
                     id_cliente: cliente.id_cliente,
-                    id_venta: factura.id_venta, // Guardamos ID Factura
+                    id_venta: factura.id_venta, 
                     monto: 0, 
                     metodo: 'Efectivo', 
                     observacion: '', 
                     nombre: cliente.nombre, 
-                    deuda_total: factura.saldo, // Ahora el límite es el saldo de ESTA factura
-                    nro_factura_visual: factura.numero 
+                    deuda_total: factura.saldo, 
+                    nro_factura_visual: factura.numero,
+                    usuario_id: this.usuarioLogueado.id_usuario 
                 };
                 this.subVistaCobranzas = 'nuevo';
             },
@@ -5576,7 +5654,7 @@
                 google.script.run
                     .withSuccessHandler(() => {
                         this.cargando = false;
-                        this.notificar('error', "Pago aplicado a la factura " + this.formCobro.nro_factura_visual);
+                        this.notificar('success', "Pago aplicado a la factura " + this.formCobro.nro_factura_visual);
                         this.subVistaCobranzas = 'listado';
                         this.cargarCobranzas(); 
                     })

@@ -1,0 +1,86 @@
+computed: {
+            camposExtraProducto() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'producto'); },
+            camposExtraCliente() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'cliente'); },
+            camposExtraProveedor() { return this.listaConfigCampos.filter(c => c.entidad_objetivo === 'proveedor'); },
+            totalVenta() { return this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio_final), 0); },
+            totalIVA() {
+                return this.carritoVenta.reduce((acc, item) => {
+                    const totalLinea = item.cantidad * item.precio_final;
+                    const tasa = Number(item.tasa_iva);
+                    if (tasa === 0) return acc;
+                    let montoIVA = 0;
+                    if (tasa === 10) montoIVA = totalLinea / 11;
+                    if (tasa === 5) montoIVA = totalLinea / 21;
+                    return acc + montoIVA;
+                }, 0);
+            },
+
+            diferenciaArqueo() { 
+                return (Number(this.datosCaja.monto_real) || 0) - (Number(this.datosCaja.resumen_teorico) || 0); 
+            }, // <-- Agregada coma aquí
+
+            totalPagadoAcumulado() {
+                if (!this.pagosVenta || !Array.isArray(this.pagosVenta)) return 0;
+                return this.pagosVenta.reduce((acc, item) => acc + Number(item.monto || 0), 0);
+            },
+            
+            saldoRestanteVenta() {
+                const total = Number(this.totalCarrito) || 0;
+                const pagado = Number(this.totalPagadoAcumulado) || 0;
+                const saldo = total - pagado;
+                return saldo < 10 ? 0 : saldo;
+            },
+
+            totalCompra() { return this.carritoCompra.reduce((acc, i) => acc + (i.cantidad * i.costo), 0); },
+            cobranzasFiltradas() {
+                if (!this.historialCobranzas) return [];
+                if (!this.busquedaCobranza) return this.historialCobranzas;
+                const texto = this.busquedaCobranza.toLowerCase().trim();
+                return this.historialCobranzas.filter(item => {
+                    const cliente = String(item.nombre_cliente || '').toLowerCase();
+                    const obs = String(item.observacion || '').toLowerCase();
+                    const metodo = String(item.metodo || '').toLowerCase();
+                    return cliente.includes(texto) || obs.includes(texto) || metodo.includes(texto);
+                });
+            },
+            aniosDisponibles() {
+                const actual = new Date().getFullYear();
+                const anios = [];
+                for(let i = 2023; i <= actual + 1; i++) anios.push(i);
+                return anios.reverse();
+            },
+            gastosFiltrados() {
+                if (!this.listaGastos) return [];
+                return this.listaGastos.filter(g => {
+                    const fechaG = new Date(g.fecha);
+                    return fechaG.getMonth() === this.filtroGastoMes && fechaG.getFullYear() === this.filtroGastoAnio;
+                });
+            },
+            totalCarrito() { return this.totalVenta || 0; },
+            totalGastosFiltrados() { return this.gastosFiltrados.reduce((sum, item) => sum + item.monto, 0); },
+            ventasFiltradas() {
+                if (!this.historialVentas || !Array.isArray(this.historialVentas)) return [];
+                if (!this.busquedaVenta) return this.historialVentas;
+                const texto = this.busquedaVenta.toLowerCase().trim();
+                return this.historialVentas.filter(item => {
+                    const cliente = String(item.nombre_cliente || '').toLowerCase();
+                    const factura = String(item.factura || '').toLowerCase();
+                    return cliente.includes(texto) || factura.includes(texto);
+                });
+            },
+            remisionesFiltradas() {
+                if (!this.historialRemisiones || !Array.isArray(this.historialRemisiones)) return [];
+                const texto = this.busquedaRemision ? this.busquedaRemision.toLowerCase().trim() : '';
+                return this.historialRemisiones.filter(item => {
+                    const n = String(item.numero || '').toLowerCase();
+                    const c = String(item.cliente || '').toLowerCase();
+                    const coincideTexto = !texto || n.includes(texto) || c.includes(texto);
+                    const coincideCliente = !this.filtroRemisionCliente || item.id_cliente_raw == this.filtroRemisionCliente;
+                    const coincideEstado = !this.filtroRemisionEstado || item.estado == this.filtroRemisionEstado;
+                    return coincideTexto && coincideCliente && coincideEstado;
+                });
+            },
+            totalRemisionesFiltradas() {
+                return this.remisionesFiltradas.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
+            }
+        }, // <-- Cierre correcto de computed
