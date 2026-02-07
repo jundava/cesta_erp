@@ -466,6 +466,14 @@
                                   <div class="row g-3 align-items-end">
 
                                       <div class="col-md-2">
+                                          <label class="form-label fw-bold">Depósito</label>
+                                          <select class="form-select text-brand fw-bold" v-model="formVenta.id_deposito">
+                                              <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}
+                                              </option>
+                                          </select>
+                                      </div>
+
+                                      <div class="col-md-2">
                                           <label class="form-label fw-bold">Cliente</label>
                                           <div class="input-group">
                                               <select class="form-select" v-model="formVenta.id_cliente">
@@ -481,14 +489,6 @@
                                       </div>
 
                                       <div class="col-md-2">
-                                          <label class="form-label fw-bold">Desde Depósito</label>
-                                          <select class="form-select text-brand fw-bold" v-model="formVenta.id_deposito">
-                                              <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}
-                                              </option>
-                                          </select>
-                                      </div>
-
-                                      <div class="col-md-1">
                                           <label class="form-label fw-bold">Fecha</label>
                                           <input type="date" class="form-control" v-model="formVenta.fecha">
                                       </div>
@@ -1559,37 +1559,37 @@
                                     <h6 class="text-secondary small fw-bold mb-3 text-uppercase">Datos del Traslado</h6>
                                     <div class="row g-3">
                                         <div class="col-md-3">
+                                            <label class="form-label fw-bold small">Depósito</label>
+                                            <select class="form-select" v-model="formRemision.id_deposito">
+                                                <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label fw-bold small">Cliente</label>
+                                            <select class="form-select" v-model="formRemision.id_cliente">
+                                                <option value="" disabled>Seleccionar...</option>
+                                                <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}
+                                                </option>
+                                            </select>
+                                        </div>                                        
+                                        <div class="col-md-3">
                                             <label class="form-label fw-bold small">Fecha</label>
                                             <input type="date" class="form-control" v-model="formRemision.fecha">
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label fw-bold small">Nro. Comprobante</label>
                                             <input type="text" class="form-control" v-model="formRemision.numero"
-                                                placeholder="Auto (Según Config)">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-bold small">Cliente Destino</label>
-                                            <select class="form-select" v-model="formRemision.id_cliente">
-                                                <option value="" disabled>Seleccionar...</option>
-                                                <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-bold small">Sale de Depósito</label>
-                                            <select class="form-select" v-model="formRemision.id_deposito">
-                                                <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}
-                                                </option>
-                                            </select>
+                                                placeholder="Automático">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small">Entregado por</label>
-                                            <input type="text" class="form-control" v-model="formRemision.conductor"
+                                            <input type="text" class="form-control" v-model="formRemision.entregado_por"
                                                 placeholder="Indicar Nombre Completo">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small">Recibido por</label>
-                                            <input type="text" class="form-control" v-model="formRemision.chapa"
+                                            <input type="text" class="form-control" v-model="formRemision.recibido_por"
                                                 placeholder="Indicar Nombre Completo">
                                         </div>
                                     </div>
@@ -1880,6 +1880,7 @@
                                                     Este usuario abrirá caja y descontará stock de este depósito por defecto.
                                                 </div>
                                             </div>
+                                            
                                             <div class="mb-4" v-if="usuarioForm.rol === 'OPERADOR'">
                                                 <label class="form-label small fw-bold mb-2">Permisos de Acceso</label>
                                                 <div class="bg-light p-3 rounded border">
@@ -2200,6 +2201,13 @@
                                 <h6 class="text-muted text-uppercase fw-bold small mb-3">Datos de la Factura de Compra</h6>
                                 <div class="row g-3">
                                     <div class="col-md-2">
+                                        <label class="form-label fw-bold small">Depósito</label>
+                                        <select class="form-select text-primary fw-bold" v-model="formCompra.id_deposito">
+                                            <option value="" disabled>Seleccione...</option>
+                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
+                                        </select>
+                                    </div>                                    
+                                    <div class="col-md-2">
                                         <label class="form-label fw-bold small">Proveedor</label>
                                         <select class="form-select" v-model="formCompra.id_proveedor">
                                             <option value="" disabled>Seleccione proveedor...</option>
@@ -2207,8 +2215,12 @@
                                         </select>
                                     </div>
                                     <div class="col-md-2">
+                                        <label class="form-label fw-bold small">Fecha</label>
+                                        <input type="date" class="form-control" v-model="formCompra.fecha">
+                                    </div>                                    
+                                    <div class="col-md-2">
                                         <label class="form-label fw-bold small">Nº Factura</label>
-                                        <input type="text" class="form-control" v-model="formCompra.comprobante" placeholder="Ej: 001-001-123456">
+                                        <input type="text" class="form-control" v-model="formCompra.nro_factura" placeholder="Ej: 001-001-123456">
                                     </div>                                    
                                     <div class="col-md-2">
                                         <label class="form-label fw-bold small">Condición</label>
@@ -2216,17 +2228,6 @@
                                             <option value="CONTADO">Contado</option>
                                             <option value="CREDITO">Crédito</option>
                                         </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label fw-bold small">Ingresar en Depósito</label>
-                                        <select class="form-select text-primary fw-bold" v-model="formCompra.id_deposito_destino">
-                                            <option value="" disabled>Seleccione...</option>
-                                            <option v-for="d in listaDepositos" :value="d.id_deposito">{{ d.nombre }}</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label fw-bold small">Fecha Emisión</label>
-                                        <input type="date" class="form-control" v-model="formCompra.fecha">
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label small fw-bold text-danger">Vencimiento</label>
@@ -2369,7 +2370,7 @@
                                                 <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td>
                                                 <td>
                                                     <div class="fw-bold text-dark">{{ h.nombre_proveedor }}</div>
-                                                    <div class="small text-muted">{{ h.comprobante }}</div>
+                                                    <div class="small text-muted">{{ h.nro_factura }}</div>
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="badge text-dark border" :class="h.condicion === 'CREDITO' ? 'bg-warning bg-opacity-25' : 'bg-light'">
@@ -2462,7 +2463,7 @@
                                               <div class="fw-bold text-dark">{{ c.nombre_proveedor }}</div>
                                               <div class="small text-muted">Emisión: {{ c.fecha_emision }}</div>
                                           </td>
-                                          <td><span class="badge bg-light text-secondary border">{{ c.comprobante }}</span></td>
+                                          <td><span class="badge bg-light text-secondary border">{{ c.nro_factura }}</span></td>
                                           <td class="text-end text-muted">{{ formatoMoneda(c.total_original) }}</td>
                                           <td class="text-end fw-bold fs-5 text-dark">{{ formatoMoneda(c.saldo_pendiente) }}</td>
                                           <td class="text-center">
@@ -2502,7 +2503,7 @@
                         </div>
 
                         <button v-if="subVistaProductos === 'lista'" class="btn btn-brand shadow-sm w-100 w-md-auto"
-                            @click="abrirModalProducto(null)"><i class="bi bi-plus-lg -fill me-1"></i> Nuevo
+                            @click="abrirModalProducto(null)"><i class="bi-plus-lg"></i> Nuevo
                             Producto</button>
 
                         <div class="d-flex gap-2">
@@ -2747,18 +2748,22 @@
                                 <tbody>
                                     <tr v-for="cli in clientes" :key="cli.id_cliente">
                                         <td class="ps-3 fw-bold text-brand">{{ cli.razon_social }}</td>
-                                        <td><span class="badge bg-light text-dark border">{{ cli.doc_identidad }}</span>
+                                        <td>
+                                          <span class="badge bg-light text-dark border"> {{ cli.doc_identidad }} </span>
                                         </td>
                                         <td>
-                                            <div v-if="cli.telefono"><i class="bi bi-telephone me-1"></i>{{ cli.telefono }}
+                                            <div v-if="cli.telefono">
+                                                <i class="bi bi-telephone me-1"></i>{{ cli.telefono }}
                                             </div>
-                                            <div v-if="cli.email" class="small text-muted"><i
-                                                    class="bi bi-envelope me-1"></i>{{ cli.email }}</div>
-                                        </td>
+                                            <div v-if="cli.email" class="small text-muted">
+                                                <i class="bi bi-envelope me-1"></i>{{ cli.email }}
+                                            </div>
+                                            <div v-if="!cli.telefono && !cli.email" class="text-muted small">Sin contacto</div>
+                                        </td> 
                                         <td class="small text-muted">
                                             <div v-for="(val, key) in cli.datos_adicionales"><span v-if="val"
                                                     class="d-block">• <strong>{{ key }}:</strong> {{ val }}</span></div>
-                                        </td>
+                                        </td>                                                                               
                                         <td class="text-end pe-3"><button
                                                 class="btn btn-sm btn-light text-brand border me-1"
                                                 @click="abrirModalCliente(cli)"><i class="bi bi-pencil"></i></button><button
@@ -2779,7 +2784,7 @@
                         <h3 class="fw-bold">Proveedores</h3>
                         <button class="btn btn-brand shadow-sm w-100 w-md-auto" @click="abrirModalProveedor(null)"><i
                                 class="bi bi-person-plus-fill me-1"></i> Nuevo Proveedor</button>
-                    </div>
+                    </div>                  
                     <div class="card shadow-sm border-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" style="min-width: 600px;">
@@ -2799,9 +2804,13 @@
                                         </td>
                                         <td>{{ prov.contacto }}</td>
                                         <td class="small text-muted">
-                                            <div v-for="(val, key) in prov.datos_adicionales"><span v-if="val"
-                                                    class="d-block">• <strong>{{ key }}:</strong> {{ val }}</span></div>
-                                        </td>
+                                            <div v-for="(val, key) in prov.datos_adicionales" :key="key">
+                                                <span v-if="val" class="d-block">
+                                                    • <strong>{{ obtenerEtiquetaCampo(key) }}:</strong> {{ val }}
+                                                </span>
+                                            </div>
+                                            <span v-if="!tieneDatosValidos(prov)" class="text-muted fst-italic">Sin datos adicionales</span>
+                                        </td>                                        
                                         <td class="text-end pe-3"><button
                                                 class="btn btn-sm btn-light text-brand border me-1"
                                                 @click="abrirModalProveedor(prov)"><i
@@ -3880,9 +3889,12 @@
       createApp({
         data() {
           return {
-                       
             cargando: false, 
+
+            modoDebug: true,
+
             subVistaVentas:'nueva', subVistaCompras:'nueva', chartInstance: null,
+
             productos: [], proveedores: [], clientes: [], listaDepositos: [], listaConfigCampos: [], listaCategorias: [], listaUnidades: [],
             
             usuarioLogueado: null, permisos: [], loginData: { usuario: '', password: '' }, 
@@ -3890,9 +3902,11 @@
             vistaActual: 'dashboard',
 
             html5QrcodeScanner: null, 
+
             modalScanner: null,
 
             subVistaCaja: 'activa', // 'activa' o 'historial'
+            
             historialCajas: [],     // Array para la tabla       
 
             perfilForm: {
@@ -3900,6 +3914,7 @@
                 nombre: '',
                 avatar: ''
             },
+
             passForm: {
                 actual: '',
                 nueva: '',
@@ -3907,17 +3922,19 @@
             },
 
             listaCuentasPagar: [],
+
             totalesDeuda: { total: 0, vencido: 0 }, 
             
             modalPagoProv: null,
-            formPagoProv: { /* ... */ },
+
+            formPagoProv: { },
 
             subVistaProductos: 'lista',
 
             filtroRemisionCliente: '', 
+
             filtroRemisionEstado: '',  
 
-            // VARIABLES PARA CAJA
             datosCaja: {
                 estado: 'CERRADA',
                 id_sesion: null,
@@ -3943,11 +3960,12 @@
 
             modalCierre: null, // Referencia al modal de Bootstrap
 
-            pagosVenta: [],     
-                pagoInput: {        
-                    metodo: 'EFECTIVO',
-                    monto: 0
-                },
+            pagosVenta: [],
+
+            pagoInput: {        
+                metodo: 'EFECTIVO',
+                monto: 0
+            },
 
             fechaHoy: new Date().toLocaleDateString(),
 
@@ -3994,18 +4012,25 @@
             ],
             
             formDeposito: { nombre:'', direccion:'', responsable:'', activo:'Si' },
-            formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false },
+
+            formCampo: { entidad_objetivo:'producto', key_interno:'', etiqueta_visible:'', tipo_dato:'text', opciones_lista:'', es_obligatorio:false }, 
+            
             configFacturaActual: '',
 
             formAjuste: { tipo: 'ENTRADA', id_producto: '', id_deposito: '', cantidad: 1, motivo: '' },
 
             formGasto: { fecha: new Date().toISOString().split('T')[0], categoria: '', descripcion: '', monto: 0, metodo: 'Efectivo' },
+
             listaGastos: [],
+
             filtroGastoMes: new Date().getMonth(), // Mes actual (0-11)
+
             filtroGastoAnio: new Date().getFullYear(), // Año actual
+
             mesesNombre: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
 
             configRemisionActual: '', // Remision
+
             busquedaRemision: '',
 
             listaUsuarios: [],
@@ -4023,50 +4048,83 @@
             },
 
             historialCobranzas: [], // 
+
             busquedaCobranza: '',   // 
+
             subVistaCobranzas: 'listado',            
             
             subVistaRemision: 'nueva',
+
             historialRemisiones: [],
+
             carritoRemision: [],
+
             formRemision: { 
                 fecha: new Date().toISOString().slice(0,10), 
                 numero: '', 
                 id_cliente: '', 
                 id_deposito: '', 
-                conductor: '', 
-                chapa: '' 
+                entregado_por: '', 
+                recibido_por: '' 
             },
+
             lineaRemision: { id_producto: '', cantidad: 1 },
 
             formCategoria: { id_categoria: '', nombre: '' },
-            modalCat: null, // Referencia al modal
 
-            formVenta: { id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: '', metodos_pago: [], total_pagado: 0 },
+            modalCat: null,
+
+            formVenta: { 
+              id_cliente:'',
+              id_deposito: '',
+              condicion: 'CONTADO',
+              fecha: new Date().toISOString().slice(0,10), 
+              nro_factura: '', 
+              metodos_pago: [], 
+              total_pagado: 0 
+            },
+
             lineaVenta: { id_producto:'', cantidad:1, precio:0 },
+
             carritoVenta: [], 
+
             busquedaVenta: '',
+
             historialVentas: [], 
+
             itemsDetalle: [],
             
             formCompra: {
-                id_proveedor: '',
-                id_deposito_destino: '',
-                condicion: 'CONTADO',
-                fecha: new Date().toISOString().split('T')[0],
-                vencimiento: new Date().toISOString().split('T')[0], // <--- AGREGAR ESTO
-                comprobante: ''
+              id_proveedor: '',
+              id_deposito: '',
+              condicion: 'CONTADO',
+              fecha: new Date().toISOString().split('T')[0],
+              vencimiento: new Date().toISOString().split('T')[0],
+              nro_factura: ''
             },
-            lineaTemp: { id_producto:'', cantidad:'', costo:'' },
+
+            lineaTemp: { 
+              id_producto:'', 
+              cantidad:0, 
+              costo:0, 
+              tasa_iva: 0,
+              metodo_iva: ''
+            },
+
             carritoCompra: [], historialCompras: [],
 
-            configGeneral: {}, // Para guardar toda la config
-            depositoDefault: '', // Para el v-model del select de configuración
+            configGeneral: {}, 
 
-            subVistaTransf: 'nueva', historialTransf: [], carritoTransf: [], formTransf: { fecha: new Date().toISOString().slice(0,10), origen: '', destino: '', responsable: 'Admin', observacion: '' }, lineaTransf: { id_producto: '', cantidad: 1 },
+            depositoDefault: '', 
 
-            // Nuevos datos para Cobranzas
+            subVistaTransf: 'nueva', historialTransf: [], carritoTransf: [], 
+            
+            formTransf: { fecha: new Date().toISOString().slice(0,10), origen: '', destino: '', responsable: '', observacion: '' }, 
+            
+            lineaTransf: { id_producto: '', cantidad: 1 },
+
             clientesDeudores: [],
+
             formCobro: { 
                 id_cliente:'', 
                 id_venta: '', // <--- IMPORTANTE: Agregado
@@ -4077,11 +4135,13 @@
                 deuda_total: 0, // Esto ahora será "Saldo Factura" visualmente
                 nro_factura_visual: '' // Para mostrar en el modal
             },
+
             formProducto: { 
                 nombre:'', sku:'', precio_venta_base:0, 
                 impuesto_iva: 10, metodo_iva: 'INCLUIDO', // <--- AGREGAR ESTO
                 datos_adicionales:{} 
             },
+
             calcularCostoFinal(item) {
                 let costo = Number(item.costo);
                 if (item.metodo_iva === 'EXCLUIDO') {
@@ -4090,10 +4150,11 @@
                 }
                 return costo;
             },
+
             formCliente: { razon_social:'', doc_identidad:'', email:'', datos_adicionales:{} }, 
             formProveedor: { razon_social:'', doc_identidad:'', contacto:'', datos_adicionales:{} },
-            modoEdicion: false, archivoParaSubir: null, imagenPreview: null,
-            modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
+            modoEdicion: false, archivoParaSubir: null, imagenPreview: null, modalDep: null, modalCmp: null, modalProd: null, modalCli: null, modalProv: null, modalDetalle: null
+
           }
         },
         computed: {
@@ -4103,7 +4164,6 @@
             totalVenta() { return this.carritoVenta.reduce((acc, i) => acc + (i.cantidad * i.precio_final), 0); },
             totalIVA() {
                 return this.carritoVenta.reduce((acc, item) => {
-                    // Precio Final es lo que paga el cliente
                     const totalLinea = item.cantidad * item.precio_final;
                     const tasa = Number(item.tasa_iva);
                     
@@ -4405,7 +4465,7 @@
                     id_compra: item.id_compra,
                     id_proveedor: item.id_proveedor || '',
                     proveedor_nombre: item.nombre_proveedor,
-                    nro_factura: item.comprobante,
+                    nro_factura: item.nro_factura,
                     saldo_pendiente: Number(item.saldo_pendiente), // Asegurar número
                     monto: Number(item.saldo_pendiente), // Sugerir el total
                     metodo: 'EFECTIVO',
@@ -5098,6 +5158,11 @@
             },
 
             guardarUsuario() {
+                // ✅ VALIDACIÓN AGREGADA
+                if (!this.usuarioForm.id_deposito) {
+                    return this.notificar('warning', 'Debes seleccionar un Depósito Base para el usuario');
+                }
+                
                 this.cargando = true;
                 // Si es admin, forzamos permiso 'todo'
                 if(this.usuarioForm.rol === 'ADMIN') {
@@ -5111,8 +5176,12 @@
                         this.cargarUsuarios();
                         this.prepararNuevoUsuario();
                     })
+                    .withFailureHandler(err => {
+                        this.cargando = false;
+                        this.notificar('error', "Error al guardar: " + err);
+                    })
                     .guardarUsuario(this.usuarioForm);
-            },
+            },            
 
             eliminarUsuario(u) {
                 if (!confirm("¿Eliminar al usuario " + u.nombre + "?")) return;
@@ -5371,19 +5440,20 @@
                 this.cargando = true;
                 Promise.all([
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerProductosConStock()), 
-                    this.pedirDatos('PROVEEDORES'), 
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerClientes()),
-                    this.pedirDatos('CATEGORIAS'), 
-                    this.pedirDatos('UNIDADES'),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerProveedores()),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerCategorias()),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerUnidades()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigCampos()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerDepositos()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigFactura()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigGeneral()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigRemision())
                 ]).then(res => {
+                  console.log("=== DEBUGGING DATOS ===");
                     this.productos = res[0]; 
-                    this.proveedores = res[1]; 
-                    this.clientes = res[2];
+                    this.clientes = res[1];
+                    this.proveedores = res[2]; 
                     this.listaCategorias = res[3]; 
                     this.listaUnidades = res[4];
                     this.listaConfigCampos = res[5] || [];
@@ -5391,14 +5461,16 @@
                     this.configFacturaActual = res[7];
                     this.configGeneral = res[8] || {};
                     this.configRemisionActual = res[9];
-                    // Extraemos el depósito default o dejamos vacío si no existe
+                    
                     this.depositoDefault = this.configGeneral['DEPOSITO_DEFAULT'] || '';
 
-                    // 👇 3. APLICAMOS EL DEFAULT AL FORMULARIO DE VENTA
-                    // Si existe un default configurado, lo pre-seleccionamos.
-                    // Si no, forzamos "1" (Depósito Central) como respaldo.
-                    this.formVenta.id_deposito = this.depositoDefault || '169169';
-                    this.verificarEstadoCaja();
+                    this.formVenta.id_deposito = this.depositoDefault || '';
+                    this.formCompra.id_deposito = this.depositoDefault || '';
+                    this.formRemision.id_deposito = this.depositoDefault || '';
+                    this.formAjuste.id_deposito = this.depositoDefault || '';
+                    this.formTransf.origen = this.depositoDefault || '';
+
+                    this.lineaTemp = {id_producto: '', costo: 0, tasa_iva: 10, metodo_iva: 'INCLUIDO', cantidad: 1};
 
                     this.cargando = false;
                 });
@@ -5665,50 +5737,54 @@
                     .registrarCobro(this.formCobro);
             },
 
-            agregarAlCarritoTransf() {
-                  if(this.formTransf.origen === this.formTransf.destino) {
-                      return this.notificar('warning', "El depósito de Origen y Destino son iguales.");
-                  }
-                  const p = this.productos.find(x => x.id_producto == this.lineaTransf.id_producto);
-                  if(!p) return;
+        agregarAlCarritoTransf() {
+              if(this.formTransf.origen === this.formTransf.destino) {
+                  return this.notificar('warning', "El depósito de Origen y Destino son iguales.");
+              }
+              const p = this.productos.find(x => x.id_producto == this.lineaTransf.id_producto);
+              if(!p) return;
+              
+              this.carritoTransf.push({ ...this.lineaTransf, nombre: p.nombre, sku: p.sku });
+              this.lineaTransf = { id_producto: '', cantidad: 1 };
+          },
+          quitarCarritoTransf(i) { this.carritoTransf.splice(i,1); },
+          limpiarTransf() { this.carritoTransf=[]; this.formTransf.observacion=''; },
+          guardarTransfFinal() {
+              if(!this.formTransf.origen || !this.formTransf.destino || this.carritoTransf.length === 0) {
+                  return this.notificar('warning', "Completa origen, destino y agrega productos.");
+              }    
+              this.cargando = true;
+              const pkg = { ...this.formTransf, items: this.carritoTransf };
+              
+              google.script.run.withSuccessHandler(res => {
+                  this.cargando = false;
+                  if(res.pdf_url) window.open(res.pdf_url, '_blank');
                   
-                  this.carritoTransf.push({ ...this.lineaTransf, nombre: p.nombre, sku: p.sku });
-                  this.lineaTransf = { id_producto: '', cantidad: 1 };
-              },
-              quitarCarritoTransf(i) { this.carritoTransf.splice(i,1); },
-              limpiarTransf() { this.carritoTransf=[]; this.formTransf.observacion=''; },
-            guardarTransfFinal() {
-                  if(!this.formTransf.origen || !this.formTransf.destino || this.carritoTransf.length === 0) {
-                      return this.notificar('warning', "Completa origen, destino y agrega productos.");
-                  }
-                  
-                  this.cargando = true;
-                  const pkg = { ...this.formTransf, items: this.carritoTransf };
-                  
-                  google.script.run.withSuccessHandler(res => {
-                      this.cargando = false;
-                      if(res.pdf_url) window.open(res.pdf_url, '_blank');
-                      
-                      this.notificar('success', "Transferencia realizada con éxito");
-                      this.limpiarTransf();
-                      this.cargarDatosIniciales(); 
-                  }).withFailureHandler(e => {
-                      this.cargando = false;
-                      this.notificar('error', "Error: " + e);
-                  }).guardarTransferencia(pkg);
-              },
-              cargarHistorialTransf() {
-                  this.subVistaTransf='historial';
-                  this.cargando=true;
-                  google.script.run.withSuccessHandler(r => {
-                      this.historialTransf = r;
-                      this.cargando=false;
-                  }).obtenerHistorialTransferencias();
-              },
+                  this.notificar('success', "Transferencia realizada con éxito");
+                  this.limpiarTransf();
+                  this.cargarDatosIniciales(); 
+              }).withFailureHandler(e => {
+                  this.cargando = false;
+                  this.notificar('error', "Error: " + e);
+              }).guardarTransferencia(pkg);
+          },
 
-            pedirDatos(hoja) { return new Promise(r => google.script.run.withSuccessHandler(r).getData(hoja)); },
+          cargarHistorialTransf() {
+              this.subVistaTransf='historial';
+              this.cargando=true;
+              google.script.run.withSuccessHandler(r => {
+                  this.historialTransf = r;
+                  this.cargando=false;
+              }).obtenerHistorialTransferencias();
+          },
 
-            // Generar Ticket
+          pedirDatos(hoja) { 
+            
+            return new Promise(r => google.script.run.withSuccessHandler(r).getData(hoja)); 
+          
+          },
+
+          // Generar Ticket
           imprimirTicket(h) {
                 this.cargando = true;
                 google.script.run.withSuccessHandler(url => {
@@ -5724,12 +5800,15 @@
             
             // Helpers
           obtenerNombreCategoria(id) { const c = this.listaCategorias.find(x => x.id_categoria == id); return c ? c.nombre : '...'; },
-          obtenerEtiquetaCampo(key) { const c = this.listaConfigCampos.find(x => x.key_interno === key); return c ? c.etiqueta_visible : key; },
-          tieneDatosValidos(item) { if (!item.datos_adicionales) return false; return Object.values(item.datos_adicionales).some(val => val && val.toString().trim() !== ''); },
-          obtenerNombreProducto(id) { const p = this.productos.find(x => x.id_producto == id); return p ? p.nombre : '...'; },
 
-          // CONFIG
+          obtenerEtiquetaCampo(key) { const c = this.listaConfigCampos.find(x => x.key_interno === key); return c ? c.etiqueta_visible : key; },
+
+          tieneDatosValidos(item) { if (!item.datos_adicionales) return false; return Object.values(item.datos_adicionales).some(val => val && val.toString().trim() !== ''); },
+
+          obtenerNombreProducto(id) { const p = this.productos.find(x => x.id_producto == id); return p ? p.nombre : '...'; },
+          
           abrirModalDeposito(item) { this.formDeposito = item ? {...item} : { nombre:'', direccion:'', responsable:'', activo:'Si' }; this.modalDep.show(); },
+
           guardarDeposito() { this.cargando = true; google.script.run.withSuccessHandler(() => { this.cargando=false; this.modalDep.hide(); this.cargarDatosIniciales(); }).guardarDeposito(this.formDeposito); },
 
           eliminarDeposito(item) { 
@@ -5826,17 +5905,15 @@
                     .guardarConfigGeneral('DEPOSITO_DEFAULT', this.depositoDefault, usuario); // Enviamos usuario al final
             },
 
-            // MODALES MAESTROS
           abrirModalCliente(item) { 
               this.modoEdicion = !!item; 
               
-              // AQUI ESTA EL CAMBIO: Agregamos direccion: '' y telefono: ''
               this.formCliente = item ? JSON.parse(JSON.stringify(item)) : { 
-                  razon_social: '', 
-                  doc_identidad: '', 
-                  email: '', 
-                  telefono: '',   // <--- Agregado para inicializar
-                  direccion: '',  // <--- VITAL: Agregado para que funcione el nuevo input
+                  razon_social: '',
+                  doc_identidad: '',
+                  email: '',
+                  telefono: '',  
+                  direccion: '',
                   datos_adicionales: {} 
               }; 
               
@@ -5848,7 +5925,7 @@
             },
           guardarCliente() { 
                 this.cargando = true; 
-                const f = this.modoEdicion ? 'actualizarCliente' : 'guardarNuevoCliente'; 
+                const f = this.modoEdicion ? 'actualizarCliente' : 'guardarCliente'; 
                 
                 google.script.run
                     .withSuccessHandler(() => {
@@ -5897,14 +5974,22 @@
             },
 
           abrirModalProveedor(item) { 
-            this.modoEdicion=!!item; 
-            this.formProveedor = item ? JSON.parse(JSON.stringify(item)) : { razon_social:'', doc_identidad:'', datos_adicionales:{} }; 
-            if(!this.formProveedor.datos_adicionales) this.formProveedor.datos_adicionales={}; this.modalProv.show(); 
+              this.modoEdicion = !!item; 
+              this.formProveedor = item ? JSON.parse(JSON.stringify(item)) : { 
+                  razon_social: '', 
+                  doc_identidad: '',
+                  contacto: '',
+                  datos_adicionales: {} 
+              };               
+              if(!this.formProveedor.datos_adicionales) {
+                  this.formProveedor.datos_adicionales = {};
+              }
+              this.modalProv.show(); 
           },
 
           guardarProveedor() { 
                 this.cargando = true; 
-                const f = this.modoEdicion ? 'actualizarProveedor' : 'guardarNuevoProveedor'; 
+                const f = this.modoEdicion ? 'actualizarProveedor' : 'guardarProveedor'; 
                 
                 google.script.run
                     .withSuccessHandler(() => {
@@ -6312,7 +6397,7 @@
             limpiarCarrito() { 
                 this.carritoCompra = []; 
                 this.formCompra.id_proveedor = '';
-                this.formCompra.comprobante = '';
+                this.formCompra.nro_factura = '';
                 this.formCompra.condicion = 'CONTADO';
             },
 
@@ -6344,8 +6429,8 @@
             guardarCompraFinal() { 
                 // 1. Validaciones
                 if(!this.formCompra.id_proveedor) return this.notificar('warning', "Selecciona un proveedor.");
-                if(!this.formCompra.id_deposito_destino) return this.notificar('warning', "Selecciona el depósito destino.");
-                if(!this.formCompra.comprobante) return this.notificar('warning', "Ingresa el Nro de Factura.");
+                if(!this.formCompra.id_deposito) return this.notificar('warning', "Selecciona el depósito destino.");
+                if(!this.formCompra.nro_factura) return this.notificar('warning', "Ingresa el Nro de Factura.");
                 if(this.carritoCompra.length === 0) return this.notificar('warning', "Agrega productos al carrito.");
                 
                 // 2. Validación de Caja
@@ -6360,9 +6445,9 @@
 
                 const pkg = { 
                     ...this.formCompra, 
-                    total: total, 
                     items: this.carritoCompra,
-                    usuario_id: idUsuario 
+                    usuario_id: idUsuario,
+                    total: total
                 }; 
                 
                 google.script.run.withSuccessHandler((res)=>{
@@ -6397,7 +6482,7 @@
                     this.cargando = false; 
                     this.notificar('error', "Error al guardar compra: " + e);
                 })
-                .guardarCompraCompleta(pkg); 
+                .guardarCompra(pkg); 
             },
 
             verDetalleCompra(h) {
@@ -6445,5 +6530,6 @@
         }
       }).mount('#app');
     </script>
+
 </body>
 </html>
