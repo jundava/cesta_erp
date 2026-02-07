@@ -323,14 +323,6 @@ function guardarCompra(compra) {
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
   try {
-    const idUsuario = compra.usuario_id || "Sistema";
-    let idSesionCaja = "";
-    
-    // 🛡️ 1. VALIDACIÓN DE CAJA (Se aplica siempre para trazabilidad del depósito)
-    if (idUsuario !== "Sistema") {
-        idSesionCaja = obtenerCajaActivaPorUsuario(idUsuario);
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const shCab = ss.getSheetByName('COMPRAS_CABECERA');
     const shDet = ss.getSheetByName('COMPRAS_DETALLE');
@@ -408,7 +400,6 @@ function guardarCompra(compra) {
         urlPdf = crearPDFOrdenCompra(datosParaPDF, compra.items);
     } catch(e) { console.error(e); }
 
-    // 4. Guardar Cabecera (AGREGADO idSesionCaja al final)
     shCab.appendRow([
       idCompra,
       fecha,
@@ -422,7 +413,6 @@ function guardarCompra(compra) {
       saldo,              
       jsonPagos,
       fechaVencimiento,
-      idSesionCaja // <--- NUEVA COLUMNA TRAZABILIDAD
     ]);
 
     compra.items.forEach(item => {
@@ -534,8 +524,6 @@ function obtenerDetalleCompra(idCompra) {
   const ss = SpreadsheetApp.openById(SS_ID);
   const hojaDet = ss.getSheetByName('COMPRAS_DETALLE'); // Asegúrate que la hoja se llame así
   const hojaProd = ss.getSheetByName('PRODUCTOS');
-
-  if (!hojaDet || !hojaProd) return [{ producto: "❌ Error: Falta hoja COMPRAS_DETALLE", cantidad: 0, subtotal: 0 }];
 
   const datosDet = hojaDet.getDataRange().getValues();
   const datosProd = hojaProd.getDataRange().getValues();
@@ -791,13 +779,6 @@ function registrarPagoProveedor(pago) {
   try { lock.waitLock(10000); } catch (e) { throw "El sistema está ocupado."; }
 
   try {
-    // 🛡️ 1. VALIDACIÓN DE CAJA (MODIFICADO PARA CAJA POR DEPÓSITO)
-    const idUsuario = pago.usuario_id || "Sistema";
-    let idSesionCaja = "";
-    if (idUsuario !== "Sistema") {
-        idSesionCaja = obtenerCajaActivaPorUsuario(idUsuario);
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetPagos = ss.getSheetByName('PAGOS_PROVEEDORES');
     const sheetCompras = ss.getSheetByName('COMPRAS_CABECERA');
@@ -805,7 +786,6 @@ function registrarPagoProveedor(pago) {
     const idPago = Utilities.getUuid();
     const fechaHoy = new Date();
 
-    // 2. GUARDAR (AGREGADO idSesionCaja al final)
     sheetPagos.appendRow([
         idPago,
         fechaHoy,
@@ -816,7 +796,6 @@ function registrarPagoProveedor(pago) {
         pago.referencia || "",
         pago.observacion || "",
         pago.usuario_nombre,
-        idSesionCaja 
     ]);
 
     const data = sheetCompras.getDataRange().getValues();
@@ -961,14 +940,6 @@ function guardarVenta(venta) {
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   try {
-    // 🛡️ 1. SEGURIDAD DE CAJA (MODIFICADO PARA CAJA POR DEPÓSITO)
-    const idUsuario = venta.usuario_id || "Sistema"; 
-    let idSesionCaja = ""; // Variable para trazabilidad
-    if (idUsuario !== "Sistema") {
-        // Esta función ya valida que el depósito del usuario tenga una caja ABIERTA
-        idSesionCaja = obtenerCajaActivaPorUsuario(idUsuario);
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
     const sheetProd = ss.getSheetByName('PRODUCTOS');
@@ -1086,7 +1057,6 @@ function guardarVenta(venta) {
         urlPdf = "ERROR_PDF"; 
     }
 
-    // 4. Guardar Cabecera (AGREGADO idSesionCaja al final)
     sheetCab.appendRow([
       idVenta,
       nroFacturaFinal,
@@ -1099,7 +1069,6 @@ function guardarVenta(venta) {
       venta.condicion || 'CONTADO', 
       saldoInicial,
       venta.json_pagos || "[]",
-      idSesionCaja // <--- NUEVA COLUMNA TRAZABILIDAD
     ]);
 
     // 5. Guardar Detalle y Movimientos
@@ -1564,13 +1533,6 @@ function registrarCobro(datos) {
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
 
   try {
-    // 🛡️ 1. SEGURIDAD DE CAJA (MODIFICADO PARA CAJA POR DEPÓSITO)
-    const idUsuario = datos.usuario_id || "Sistema";
-    let idSesionCaja = "";
-    if (idUsuario !== "Sistema") {
-        idSesionCaja = obtenerCajaActivaPorUsuario(idUsuario);
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const shCob = ss.getSheetByName('COBRANZAS');
     const shVentas = ss.getSheetByName('VENTAS_CABECERA');
@@ -1599,7 +1561,6 @@ function registrarCobro(datos) {
       throw "El monto supera el saldo pendiente de la factura.";
     }
 
-    // 3. Registrar el Cobro (AGREGADO idSesionCaja al final)
     shCob.appendRow([
       Utilities.getUuid(),
       new Date(),
@@ -1608,7 +1569,6 @@ function registrarCobro(datos) {
       datos.metodo,
       datos.observacion,
       datos.id_venta,
-      idSesionCaja // <--- NUEVA COLUMNA TRAZABILIDAD
     ]);
 
     const nuevoSaldo = saldoActual - montoAPagar;
@@ -2415,8 +2375,8 @@ function guardarRemision(datos) {
     nuevoNumero, 
     datos.id_cliente, 
     datos.id_deposito,
-    datos.conductor,
-    datos.chapa,
+    datos.entregado_por,
+    datos.recibido_por,
     'PENDIENTE_FACTURAR', // Estado inicial
     urlPdf,
     totalValorizado
@@ -2670,15 +2630,6 @@ function guardarGasto(datos) {
   try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
 
   try {
-    const idUsuario = datos.usuario_id;
-    if (!idUsuario) throw "Falta el ID de usuario en la solicitud.";
-
-    let idSesionCaja = "";
-
-    // 🛡️ LLAMADA ACTIVA
-    // Si esta función falla, el flujo salta directamente al catch(error)
-    idSesionCaja = obtenerCajaActivaPorUsuario(idUsuario);
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sh = ss.getSheetByName('GASTOS');
     if (!sh) throw "No se encontró la hoja GASTOS.";
@@ -2693,12 +2644,10 @@ function guardarGasto(datos) {
       datos.categoria || "Varios",
       datos.descripcion || "",
       Number(datos.monto || 0),
-      datos.metodo || "Efectivo",
-      idSesionCaja // Columna G
+      datos.metodo || "Efectivo"
     ];
 
     sh.appendRow(nuevaFila);
-    console.log("Gasto insertado con éxito. Sesión: " + idSesionCaja);
 
     return { success: true };
 

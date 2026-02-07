@@ -6227,13 +6227,6 @@
                     condicion: this.formVenta.condicion, 
                     total: total, 
                     items: this.carritoVenta,
-                    
-                    // --- NUEVOS CAMPOS ---
-                    // Enviamos la lista de pagos como Texto JSON para guardarlo en la BD
-                    json_pagos: JSON.stringify(this.pagosVenta),
-                    // Enviamos el usuario para que el Backend verifique si tiene CAJA ABIERTA
-                    usuario_id: this.usuarioLogueado ? this.usuarioLogueado.id_usuario : null,
-                    usuario_nombre: this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Sistema'
                 };
                 
                 // 5. Envío al Backend
@@ -6432,11 +6425,6 @@
                 if(!this.formCompra.id_deposito) return this.notificar('warning', "Selecciona el depósito destino.");
                 if(!this.formCompra.nro_factura) return this.notificar('warning', "Ingresa el Nro de Factura.");
                 if(this.carritoCompra.length === 0) return this.notificar('warning', "Agrega productos al carrito.");
-                
-                // 2. Validación de Caja
-                if (this.formCompra.condicion === 'CONTADO' && this.datosCaja.estado !== 'ABIERTA') {
-                    return this.notificar('error', "⛔ Caja Cerrada. Para compras al contado abre la caja primero.");
-                }
 
                 this.cargando = true; 
                 

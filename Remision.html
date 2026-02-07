@@ -61,8 +61,8 @@
       </div>
       
       <div style="width: 45%; float: right; text-align: right;">
-        <div><span class="label">Entregado por:</span> <?= datos.conductor || '---' ?></div>
-        <div style="margin-top: 5px;"><span class="label">Recibido por:</span> <?= datos.chapa || '---' ?></div>
+        <div><span class="label">Entregado por:</span> <?= datos.entregado_por || '---' ?></div>
+        <div style="margin-top: 5px;"><span class="label">Recibido por:</span> <?= datos.recibido_por || '---' ?></div>
       </div>
     </div>
   </div>
@@ -110,12 +110,12 @@
   <div class="signatures">
     <div class="sig-box">
       _____________________________________________________________________________________
-      <br>Firma | Entregado por <strong><?= datos.conductor || '---' ?></strong>
+      <br>Firma | Entregado por <strong><?= datos.entregado_por || '---' ?></strong>
     </div>
     <br><br>
     <div class="sig-box sig-box-right">
       _____________________________________________________________________________________
-      <br>Firma | Recibido por <strong><?= datos.chapa || '---' ?></strong>
+      <br>Firma | Recibido por <strong><?= datos.recibido_por || '---' ?></strong>
     </div>
   </div>
   <br><br>
