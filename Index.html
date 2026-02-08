@@ -646,11 +646,7 @@
                               <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
                                   <button class="btn btn-outline-secondary me-2"
                                       @click="limpiarCarritoVenta">Cancelar</button>
-
-                                  <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"
-                                      :disabled="datosCaja.estado !== 'ABIERTA'"> <i class="bi bi-cash-coin me-2"></i>
-                                      {{ datosCaja.estado === 'ABIERTA' ? 'FINALIZAR VENTA' : 'CAJA CERRADA' }}
-                                  </button>
+                                  <button type="submit" class="btn btn-success btn-lg fw-bold">FINALIZAR VENTA</button>
                               </div>
 
                           </div>
@@ -2091,26 +2087,26 @@
                                     </div>
                                     <form @submit.prevent="guardarCobro">
                                         <div class="mb-3"><label class="form-label">Cliente</label><input type="text"
-                                                class="form-control" :value="formCobro.nombre" disabled></div>
+                                                class="form-control" :value="formCobro.nombre" disabled>
+                                        </div>
                                         <div class="mb-3"><label class="form-label fw-bold">Monto a Pagar</label><input
                                                 type="number"
                                                 class="form-control form-control-lg text-end fw-bold text-success"
-                                                v-model.number="formCobro.monto" required min="1"></div>
-                                        <div class="mb-3"><label class="form-label">Método de Pago</label><select
-                                                class="form-select" v-model="formCobro.metodo">
+                                                v-model.number="formCobro.monto" required min="1">
+                                        </div>
+                                        <div class="mb-3"><label class="form-label">Método de Pago</label>
+                                            <select class="form-select" v-model="formCobro.metodo">
                                                 <option>Efectivo</option>
                                                 <option>Transferencia</option>
                                                 <option>Cheque</option>
                                                 <option>Tarjeta</option>
                                                 <option>QR</option>
-                                            </select></div>
+                                            </select>
+                                        </div>
                                         <div class="mb-3"><label class="form-label">Observación</label><input type="text"
-                                                class="form-control" v-model="formCobro.observacion"
-                                                placeholder="Nro de comprobante, banco..."></div>
-                                        <button type="submit" class="btn btn-success btn-lg fw-bold"
-                                            :disabled="datosCaja.estado !== 'ABIERTA'">
-                                            {{ datosCaja.estado === 'ABIERTA' ? 'CONFIRMAR COBRANZA' : 'CAJA CERRADA' }}
-                                        </button>
+                                                class="form-control" v-model="formCobro.observacion" placeholder="Nro de comprobante, banco...">
+                                        </div>
+                                        <button type="submit" class="btn btn-success btn-lg fw-bold">CONFIRMAR COBRANZA</button>
                                     </form>
                                 </div>
                             </div>
@@ -3163,11 +3159,7 @@
                                       </div>
 
                                       <div class="d-grid">
-                                          <button type="submit" class="btn btn-success btn-lg fw-bold" 
-                                                  :disabled="datosCaja.estado !== 'ABIERTA'">
-                                              <i class="bi" :class="datosCaja.estado === 'ABIERTA' ? 'bi-plus-lg' : 'bi-lock-fill'"></i> 
-                                              {{ datosCaja.estado === 'ABIERTA' ? 'CONFIRMAR GASTO' : 'CAJA CERRADA' }}
-                                          </button>
+                                          <button type="submit" class="btn btn-success btn-lg fw-bold">CONFIRMAR GASTO</button>
                                       </div>
                                   </form>
                               </div>
@@ -3330,20 +3322,8 @@
                                         </div>
                                     </div>
 
-                                    <div class="alert alert-warning mt-3 py-2 small d-flex align-items-center" 
-                                        v-if="formPagoProv.metodo === 'EFECTIVO' && datosCaja.estado !== 'ABIERTA'">
-                                        <i class="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
-                                        <div>
-                                            <strong>¡Atención!</strong> La caja está cerrada. No podrás registrar salidas de efectivo.
-                                        </div>
-                                    </div>
-
                                     <div class="d-grid mt-4">
-                                        <button type="submit" class="btn btn-success btn-lg fw-bold px-5 shadow"
-                                            :disabled="cargando || (formPagoProv.metodo === 'EFECTIVO' && datosCaja.estado !== 'ABIERTA')">
-                                            <span v-if="cargando"><span class="spinner-border spinner-border-sm me-2"></span>Procesando...</span>
-                                            <span v-else><i class="bi bi-check-circle-fill me-2"></i>{{ datosCaja.estado === 'ABIERTA' ? 'CONFIRMAR PAGO' : 'CAJA CERRADA' }}</span>
-                                        </button>
+                                        <button type="submit" class="btn btn-success btn-lg fw-bold">CONFIRMAR PAGO</button>
                                     </div>
                                 </form>
                             </div>
@@ -4506,11 +4486,6 @@
                 if (this.formPagoProv.monto <= 0) return this.notificar('warning', "El monto debe ser mayor a 0");
                 if (this.formPagoProv.monto > (this.formPagoProv.saldo_pendiente + 100)) return this.notificar('warning', "El monto excede la deuda");
 
-                // Validar Caja si es efectivo
-                if (this.formPagoProv.metodo === 'EFECTIVO' && this.datosCaja.estado !== 'ABIERTA') {
-                    return this.notificar('error', "La caja está cerrada. Abre caja o usa otro medio de pago.");
-                }
-
                 this.cargando = true;
 
                 // Preparar objeto para enviar
@@ -5241,11 +5216,6 @@
             guardarGasto() {
                 // 1. Validaciones previas de UI
                 if (this.formGasto.monto <= 0) return this.notificar('error', "El monto debe ser mayor a 0.");
-                
-                // 2. Validación de Estado de Caja Local
-                if (this.datosCaja.estado !== 'ABIERTA') {
-                    return this.notificar('error', '⛔ La caja está cerrada. No puedes registrar gastos.');
-                }
 
                 // 3. Validación de Sesión de Usuario
                 if (!this.usuarioLogueado || !this.usuarioLogueado.id_usuario) {
@@ -5282,7 +5252,6 @@
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
-                        // El error "Falta el ID de usuario" o "Caja Cerrada" del servidor llegará aquí
                         this.notificar('error', "Error: " + e);
                     })
                     .guardarGasto(datosParaEnviar); // Enviamos el objeto con el ID ya inyectado
@@ -5669,17 +5638,7 @@
                         try {
                             // Parseamos la respuesta
                             const paquete = JSON.parse(respuesta);
-                            
-                            // 1. IMPRIMIR LOGS DEL SERVIDOR (IMPORTANTE)
-                            console.log("=== LOGS DEL SERVIDOR ===");
-                            console.log(paquete.logs.join("\n"));
-                            
-                            // Si no hay datos, mostrar alerta con los logs para diagnosticar
-                            if (!paquete.datos || paquete.datos.length === 0) {
-                                this.notificar('error', "ALERTA DE DEBUG:\n" + paquete.logs.join("\n"));
-                            }
 
-                            // 2. ASIGNAR DATOS
                             this.clientesDeudores = paquete.datos || [];
 
                         } catch (e) {
@@ -5712,9 +5671,6 @@
                 this.subVistaCobranzas = 'nuevo';
             },
             guardarCobro() {
-                if (this.datosCaja.estado !== 'ABIERTA') {
-                    return this.notificar('error', '⛔ La caja está cerrada. Ábrela para cobrar.');
-                }
                 if(this.formCobro.monto <= 0) return this.notificar('error', "Monto inválido");
                 
                 // Validación estricta del saldo

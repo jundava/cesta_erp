@@ -328,20 +328,24 @@ function guardarCompra(compra) {
     const shDet = ss.getSheetByName('COMPRAS_DETALLE');
     const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
     const shProv = ss.getSheetByName('PROVEEDORES');
-    const shDep = ss.getSheetByName('DEPOSITOS'); 
+    const shDep = ss.getSheetByName('DEPOSITOS');
+    const shProd = ss.getSheetByName('PRODUCTOS'); // Hoja necesaria para CPP
 
-    if (!shCab || !shDet) throw "Faltan hojas de base de datos.";
+    if (!shCab || !shDet || !shProd) throw "Faltan hojas de base de datos.";
+
+    // 1. CARGAR MAESTRO DE PRODUCTOS A MEMORIA (Optimización O(n))
+    const dataProd = shProd.getDataRange().getValues();
+    const headersProd = dataProd[0];
+    const colIdProd = headersProd.indexOf('id_producto');
+    const colCostoProm = headersProd.indexOf('costo_promedio');
+    const colStockTotal = headersProd.indexOf('stock_actual');
 
     const idCompra = Utilities.getUuid();
     const fecha = new Date(compra.fecha + "T12:00:00");
     
-    let fechaVencimiento;
-    if (compra.vencimiento) {
-        fechaVencimiento = new Date(compra.vencimiento + "T12:00:00");
-    } else {
-        fechaVencimiento = new Date(fecha); 
-    }
+    let fechaVencimiento = compra.vencimiento ? new Date(compra.vencimiento + "T12:00:00") : new Date(fecha);
 
+    // Cálculos de totales de cabecera
     let totalCalculado = 0;
     compra.items.forEach(it => {
         let costoFinal = Number(it.costo);
@@ -351,40 +355,23 @@ function guardarCompra(compra) {
         totalCalculado += (costoFinal * Number(it.cantidad));
     });
     
-    let estado = 'PAGADO';
-    let saldo = 0;
-    let jsonPagos = '[]';
+    let estado = compra.condicion === 'CREDITO' ? 'PENDIENTE' : 'PAGADO';
+    let saldo = compra.condicion === 'CREDITO' ? totalCalculado : 0;
+    let jsonPagos = compra.condicion === 'CREDITO' ? '[]' : JSON.stringify([{ metodo: 'EFECTIVO', monto: totalCalculado, fecha: new Date() }]);
 
-    if (compra.condicion === 'CREDITO') {
-        estado = 'PENDIENTE';
-        saldo = totalCalculado;
-    } else {
-        estado = 'PAGADO';
-        jsonPagos = JSON.stringify([{ metodo: 'EFECTIVO', monto: totalCalculado, fecha: new Date() }]);
-    }
-
-    let nombreProveedor = "Proveedor General";
-    let docProveedor = "";
+    // Búsqueda de nombres (Proveedores/Depósitos) - Mantengo tu lógica de búsqueda
+    let nombreProveedor = "Proveedor General", docProveedor = "";
     if (shProv) {
-         const datosP = shProv.getDataRange().getValues();
-         for(let i=1; i<datosP.length; i++){
-             if(String(datosP[i][0]) == String(compra.id_proveedor)){
-                 nombreProveedor = datosP[i][1];
-                 docProveedor = datosP[i][2];
-                 break;
-             }
-         }
+        const datosP = shProv.getDataRange().getValues();
+        const p = datosP.find(r => String(r[0]) === String(compra.id_proveedor));
+        if(p) { nombreProveedor = p[1]; docProveedor = p[2]; }
     }
 
     let nombreDeposito = "Depósito Principal";
     if (shDep) {
-         const datosD = shDep.getDataRange().getValues();
-         for(let i=1; i<datosD.length; i++){
-             if(String(datosD[i][0]) == String(compra.id_deposito_destino)){
-                 nombreDeposito = datosD[i][1];
-                 break;
-             }
-         }
+        const datosD = shDep.getDataRange().getValues();
+        const d = datosD.find(r => String(r[0]) === String(compra.id_deposito));
+        if(d) nombreDeposito = d[1];
     }
 
     let urlPdf = "";
@@ -398,50 +385,49 @@ function guardarCompra(compra) {
             deposito_nombre: nombreDeposito
         };
         urlPdf = crearPDFOrdenCompra(datosParaPDF, compra.items);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("Error PDF:", e); }
 
-    shCab.appendRow([
-      idCompra,
-      fecha,
-      compra.id_proveedor,
-      compra.id_deposito_destino,
-      totalCalculado,
-      estado,
-      urlPdf, 
-      compra.comprobante, 
-      compra.condicion,   
-      saldo,              
-      jsonPagos,
-      fechaVencimiento,
-    ]);
+    // Guardar Cabecera
+    shCab.appendRow([idCompra, fecha, compra.id_proveedor, compra.id_deposito, totalCalculado, estado, urlPdf, compra.comprobante, compra.condicion, saldo, jsonPagos, fechaVencimiento]);
 
+    // 2. PROCESAR ÍTEMS, MOVIMIENTOS Y CÁLCULO DE COSTO PROMEDIO
     compra.items.forEach(item => {
-       shDet.appendRow([
-         Utilities.getUuid(),
-         idCompra,
-         item.id_producto,
-         item.cantidad,
-         item.costo,
-         item.tasa_iva || 10,
-         (item.metodo_iva === 'EXCLUIDO' ? item.costo * (1 + item.tasa_iva/100) : item.costo) * item.cantidad
-       ]);
+        const cantNueva = Number(item.cantidad);
+        const costoNuevo = Number(item.costo); // Se usa costo base para el CPP contable
 
-       shMov.appendRow([
-         Utilities.getUuid(),
-         new Date(),
-         "ENTRADA_COMPRA",
-         item.id_producto,
-         compra.id_deposito_destino, 
-         Number(item.cantidad),      
-         idCompra
-       ]);
+        // --- LÓGICA CPP ---
+        const filaIndex = dataProd.findIndex(r => String(r[colIdProd]) === String(item.id_producto));
+        if (filaIndex !== -1) {
+            const stockActual = Number(dataProd[filaIndex][colStockTotal] || 0);
+            const costoAnterior = Number(dataProd[filaIndex][colCostoProm] || 0);
+            
+            let nuevoCostoPromedio = costoAnterior;
+            if ((stockActual + cantNueva) > 0) {
+                nuevoCostoPromedio = ((stockActual * costoAnterior) + (cantNueva * costoNuevo)) / (stockActual + cantNueva);
+            }
+            
+            // Actualizar en la hoja PRODUCTOS (colCostoProm + 1 porque Sheets es base 1)
+            shProd.getRange(filaIndex + 1, colCostoProm + 1).setValue(nuevoCostoPromedio);
+            // Actualizamos el array en memoria para el siguiente ítem por si se repite producto
+            dataProd[filaIndex][colCostoProm] = nuevoCostoPromedio;
+            dataProd[filaIndex][colStockTotal] = stockActual + cantNueva;
+        }
+        // ------------------
 
-       actualizarStockDeposito(item.id_producto, compra.id_deposito_destino, Number(item.cantidad));
+        shDet.appendRow([
+          Utilities.getUuid(), idCompra, item.id_producto, cantNueva, costoNuevo, item.tasa_iva || 10,
+          (item.metodo_iva === 'EXCLUIDO' ? costoNuevo * (1 + item.tasa_iva/100) : costoNuevo) * cantNueva
+        ]);
+
+        shMov.appendRow([Utilities.getUuid(), new Date(), "ENTRADA_COMPRA", item.id_producto, compra.id_deposito, cantNueva, idCompra]);
+
+        actualizarStockDeposito(item.id_producto, compra.id_deposito, cantNueva);
     });
 
     return { success: true, pdf_url: urlPdf };
 
   } catch (e) {
+    console.error("Error en guardarCompra:", e);
     throw e;
   } finally {
     lock.releaseLock();
@@ -550,7 +536,7 @@ function obtenerDetalleCompra(idCompra) {
         producto: mapaProd[idProd] || 'Producto desconocido',
         cantidad: row[3], // Columna D
         precio: row[4],   // Columna E
-        subtotal: row[5]  // Columna F (Subtotal)
+        subtotal: row[6]  // Columna F (Subtotal)
       });
     }
   }
@@ -1992,7 +1978,7 @@ function eliminarDeposito(id) {
   const sheetCompras = ss.getSheetByName('COMPRAS_CABECERA');
   if(sheetCompras) {
     const datos = sheetCompras.getDataRange().getValues();
-    // Revisamos la columna 3 (id_deposito_destino, si existe)
+    // Revisamos la columna 3 (id_deposito, si existe)
     const usado = datos.some((r, i) => i > 0 && r[3] == id);
     if(usado) return { error: "⛔ No se puede eliminar: Existen compras destinadas a este depósito." };
   }

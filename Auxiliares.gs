@@ -26,6 +26,7 @@ function setupDatabase() {
     { nombre: "CAJA_SESIONES", cols: ["id_sesion", "id_usuario", "responsable_apertura", "fecha_apertura", "monto_inicial", "fecha_cierre", "total_sistema", "total_real", "diferencia", "estado", "id_deposito"] },
     { nombre: "VENTAS_CABECERA", cols: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado", "url_pdf", "condicion", "saldo_pendiente", "json_pagos", "id_sesion_caja"] },
     { nombre: "COMPRAS_CABECERA", cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf", "numero_factura", "condicion", "saldo_pendiente", "json_pagos", "fecha_vencimiento", "id_sesion_caja"] },
+    
     { nombre: "COBRANZAS", cols: ["id_cobro", "fecha", "id_cliente", "monto", "metodo_pago", "observacion", "id_venta_asociada", "id_sesion_caja"] },
     { nombre: "PAGOS_PROVEEDORES", cols: ["id_pago", "fecha_pago", "id_compra", "id_proveedor", "monto", "metodo", "referencia", "observacion", "usuario_responsable", "id_sesion_caja"] },
     { nombre: "GASTOS", cols: ["id_gasto", "fecha", "categoria", "descripcion", "monto", "metodo_pago", "id_sesion_caja"] },
