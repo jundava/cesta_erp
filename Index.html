@@ -429,9 +429,9 @@
                                         {{ usuarioLogueado.nombre }}
                                     </div>
 
-                                    <small v-if="indicadorCaja" :class="indicadorCaja.clase" style="font-size: 10px; line-height: 1.2;">
-                                        <i class="bi me-1" :class="indicadorCaja.icono" style="font-size: 9px;"></i>
-                                        {{ indicadorCaja.texto }}
+                                    <small class='text-success' style="font-size: 10px; line-height: 1.2;">
+                                        <i class="bi bi-circle-fill me-1" style="font-size: 9px;"></i>
+                                        Conectado
                                     </small>
 
                                 </div>
@@ -644,9 +644,8 @@
                                   </table>
                               </div>
                               <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
-                                  <button class="btn btn-outline-secondary me-2"
-                                      @click="limpiarCarritoVenta">Cancelar</button>
-                                  <button type="submit" class="btn btn-success btn-lg fw-bold">FINALIZAR VENTA</button>
+                                  <button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button>
+                                  <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i>FINALIZAR VENTA</button>                                      
                               </div>
 
                           </div>
@@ -2456,10 +2455,10 @@
                                               <small class="text-success" v-else>En {{ c.dias_restantes }} días</small>
                                           </td>
                                           <td>
-                                              <div class="fw-bold text-dark">{{ c.nombre_proveedor }}</div>
+                                              <div class="fw-bold text-dark">{{ c.nombre_proveedor}}</div>                                              
                                               <div class="small text-muted">Emisión: {{ c.fecha_emision }}</div>
                                           </td>
-                                          <td><span class="badge bg-light text-secondary border">{{ c.nro_factura }}</span></td>
+                                          <td><span class="badge bg-light text-secondary border">{{ c.comprobante }}</span></td>
                                           <td class="text-end text-muted">{{ formatoMoneda(c.total_original) }}</td>
                                           <td class="text-end fw-bold fs-5 text-dark">{{ formatoMoneda(c.saldo_pendiente) }}</td>
                                           <td class="text-center">
@@ -4310,7 +4309,7 @@
                             
                             // Solo cargamos datos si hay sesión
                             this.cargarDatosIniciales();
-                            this.actualizarIndicadorVisualCaja();
+                            //this.actualizarIndicadorVisualCaja();
                             
                             // --- LÓGICA DE NAVEGACIÓN (CORREGIDA) ---
                             
@@ -4384,8 +4383,8 @@
                     this.cargarUsuarios();
                 }
                 if (v === 'caja') {
-                    this.verificarEstadoCaja();
-                    this.actualizarIndicadorVisualCaja();
+                    //this.verificarEstadoCaja();
+                    //this.actualizarIndicadorVisualCaja();
                 }
             },
 
@@ -4437,7 +4436,7 @@
                         this.cargando = false;
                         this.notificar('error', e);
                     })
-                    .obtenerHistorialCajas();
+                    .obtenerHistorialCajas();                    
             },
 
             abrirModalPagoProv(item) {
@@ -4467,7 +4466,7 @@
                 
                 // Mostramos el modal
                 if(this.modalPagoProv) this.modalPagoProv.show();
-            },
+              },
 
             calcularVencimiento() {
                 if (this.formCompra.condicion === 'CONTADO') {
@@ -4503,7 +4502,7 @@
                         
                         // Recargar lista y caja
                         this.cargarCuentasPagar();
-                        this.cargarDatosIniciales(); // Para actualizar saldo de caja visualmente
+                        //this.cargarDatosIniciales(); // Para actualizar saldo de caja visualmente
                     }
                 })
                 .withFailureHandler(e => {
@@ -4624,7 +4623,7 @@
                             this.datosCaja.fecha_apertura = new Date(); // Fecha visual actual
                             this.datosCaja.monto_inicial = montoGuardado;
                             
-                            this.actualizarIndicadorVisualCaja();
+                            //this.actualizarIndicadorVisualCaja();
                             //Opcional: Redirigir a ventas si quieres
                             //this.cambiarVista('ventas');
                         } else {
@@ -4692,8 +4691,8 @@
                             icon: res.diferencia === 0 ? 'success' : 'warning'
                         });
 
-                        this.verificarEstadoCaja(); // Volverá a estado 'CERRADA'
-                        this.actualizarIndicadorVisualCaja();
+                        //this.verificarEstadoCaja(); // Volverá a estado 'CERRADA'
+                        //this.actualizarIndicadorVisualCaja();
                     })
                     .withFailureHandler(e => {
                         this.cargando = false;
@@ -4912,7 +4911,6 @@
                 }
             },
 
-            // --- FUNCIÓN QUE FALTA PARA EL FORMULARIO ---
               cargarReporte() {
                   this.cargando = true;
                   this.reporteData = { cabeceras: [], filas: [], totales: { suma: 0, conteo: 0 } }; // Limpiar anterior
@@ -4928,36 +4926,34 @@
                           this.notificar('error', "Error al generar el reporte: " + error);
                       })
                       .generarReporte(JSON.parse(JSON.stringify(this.reporteForm))); 
-                      // Usamos JSON.parse/stringify para enviar una copia limpia del objeto
-              },
+                },
 
-            // --- FUNCIÓN PARA GENERAR Y DESCARGAR CSV ---
-            exportarCSV() {
-                if (this.reporteData.filas.length === 0) return;
+                exportarCSV() {
+                    if (this.reporteData.filas.length === 0) return;
 
-                // 1. Unir cabeceras
-                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // UTF-8 BOM para Excel
-                csvContent += this.reporteData.cabeceras.join(",") + "\n";
+                      // 1. Unir cabeceras
+                      let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // UTF-8 BOM para Excel
+                      csvContent += this.reporteData.cabeceras.join(",") + "\n";
 
-                // 2. Unir filas
-                this.reporteData.filas.forEach(fila => {
-                    let filaString = fila.map(campo => {
-                        // Escapar comillas y manejar textos con comas
-                        let str = String(campo).replace(/"/g, '""'); 
-                        return `"${str}"`;
-                    }).join(",");
-                    csvContent += filaString + "\n";
-                });
+                    // 2. Unir filas
+                      this.reporteData.filas.forEach(fila => {
+                          let filaString = fila.map(campo => {
+                              // Escapar comillas y manejar textos con comas
+                              let str = String(campo).replace(/"/g, '""'); 
+                              return `"${str}"`;
+                          }).join(",");
+                          csvContent += filaString + "\n";
+                      });
 
-                // 3. Descargar
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `Reporte_${this.reporteForm.tipo}_${this.reporteForm.fechaInicio}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            },
+                    // 3. Descargar
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", `Reporte_${this.reporteForm.tipo}_${this.reporteForm.fechaInicio}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
 
             cargarDashboard() {
                 this.cargando = true;

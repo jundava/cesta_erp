@@ -377,7 +377,7 @@ function guardarCompra(compra) {
     let urlPdf = "";
     try {
         const datosParaPDF = {
-            comprobante: compra.comprobante || "S/N",
+            comprobante: compra.nro_factura || "S/N",
             fecha: fecha.toISOString(),
             proveedor_nombre: nombreProveedor,
             proveedor_doc: docProveedor,
@@ -388,7 +388,7 @@ function guardarCompra(compra) {
     } catch(e) { console.error("Error PDF:", e); }
 
     // Guardar Cabecera
-    shCab.appendRow([idCompra, fecha, compra.id_proveedor, compra.id_deposito, totalCalculado, estado, urlPdf, compra.comprobante, compra.condicion, saldo, jsonPagos, fechaVencimiento]);
+    shCab.appendRow([idCompra, fecha, compra.id_proveedor, compra.id_deposito, totalCalculado, estado, urlPdf, compra.nro_factura, compra.condicion, saldo, jsonPagos, fechaVencimiento]);
 
     // 2. PROCESAR ÍTEMS, MOVIMIENTOS Y CÁLCULO DE COSTO PROMEDIO
     compra.items.forEach(item => {
@@ -487,7 +487,7 @@ function obtenerHistorialCompras() {
            total: Number(row[4] || 0),
            estado: row[5],
            url_pdf: row[6],
-           comprobante: row[7],
+           nro_factura: row[7],
            condicion: row[8] || 'CONTADO',
            saldo: Number(row[9] || 0)
          });
@@ -741,6 +741,7 @@ function obtenerCuentasPorPagar() {
            id_compra: row[0],
            fecha_emision: new Date(row[1]).toLocaleDateString('es-PY'),
            nombre_proveedor: mapProv[row[2]] || 'Prov. ' + row[2],
+           id_proveedor: row[2],
            comprobante: row[7],
            total_original: Number(row[4]),
            saldo_pendiente: saldo,
@@ -788,7 +789,7 @@ function registrarPagoProveedor(pago) {
     let compraEncontrada = false;
 
     const COL_ID_COMPRA = 0; 
-    const COL_ESTADO = 6;    
+    const COL_ESTADO = 5;    
     const COL_SALDO = 9;     
 
     for (let i = 1; i < data.length; i++) {
@@ -3211,30 +3212,34 @@ function generarReporte(peticion) {
   // ======================================================
 
   switch (tipo) {
-    
+
     // --- VENTAS ---
     case 'ventas':
-      cabeceras = ["Fecha", "Nro Factura", "Cliente", "Producto", "Cantidad", "Precio Unit.", "Subtotal"];
+      // Se agrega "Estado" en la posición 3 (visual)
+      cabeceras = ["Fecha", "Nro Factura", "Cliente", "Estado", "Condición", "Producto", "Cantidad", "Precio Unit.", "Subtotal"];
       procesarDetalleCompleto({
          hojaCab: 'VENTAS_CABECERA', 
          hojaDet: 'VENTAS_DETALLE',
          colFecha: 2, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [1, 3], // [1:Nro, 3:Cliente]
-         datosDet: [2, 3, 4, 6], // [2:Prod, 3:Cant, 4:Precio, 6:Subtotal]
+         datosCab: [1, 3, 6, 8], // [1:Nro, 3:Cliente, 6:Estado] <--- Agregado índice 6
+         colEstado: 6,        // <--- NUEVO: Indicamos dónde está el estado para la lógica
+         datosDet: [2, 3, 4, 6], 
          idxCliente: 3, idxProductoEnDet: 2, idxMontoSumar: 6
       });
       break;
 
     // --- COMPRAS ---
     case 'compras':
-      cabeceras = ["Fecha", "ID Compra", "Proveedor", "Producto", "Cantidad", "Costo Unit.", "Subtotal"];
+      // Se agrega "Estado" en la posición 3 (visual)
+      cabeceras = ["Fecha", "Nro. Factura", "Proveedor", "Estado", "Condición", "Producto", "Cantidad", "Costo Unit.", "Subtotal"];
       procesarDetalleCompleto({
          hojaCab: 'COMPRAS_CABECERA', 
          hojaDet: 'COMPRAS_DETALLE',
          colFecha: 1, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [0, 2], // [0:ID, 2:Prov]
-         datosDet: [2, 3, 4, 5], // [2:Prod, 3:Cant, 4:Costo, 5:Subtotal]
-         idxCliente: 2, idxProductoEnDet: 2, idxMontoSumar: 5
+         datosCab: [7, 2, 5, 8], // [0:ID, 2:Prov, 5:Estado] <--- Agregado índice 5
+         colEstado: 5,        // <--- NUEVO: Indicamos dónde está el estado para la lógica
+         datosDet: [2, 3, 4, 6], 
+         idxCliente: 2, idxProductoEnDet: 2, idxMontoSumar: 6
       });
       break;
 
@@ -3253,21 +3258,22 @@ function generarReporte(peticion) {
       });
       break;
 
-    // --- REMISIONES ---
+  // --- REMISIONES ---
     case 'remisiones':
-      cabeceras = ["Fecha", "Nro Remisión", "Cliente", "Destino", "Producto", "Cantidad"];
+      // Se agrega "Estado" en la posición 4 (visual)
+      cabeceras = ["Fecha", "Nro Remisión", "Cliente", "Destino", "Estado", "Producto", "Cantidad"];
       procesarDetalleCompleto({
          hojaCab: 'REMISIONES_CABECERA', 
          hojaDet: 'REMISIONES_DETALLE',
          colFecha: 1, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [2, 3, 4], // [2:Nro, 3:Cliente, 4:Destino]
-         datosDet: [2, 3],    // [2:Prod, 3:Cant]
+         datosCab: [2, 3, 4, 7], // [2:Nro, 3:Cliente, 4:Destino, 7:Estado] <--- Agregado índice 7
+         colEstado: 7,           // <--- NUEVO: Indicamos dónde está el estado para la lógica
+         datosDet: [2, 3],    
          idxCliente: 3, 
-         indicesCabTraducir: [4], // Traducir destino
+         indicesCabTraducir: [4], 
          idxProductoEnDet: 2, idxMontoSumar: null
       });
       break;
-
     // --- AJUSTES (CORREGIDO) ---
     case 'ajustes':
       cabeceras = ["Fecha", "Motivo", "Producto", "Depósito", "Cantidad"];
@@ -3334,14 +3340,13 @@ function generarReporte(peticion) {
     const dataCab = shCab.getDataRange().getValues();
     const dataDet = shDet.getDataRange().getValues();
 
-    // 1. Filtrar Cabeceras válidas por Fecha (CORREGIDO)
+    // 1. Filtrar Cabeceras válidas por Fecha
+    // Ahora guardaremos un objeto: { datosVisuales: [], estadoRaw:Str }
     let cabecerasValidas = {}; 
     
     for(let i=1; i<dataCab.length; i++){
-      // Convertir fecha de celda a ISO String (yyyy-MM-dd)
       const fCabIso = fechaToIso(dataCab[i][cfg.colFecha]);
       
-      // Comparar cadenas
       if(fCabIso >= inicioStr && fCabIso <= finStr) {
         let idLink = dataCab[i][cfg.colLinkCab]; 
         
@@ -3350,13 +3355,23 @@ function generarReporte(peticion) {
         
         cfg.datosCab.forEach(idx => {
            let val = dataCab[i][idx];
+           // Traducir IDs a Nombres si es necesario
            if(idx === cfg.idxCliente || (cfg.indicesCabTraducir && cfg.indicesCabTraducir.includes(idx))){
              val = mapaNombres[val] || val;
            }
            datosFilaCab.push(val);
         });
 
-        cabecerasValidas[idLink] = datosFilaCab;
+        // Capturamos el estado "crudo" para la lógica de suma
+        let estadoRaw = 'ACTIVO'; // Valor por defecto si no se define columna
+        if (cfg.colEstado !== undefined) {
+            estadoRaw = String(dataCab[i][cfg.colEstado]).toUpperCase().trim();
+        }
+
+        cabecerasValidas[idLink] = {
+            datos: datosFilaCab,
+            estado: estadoRaw
+        };
       }
     }
 
@@ -3365,7 +3380,7 @@ function generarReporte(peticion) {
        let idLink = dataDet[j][cfg.colLinkDet]; 
        
        if(cabecerasValidas[idLink]) {
-         let infoCabecera = cabecerasValidas[idLink]; 
+         let infoCabecera = cabecerasValidas[idLink]; // Objeto {datos, estado}
          
          let infoDetalle = cfg.datosDet.map(idx => {
             let val = dataDet[j][idx];
@@ -3375,12 +3390,18 @@ function generarReporte(peticion) {
             return val;
          });
 
-         filas.push([...infoCabecera, ...infoDetalle]);
+         // Unimos los datos visuales de cabecera + detalle
+         filas.push([...infoCabecera.datos, ...infoDetalle]);
          
          totales.conteo++;
+
+         // LÓGICA DE SUMA CONDICIONAL
+         // Solo sumamos si hay monto definido Y el estado NO es ANULADO
          if(cfg.idxMontoSumar !== null) {
-            let monto = parseFloat(dataDet[j][cfg.idxMontoSumar]) || 0;
-            totales.suma += monto;
+            if (infoCabecera.estado !== 'ANULADO') {
+                let monto = parseFloat(dataDet[j][cfg.idxMontoSumar]) || 0;
+                totales.suma += monto;
+            }
          }
        }
     }
@@ -3541,6 +3562,8 @@ function verificarCajaAbierta(idUsuario) {
     const scriptProperties = PropertiesService.getScriptProperties();
     const memoriaCaja = scriptProperties.getProperty(CLAVE_MEMORIA);
 
+    return;
+
     if (memoriaCaja) {
       const datos = JSON.parse(memoriaCaja);
       return {
@@ -3581,6 +3604,42 @@ function verificarCajaAbierta(idUsuario) {
   } catch (e) {
     return { debug_error: true, mensaje: e.toString() };
   }
+}
+
+function obtenerCajaActivaPorUsuario(idUsuario) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shUsuarios = ss.getSheetByName('USUARIOS');
+  const shCajas = ss.getSheetByName('CAJA_SESIONES');
+
+  console.log("Buscando caja para usuario ID: " + idUsuario);
+
+  // 1. Obtener id_deposito del usuario (Columna I - Índice 8)
+  const dataUsers = shUsuarios.getDataRange().getValues();
+  const usuario = dataUsers.find(row => String(row[0]) === String(idUsuario));
+  
+  if (!usuario) {
+    console.error("Usuario no encontrado en la tabla USUARIOS");
+    throw "Error de seguridad: Usuario no identificado.";
+  }
+  
+  const idDeposito = usuario[8]; 
+  console.log("Depósito asociado: " + idDeposito);
+
+  // 2. Buscar caja ABIERTA para ese depósito (Columna K - Índice 10)
+  const dataCajas = shCajas.getDataRange().getValues();
+  // Estructura: id_sesion(0)... estado(9), id_deposito(10)
+  const caja = dataCajas.find(row => 
+    String(row[10]) === String(idDeposito) && 
+    String(row[9]).toUpperCase() === 'ABIERTA'
+  );
+
+  if (!caja) {
+    console.warn("No se encontró caja abierta para depósito: " + idDeposito);
+    throw "⛔ CAJA CERRADA: No hay una sesión abierta para su depósito.";
+  }
+
+  console.log("ID Sesión encontrada: " + caja[0]);
+  return caja[0]; 
 }
 
 function abrirCaja(montoInicial, usuario) {
