@@ -1,3902 +1,1117 @@
-const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
-
-function doGet(e) {
+function doGet() {
   return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Cesta - Gestión de Stock') // El título de la pestaña del navegador
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1') // Vital para que se vea bien en móviles
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+      .evaluate()
+      .setTitle('Lock - Gestión de Proyectos de Obras')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-function getData(sheetName) {
-  const ss = SpreadsheetApp.openById(SS_ID); // Tu ID
-  const sheet = ss.getSheetByName(sheetName);
+/**
+ * DriveManager: Gestiona la creación de carpetas por proyecto
+ */
+const DriveManager = {
   
-  if (!sheet) return []; // Si no existe la hoja, devuelve lista vacía
-
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift(); // Saca la primera fila (encabezados)
-
-  // Mapeamos las filas a objetos
-  // Ejemplo: transforma ["PROD-01", "Coca Cola"] en {sku: "PROD-01", nombre: "Coca Cola"}
-  const jsonOutput = data.map(row => {
-    let tempObject = {};
-    headers.forEach((header, index) => {
-      // Importante: Si es la columna de datos_adicionales, intentamos parsear el JSON
-      if (header === 'datos_adicionales' && row[index]) {
-        try {
-          tempObject[header] = JSON.parse(row[index]);
-        } catch (e) {
-          tempObject[header] = {};
-        }
-      } else {
-        tempObject[header] = row[index];
-      }
-    });
-    return tempObject;
-  });
-
-  return jsonOutput;
-}
-
-//PRODUCTO
-
-function guardarNuevoProducto(producto) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('PRODUCTOS');
-  
-  const idUnico = Utilities.getUuid();
-  
-  // Orden EXACTO según tu archivo CSV PRODUCTOS:
-  // 1.id, 2.sku, 3.nombre, 4.cat, 5.unidad, 6.precio, 7.costo, 8.min, 9.iva, 10.maneja, 11.json, 12.img, 13.stock, 14.metodo
-  const nuevaFila = [
-    idUnico,                        // A: id_producto
-    producto.sku,                   // B: sku
-    producto.nombre,                // C: nombre
-    producto.id_categoria,          // D: id_categoria
-    producto.unidad_medida,         // E: unidad_medida
-    producto.precio_venta_base,     // F: precio_venta_base
-    0,                              // G: costo_promedio (inicial 0)
-    producto.stock_minimo,          // H: stock_minimo
-    producto.impuesto_iva || 10,    // I: impuesto_iva
-    producto.maneja_stock || 'True',// J: maneja_stock
-    JSON.stringify(producto.datos_adicionales || {}), // K: datos_adicionales
-    producto.url_imagen || "",      // L: url_imagen
-    0,                              // M: stock_actual (inicial 0)
-    producto.metodo_iva || 'INCLUIDO' // N: metodo_iva (Aquí tenías el error de variable indefinida)
-  ];
-  
-  ws.appendRow(nuevaFila);
-  return { status: 'ok', id: idUnico };
-}
-
-function actualizarProducto(producto) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('PRODUCTOS');
-  const data = ws.getDataRange().getValues();
-  
-  // Buscamos el índice del producto
-  const ids = data.map(r => r[0]);
-  const index = ids.indexOf(producto.id_producto);
-  
-  if (index === -1) throw new Error("Producto no encontrado");
-
-  const fila = index + 1; // +1 porque Apps Script cuenta filas desde 1
-  
-  // --- 1. CAPTURA DE DATOS ANTIGUOS PARA AUDITORÍA ---
-  // Leemos lo que hay AHORA antes de sobrescribirlo
-  const filaDatos = data[index];
-  const nombreViejo = filaDatos[2]; // Columna C (índice 2)
-  const precioViejo = filaDatos[5]; // Columna F (índice 5)
-  const skuActual   = filaDatos[1]; // Columna B (índice 1)
-
-  // --- 2. ACTUALIZAMOS LOS DATOS EN LA HOJA (Tu código original) ---
-  ws.getRange(fila, 2).setValue(producto.sku);           // Col B
-  ws.getRange(fila, 3).setValue(producto.nombre);        // Col C
-  ws.getRange(fila, 4).setValue(producto.id_categoria);  // Col D
-  ws.getRange(fila, 5).setValue(producto.unidad_medida); // Col E
-  ws.getRange(fila, 6).setValue(producto.precio_venta_base); // Col F
-  ws.getRange(fila, 8).setValue(producto.stock_minimo);  // Col H
-  
-  // Actualización de nuevos campos
-  ws.getRange(fila, 9).setValue(producto.impuesto_iva);  // Col I
-  ws.getRange(fila, 11).setValue(JSON.stringify(producto.datos_adicionales || {})); // Col K
-  
-  // Imagen (Solo si hay URL nueva)
-  if (producto.url_imagen) {
-    ws.getRange(fila, 12).setValue(producto.url_imagen); 
-  }
-  
-  // Método IVA
-  ws.getRange(fila, 14).setValue(producto.metodo_iva); 
-  
-  // --- 3. DETECCIÓN DE CAMBIOS Y REGISTRO EN BITÁCORA (NUEVO) ---
-  let cambios = [];
-
-  // Detectar cambio de Precio (Convertimos a Number para evitar falsos positivos por texto)
-  if (Number(precioViejo) != Number(producto.precio_venta_base)) {
-    cambios.push(`Precio: ${precioViejo} ➝ ${producto.precio_venta_base}`);
-  }
-
-  // Detectar cambio de Nombre
-  if (String(nombreViejo).trim() != String(producto.nombre).trim()) {
-    cambios.push(`Nombre: '${nombreViejo}' ➝ '${producto.nombre}'`);
-  }
-
-  // Si hubo cambios sensibles, registramos el evento
-  if (cambios.length > 0) {
-    const usuarioEditor = producto.usuario_editor || "Sistema"; // Viene del frontend o fallback
-    const detalleLog = `Producto SKU: ${skuActual}. Cambios: ${cambios.join(", ")}`;
-    
-    // Llamada a la función de auditoría (asegúrate de tener registrarEvento en Code.gs)
-    registrarEvento(usuarioEditor, "EDICIÓN PRODUCTO", detalleLog);
-  }
-  
-  return { status: 'actualizado' };
-}
-
-function eliminarProducto(idProducto) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  
-  // 1. CHEQUEO DE SEGURIDAD (Integridad Referencial)
-  // Verificamos si el ID existe en Ventas o Compras
-  const hojasAChequear = ['VENTAS_DETALLE', 'COMPRAS_DETALLE', 'MOVIMIENTOS_STOCK'];
-  
-  for (let nombreHoja of hojasAChequear) {
-    let sheet = ss.getSheetByName(nombreHoja);
-    if (sheet && sheet.getLastRow() > 1) {
-      let datos = sheet.getDataRange().getValues();
-      // Asumimos que la columna del producto es variable, pero buscaremos en toda la hoja por seguridad
-      // Ojo: Esto es una búsqueda simple. Para optimizar, mejor saber la columna exacta.
-      // En tu esquema: VENTAS_DETALLE (col 2), COMPRAS_DETALLE (col 2), MOVIMIENTOS (col 3)
-      
-      let columnaBusqueda = 2; // Por defecto col C (index 2)
-      if (nombreHoja === 'MOVIMIENTOS_STOCK') columnaBusqueda = 3; // col D (index 3)
-      
-      let idsEnUso = datos.map(r => r[columnaBusqueda]);
-      if (idsEnUso.includes(idProducto)) {
-        return { success: false, error: `No se puede eliminar: El producto tiene registros en ${nombreHoja}` };
-      }
-    }
-  }
-
-  // 2. Si pasó las pruebas, procedemos a borrar
-  const sheet = ss.getSheetByName('PRODUCTOS');
-  const data = sheet.getDataRange().getValues();
-  const ids = data.map(r => r[0]);
-  const filaIndex = ids.indexOf(idProducto);
-  
-  if (filaIndex !== -1) {
-    sheet.deleteRow(filaIndex + 1);
-    return { success: true };
-  } else {
-    return { success: false, error: "Producto no encontrado" };
-  }
-}
-
-function subirImagenDrive(data, nombre, tipo) {
-  try {
-    // 1. Apuntamos DIRECTAMENTE a la carpeta específica por su ID
-    const idCarpeta = "1Wb4qNDOaII7w9Q1HueZyX7vTxuwNvSZs"; 
-    const folder = DriveApp.getFolderById(idCarpeta);
-
-    // 2. Decodificar el archivo y crearlo en Drive
-    const blob = Utilities.newBlob(Utilities.base64Decode(data), tipo, nombre);
-    const archivo = folder.createFile(blob);
-    
-    // 3. Permisos (Hacemos público el archivo individual para que se pueda ver en la app)
-    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
-    // 4. Construimos la URL
-    // Usamos el endpoint de 'thumbnail' que es rápido y eficiente
-    const urlImagen = "https://drive.google.com/thumbnail?id=" + archivo.getId() + "&sz=w1000";
-    
-    return urlImagen;
-
-  } catch (e) {
-    throw new Error("Error subiendo imagen: " + e.toString());
-  }
-}
-
-function obtenerUnidades() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('UNIDADES');
-  
-  if(!ws || ws.getLastRow() <= 1) return [];
-  
-  const datos = ws.getDataRange().getValues();
-  const lista = [];
-  
-  for(let i = 1; i < datos.length; i++) {
-    if(datos[i][0]) {
-      lista.push({
-        id_unidad: datos[i][0],
-        nombre: datos[i][1],
-        abreviatura: datos[i][2]
-      });
-    }
-  }
-  return lista;
-}
-
-//PROVEEDOR
-
-function guardarProveedor(form) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('PROVEEDORES');
-  const idUnico = Utilities.getUuid();
-  
-  // Estructura: [id_proveedor, razon_social, doc_identidad, contacto, datos_adicionales]
-  const nuevaFila = [
-    idUnico,
-    form.razon_social,
-    form.doc_identidad,
-    form.contacto,
-    JSON.stringify(form.datos_adicionales || {})
-  ];
-  
-  ws.appendRow(nuevaFila);
-  return { status: 'ok', id: idUnico };
-}
-
-function eliminarProveedor(idProveedor) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  
-  // 1. VALIDACIÓN DE SEGURIDAD: ¿Tiene compras?
-  const hojaCompras = ss.getSheetByName('COMPRAS_CABECERA');
-  if (hojaCompras && hojaCompras.getLastRow() > 1) {
-    const datosCompras = hojaCompras.getDataRange().getValues();
-    // Columna 2 (índice 2) es id_proveedor en COMPRAS_CABECERA
-    const tieneCompras = datosCompras.some(fila => fila[2] == idProveedor);
-    
-    if (tieneCompras) {
-      return { success: false, error: "⛔ No se puede eliminar: El proveedor tiene facturas de compra registradas." };
-    }
-  }
-
-  // 2. Borrar si está limpio
-  const hojaProv = ss.getSheetByName('PROVEEDORES');
-  const datos = hojaProv.getDataRange().getValues();
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][0] == idProveedor) {
-      hojaProv.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  return { success: false, error: "Proveedor no encontrado" };
-}
-
-function actualizarProveedor(form) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('PROVEEDORES');
-  const datos = ws.getDataRange().getValues();
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][0] == form.id_proveedor) {
-      // Ajusta los índices según tus columnas de proveedores
-      ws.getRange(i + 1, 2, 1, 4).setValues([[
-        form.razon_social,
-        form.doc_identidad,
-        form.contacto,
-        JSON.stringify(form.datos_adicionales || {})
-      ]]);
-      return { success: true };
-    }
-  }
-  throw new Error("Proveedor no encontrado");
-}
-
-function obtenerProveedores() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('PROVEEDORES');
-    if (!sh) return [];
-    
-    const data = sh.getDataRange().getValues();
-    const lista = [];
-    
-    // Estructura esperada: [0:ID, 1:Razon Social, 2:RUC, ...]
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0]) { // Si tiene ID
-        lista.push({
-          id_proveedor: data[i][0],
-          razon_social: data[i][1],
-          doc_identidad: data[i][2],
-          contacto: data[i][3],
-          datos_adicionales: data[i][4] ? JSON.parse(data[i][4]) : {}
-        });
-      }
-    }
-    return lista;
-  } catch (e) {
-    return [];
-  }
-}
-
-//COMPRA
-
-function guardarCompra(compra) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shCab = ss.getSheetByName('COMPRAS_CABECERA');
-    const shDet = ss.getSheetByName('COMPRAS_DETALLE');
-    const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-    const shProv = ss.getSheetByName('PROVEEDORES');
-    const shDep = ss.getSheetByName('DEPOSITOS');
-    const shProd = ss.getSheetByName('PRODUCTOS'); // Hoja necesaria para CPP
-
-    if (!shCab || !shDet || !shProd) throw "Faltan hojas de base de datos.";
-
-    // 1. CARGAR MAESTRO DE PRODUCTOS A MEMORIA (Optimización O(n))
-    const dataProd = shProd.getDataRange().getValues();
-    const headersProd = dataProd[0];
-    const colIdProd = headersProd.indexOf('id_producto');
-    const colCostoProm = headersProd.indexOf('costo_promedio');
-    const colStockTotal = headersProd.indexOf('stock_actual');
-
-    const idCompra = Utilities.getUuid();
-    const fecha = new Date(compra.fecha + "T12:00:00");
-    
-    let fechaVencimiento = compra.vencimiento ? new Date(compra.vencimiento + "T12:00:00") : new Date(fecha);
-
-    // Cálculos de totales de cabecera
-    let totalCalculado = 0;
-    compra.items.forEach(it => {
-        let costoFinal = Number(it.costo);
-        if (it.metodo_iva === 'EXCLUIDO') {
-            costoFinal = costoFinal * (1 + (Number(it.tasa_iva)/100));
-        }
-        totalCalculado += (costoFinal * Number(it.cantidad));
-    });
-    
-    let estado = compra.condicion === 'CREDITO' ? 'PENDIENTE' : 'PAGADO';
-    let saldo = compra.condicion === 'CREDITO' ? totalCalculado : 0;
-    let jsonPagos = compra.condicion === 'CREDITO' ? '[]' : JSON.stringify([{ metodo: 'EFECTIVO', monto: totalCalculado, fecha: new Date() }]);
-
-    // Búsqueda de nombres (Proveedores/Depósitos) - Mantengo tu lógica de búsqueda
-    let nombreProveedor = "Proveedor General", docProveedor = "";
-    if (shProv) {
-        const datosP = shProv.getDataRange().getValues();
-        const p = datosP.find(r => String(r[0]) === String(compra.id_proveedor));
-        if(p) { nombreProveedor = p[1]; docProveedor = p[2]; }
-    }
-
-    let nombreDeposito = "Depósito Principal";
-    if (shDep) {
-        const datosD = shDep.getDataRange().getValues();
-        const d = datosD.find(r => String(r[0]) === String(compra.id_deposito));
-        if(d) nombreDeposito = d[1];
-    }
-
-    let urlPdf = "";
+  /**
+   * Obtiene o crea la subcarpeta de un proyecto
+   * @param {string} proyectoId El UUID o nombre del proyecto
+   * @return {string} ID de la carpeta de Google Drive
+   */
+  getOrCreateProjectFolder: function(proyectoId) {
+    const lock = LockService.getScriptLock();
     try {
-        const datosParaPDF = {
-            comprobante: compra.nro_factura || "S/N",
-            fecha: fecha.toISOString(),
-            proveedor_nombre: nombreProveedor,
-            proveedor_doc: docProveedor,
-            condicion: compra.condicion,
-            deposito_nombre: nombreDeposito
-        };
-        urlPdf = crearPDFOrdenCompra(datosParaPDF, compra.items);
-    } catch(e) { console.error("Error PDF:", e); }
+      lock.waitLock(10000);
+      
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const confSheet = ss.getSheetByName("CONF_GENERAL");
+      const data = confSheet.getDataRange().getValues();
+      
+      // 1. Obtener la URL raíz de la configuración
+      const rootUrlRow = data.find(row => row[0] === "DRIVE_ROOT_FOLDER_URL");
+      if (!rootUrlRow || !rootUrlRow[1]) {
+        throw new Error("La URL raíz de Google Drive no está configurada.");
+      }
+      
+      const rootFolderId = this.extractIdFromUrl(rootUrlRow[1]);
+      const rootFolder = DriveApp.getFolderById(rootFolderId);
+      
+      // 2. Buscar si ya existe la subcarpeta (por nombre o ID)
+      const folderIterator = rootFolder.getFoldersByName(proyectoId);
+      
+      if (folderIterator.hasNext()) {
+        return folderIterator.next().getId();
+      } else {
+        // 3. Crear la carpeta si no existe
+        const newFolder = rootFolder.createFolder(proyectoId);
+        return newFolder.getId();
+      }
+      
+    } catch (e) {
+      console.error("Error en DriveManager: " + e.toString());
+      throw e;
+    } finally {
+      lock.releaseLock();
+    }
+  },
 
-    // Guardar Cabecera
-    shCab.appendRow([idCompra, fecha, compra.id_proveedor, compra.id_deposito, totalCalculado, estado, urlPdf, compra.nro_factura, compra.condicion, saldo, jsonPagos, fechaVencimiento]);
+  /**
+   * Helper para extraer ID de una URL de carpeta de Drive
+   */
+  extractIdFromUrl: function(url) {
+    const match = url.match(/[-\w]{25,}/);
+    return match ? match[0] : url;
+  }
+}
 
-    // 2. PROCESAR ÍTEMS, MOVIMIENTOS Y CÁLCULO DE COSTO PROMEDIO
-    compra.items.forEach(item => {
-        const cantNueva = Number(item.cantidad);
-        const costoNuevo = Number(item.costo); // Se usa costo base para el CPP contable
+/**
+ * CRUD SERVICE - Módulo de Configuración
+ * Especialista: GAS Expert
+ */
 
-        // --- LÓGICA CPP ---
-        const filaIndex = dataProd.findIndex(r => String(r[colIdProd]) === String(item.id_producto));
-        if (filaIndex !== -1) {
-            const stockActual = Number(dataProd[filaIndex][colStockTotal] || 0);
-            const costoAnterior = Number(dataProd[filaIndex][colCostoProm] || 0);
-            
-            let nuevoCostoPromedio = costoAnterior;
-            if ((stockActual + cantNueva) > 0) {
-                nuevoCostoPromedio = ((stockActual * costoAnterior) + (cantNueva * costoNuevo)) / (stockActual + cantNueva);
-            }
-            
-            // Actualizar en la hoja PRODUCTOS (colCostoProm + 1 porque Sheets es base 1)
-            shProd.getRange(filaIndex + 1, colCostoProm + 1).setValue(nuevoCostoPromedio);
-            // Actualizamos el array en memoria para el siguiente ítem por si se repite producto
-            dataProd[filaIndex][colCostoProm] = nuevoCostoPromedio;
-            dataProd[filaIndex][colStockTotal] = stockActual + cantNueva;
-        }
-        // ------------------
+const CONFIG_SHEETS = {
+  ETAPAS: "CONF_ETAPAS",
+  TAREAS: "CONF_TAREAS",
+  PROFESIONALES: "CONF_PROFESIONALES",
+  CHECKLISTS: "CONF_CHECKLISTS",
+  GENERAL: "CONF_GENERAL",
+  TIPOS: "CONF_TIPO_PROYECTO"
+};
 
-        shDet.appendRow([
-          Utilities.getUuid(), idCompra, item.id_producto, cantNueva, costoNuevo, item.tasa_iva || 10,
-          (item.metodo_iva === 'EXCLUIDO' ? costoNuevo * (1 + item.tasa_iva/100) : costoNuevo) * cantNueva
-        ]);
 
-        shMov.appendRow([Utilities.getUuid(), new Date(), "ENTRADA_COMPRA", item.id_producto, compra.id_deposito, cantNueva, idCompra]);
-
-        actualizarStockDeposito(item.id_producto, compra.id_deposito, cantNueva);
-    });
-
-    return { success: true, pdf_url: urlPdf };
-
+/**
+ * Borrado físico de configuración
+ */
+function deleteConfigRecord(tableName, id) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tableName);
+    const data = sheet.getDataRange().getValues();
+    const idColIndex = data[0].indexOf("id");
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idColIndex] === id) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: "Registro eliminado" };
+      }
+    }
+    return { success: false, error: "ID no encontrado" };
   } catch (e) {
-    console.error("Error en guardarCompra:", e);
-    throw e;
+    return { success: false, error: e.toString() };
   } finally {
     lock.releaseLock();
   }
 }
 
-function obtenerHistorialCompras() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('COMPRAS_CABECERA');
-    const shProv = ss.getSheetByName('PROVEEDORES');
-    
-    if (!sh) return [];
-
-    // 1. Obtener Proveedores (Protegido)
-    const mapProv = {};
-    if (shProv && shProv.getLastRow() > 1) {
-       try {
-         const datosProv = shProv.getDataRange().getValues();
-         for(let i=1; i<datosProv.length; i++) {
-           // Col 0: ID, Col 1: Razon Social
-           if(datosProv[i][0]) {
-              mapProv[String(datosProv[i][0])] = datosProv[i][1];
-           }
-         }
-       } catch(e) { console.error("Error leyendo proveedores: " + e); }
+/**
+ * Específico para guardar la URL de Drive en CONF_GENERAL
+ */
+function updateDriveUrl(url) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEETS.GENERAL);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === "DRIVE_ROOT_FOLDER_URL") {
+      sheet.getRange(i + 1, 2).setValue(url);
+      sheet.getRange(i + 1, 4).setValue(new Date());
+      return { success: true };
     }
+  }
+  return { success: false, error: "Parámetro no encontrado" };
+}
 
-    // 2. Leer compras
-    const data = sh.getDataRange().getValues();
-    const result = [];
+/**
+ * Obtiene las tareas vinculadas a una etapa específica
+ * Usa Map para optimizar si fuera necesario en el futuro
+ */
+function getTareasByEtapa(etapaId) {
+  const todasLasTareas = readConfig(CONFIG_SHEETS.TAREAS);
+  return todasLasTareas.filter(t => t.etapa_id === etapaId);
+}
+
+/**
+ * Lectura robusta: Normaliza encabezados, tipos de datos y SANITIZA FECHAS.
+ */
+function readConfig(tableName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(tableName);
+  if (!sheet) return [];
+  
+  const data = sheet.getDataRange().getValues(); 
+  if (data.length <= 1) return [];
+
+  const originalHeaders = data.shift();
+  // Normalizamos headers a minúsculas y guiones bajos
+  const headers = originalHeaders.map(h => h.toString().trim().toLowerCase().replace(/\s+/g, '_'));
+  
+  return data.map(row => {
+    const obj = {};
+    headers.forEach((header, i) => {
+      if(header) {
+        let value = row[i];
+        
+        // 1. Normalización de Booleanos
+        if (typeof value === 'string') {
+          if (value.toUpperCase() === 'TRUE') value = true;
+          if (value.toUpperCase() === 'FALSE') value = false;
+        }
+        
+        // 2. SANITIZACIÓN DE FECHAS (CRÍTICO PARA QUE SE VEAN LOS DATOS)
+        // Convertimos objetos Date a String ISO para que viajen seguros al HTML
+        if (value instanceof Date) {
+           value = value.toISOString(); 
+        }
+        
+        obj[header] = value;
+      }
+    });
+    return obj;
+  });
+}
+
+/**
+ * Escritura robusta: Busca la columna correcta ignorando mayúsculas
+ */
+function saveConfigRecord(tableName, item) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(tableName);
     
-    // Indices basados en tu imagen:
-    // 0:id, 1:fecha, 2:prov, 3:dep, 4:total, 5:estado, 6:url, 7:nro, 8:cond, 9:saldo
+    // Leer encabezados y normalizarlos para buscar correspondencias
+    const data = sheet.getDataRange().getValues();
+    if (data.length === 0) throw new Error("La tabla " + tableName + " está vacía.");
+    
+    const headers = data[0].map(h => h.toString().trim().toLowerCase());
+    
+    // Generar nuevo ID si no existe
+    if (!item.id) {
+      item.id = Utilities.getUuid();
+      item.created_at = new Date(); // Se guardará como fecha objeto en GAS
+      
+      // Mapeamos los datos del item a las columnas del Sheet
+      const newRow = headers.map(h => {
+        // Buscamos la clave en el objeto item que coincida con el header (case insensitive)
+        const itemKey = Object.keys(item).find(k => k.toLowerCase() === h);
+        return itemKey ? item[itemKey] : "";
+      });
+      
+      sheet.appendRow(newRow);
+      return { success: true, message: "Registro creado", data: item };
+    } 
+    
+    // Lógica de Actualización (Update)
+    const idColIndex = headers.indexOf("id");
+    if (idColIndex === -1) throw new Error("No se encuentra la columna 'id'");
     
     for (let i = 1; i < data.length; i++) {
-       const row = data[i];
-       
-       // Validamos que haya ID de compra
-       if (row[0] && row[0] !== "") {
-         
-         // --- CORRECCIÓN DE FECHA ---
-         // Convertimos la fecha a formato ISO seguro para que el HTML no falle
-         let fechaSegura = row[1];
-         if (row[1] instanceof Date) {
-            fechaSegura = row[1].toISOString();
-         } else {
-            // Si es texto, forzamos un string simple para evitar errores
-            fechaSegura = String(row[1]);
-         }
-
-         result.push({
-           id_compra: String(row[0]),
-           fecha: fechaSegura, 
-           // Si no encuentra el proveedor, muestra el ID o "Desconocido" en vez de romper
-           nombre_proveedor: mapProv[String(row[2])] || (row[2] ? 'Prov. (' + row[2] + ')' : 'Proveedor General'),
-           total: Number(row[4] || 0),
-           estado: row[5],
-           url_pdf: row[6],
-           nro_factura: row[7],
-           condicion: row[8] || 'CONTADO',
-           saldo: Number(row[9] || 0)
-         });
-       }
+      if (data[i][idColIndex] === item.id) {
+        const rowRange = sheet.getRange(i + 1, 1, 1, headers.length);
+        
+        // Preparamos la fila actualizada
+        const updatedRow = headers.map((h, colIdx) => {
+           const itemKey = Object.keys(item).find(k => k.toLowerCase() === h);
+           // Si el item tiene el dato, lo usamos. Si no, mantenemos el valor actual del sheet
+           return itemKey !== undefined ? item[itemKey] : data[i][colIdx];
+        });
+        
+        rowRange.setValues([updatedRow]);
+        return { success: true, message: "Registro actualizado" };
+      }
     }
     
-    // Si no hay datos, imprimimos en consola para debug
-    if (result.length === 0) console.log("La función corrió bien pero no encontró filas válidas.");
-
-    return result.reverse();
+    throw new Error("No se encontró el ID para actualizar.");
     
   } catch (e) {
-    // Si hay error fatal, lo mostramos en los logs de Apps Script
-    console.error("ERROR FATAL EN HISTORIAL COMPRAS: " + e.toString());
-    return [];
+    return { success: false, error: e.toString() };
+  } finally {
+    lock.releaseLock();
   }
 }
 
-function obtenerDetalleCompra(idCompra) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const hojaDet = ss.getSheetByName('COMPRAS_DETALLE'); // Asegúrate que la hoja se llame así
-  const hojaProd = ss.getSheetByName('PRODUCTOS');
+/* AGREGAR ESTO A TU Code.gs EXISTENTE */
 
-  const datosDet = hojaDet.getDataRange().getValues();
-  const datosProd = hojaProd.getDataRange().getValues();
-
-  // 1. Mapa de productos (Columna A=ID, Columna C=Nombre)
-  const mapaProd = {};
-  for(let i=1; i<datosProd.length; i++) {
-    const idP = String(datosProd[i][0]).trim();
-    mapaProd[idP] = datosProd[i][2]; 
-  }
-
-  const items = [];
-  const idBuscado = String(idCompra).trim();
-
-  // 2. Recorremos COMPRAS (Estructura de 6 columnas)
-  // [0:id_det, 1:id_compra, 2:id_prod, 3:cant, 4:costo, 5:subtotal]
-  for(let i=1; i<datosDet.length; i++) {
-    const row = datosDet[i];
-    const idEnFila = String(row[1]).trim(); // Columna B
-    
-    if(idEnFila === idBuscado) {
-      const idProd = String(row[2]).trim();
-      items.push({
-        producto: mapaProd[idProd] || 'Producto desconocido',
-        cantidad: row[3], // Columna D
-        precio: row[4],   // Columna E
-        subtotal: row[6]  // Columna F (Subtotal)
-      });
-    }
-  }
-  
-  if (items.length === 0) {
-     return [{ producto: "⚠️ (v5) No encontrado: " + idBuscado, cantidad: 0, precio: 0, subtotal: 0 }];
-  }
-
-  return items;
+function getUserInfo() {
+  return {
+    email: Session.getActiveUser().getEmail(),
+    // En el futuro podemos buscar nombre y rol en la tabla de Profesionales
+    role: 'Admin' 
+  };
 }
 
-function anularCompra(idCompra, usuario) { 
+/**
+ * CreateProjectFull - Versión Optimizada
+ * Crea proyecto, estructura en Drive y clona tareas según el Tipo de Proyecto.
+ */
+function createProjectFull(projectData) {
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado"; }
-
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheetCab = ss.getSheetByName('COMPRAS_CABECERA');
-  const sheetDet = ss.getSheetByName('COMPRAS_DETALLE');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const sheetProv = ss.getSheetByName('PROVEEDORES'); // <--- 1. Referencia a Proveedores
-
-  // --- 2. CREAR MAPA DE NOMBRES DE PROVEEDORES ---
-  // Esto nos permite buscar el nombre rápido usando el ID
-  const datosProv = sheetProv.getDataRange().getValues();
-  const mapaProveedores = {};
-  for(let p = 1; p < datosProv.length; p++) {
-     // Asumiendo Columna A (0) es ID y Columna B (1) es Razón Social
-     mapaProveedores[datosProv[p][0]] = datosProv[p][1]; 
-  }
-
-  // Variables para la bitácora
-  let proveedorLog = "Desconocido";
-  let totalLog = 0;
-
-  // 1. Buscar Compra
-  const datosCab = sheetCab.getDataRange().getValues();
-  let filaCab = -1;
   
-  for (let i = 1; i < datosCab.length; i++) {
-    if (String(datosCab[i][0]) === String(idCompra)) {
-      if (datosCab[i][5] === 'ANULADO') { 
-        lock.releaseLock(); 
-        throw "Compra ya anulada."; 
-      }
-      
-      filaCab = i + 1;
-      
-      // --- 3. CAPTURAR DATOS PARA BITÁCORA ---
-      const idProv = datosCab[i][2]; // Obtenemos el ID (ej: P-001)
-      
-      // Buscamos el nombre en el mapa. Si no existe, usamos el ID como respaldo.
-      proveedorLog = mapaProveedores[idProv] || ("ID: " + idProv); 
-      
-      totalLog = datosCab[i][4];
-      
-      break;
-    }
-  }
-  
-  if (filaCab === -1) { 
-    lock.releaseLock(); 
-    throw "Compra no encontrada."; 
-  }
-
-  // 3. Obtener items
-  const datosDet = sheetDet.getDataRange().getValues();
-  const itemsRevertir = [];
-  for (let i = 1; i < datosDet.length; i++) {
-    if (String(datosDet[i][1]) === String(idCompra)) {
-      itemsRevertir.push({ 
-        id_prod: datosDet[i][2], 
-        cant: Number(datosDet[i][3]), 
-        costo: Number(datosDet[i][4]) 
-      });
-    }
-  }
-
-  // 4. Revertir Stock y Costo Promedio (Matemática Inversa)
-  const datosProd = sheetProd.getDataRange().getValues();
-  const mapaProd = {};
-  for(let i=1; i<datosProd.length; i++) mapaProd[datosProd[i][0]] = i + 1;
-
-  itemsRevertir.forEach(item => {
-    const filaProd = mapaProd[item.id_prod];
-    if (filaProd) {
-      // Datos Actuales
-      const stockActual = Number(sheetProd.getRange(filaProd, 13).getValue() || 0);
-      const costoPromActual = Number(sheetProd.getRange(filaProd, 7).getValue() || 0);
-      
-      // Nuevo Stock
-      const nuevoStock = stockActual - item.cant;
-      
-      // Recálculo de Costo Inverso
-      let nuevoCosto = costoPromActual;
-      if (nuevoStock > 0) {
-        const valorTotalActual = stockActual * costoPromActual;
-        const valorCompraAnulada = item.cant * item.costo;
-        nuevoCosto = (valorTotalActual - valorCompraAnulada) / nuevoStock;
-        if(nuevoCosto < 0) nuevoCosto = 0;
-      }
-
-      // Guardar cambios
-      sheetProd.getRange(filaProd, 13).setValue(nuevoStock);
-      sheetProd.getRange(filaProd, 7).setValue(nuevoCosto);
-
-      // Registrar Movimiento (Salida por anulación)
-      sheetMov.appendRow([
-        Utilities.getUuid(), 
-        new Date(), 
-        "ANULACION_COMPRA", 
-        item.id_prod, 
-        "DEP-CENTRAL", 
-        item.cant * -1, 
-        idCompra
-      ]);
-    }
-  });
-
-  // 5. Marcar Cabecera como ANULADO
-  sheetCab.getRange(filaCab, 6).setValue('ANULADO');
-
-  // --- 6. REGISTRAR EN BITÁCORA ---
-  const quien = usuario || "Sistema";
-  // Ahora proveedorLog contiene el Nombre Real
-  const detalleBitacora = `Se anuló Compra ID: ${idCompra}. Proveedor: ${proveedorLog}. Valor: ${totalLog}`;
-  
-  registrarEvento(quien, "ANULAR COMPRA", detalleBitacora);
-
-  lock.releaseLock();
-  return { success: true };
-}
-
-function crearPDFOrdenCompra(datosCompra, listaItems) {
-  // 1. Gestionar Carpeta por ID (OrdenCompras)
-  const idCarpeta = "1XSDYJ4kKR2DChfUb0fAb9EqGzYuDd_EV"; 
-  const carpeta = DriveApp.getFolderById(idCarpeta);
-
-  // 2. Preparar Plantilla
-  const template = HtmlService.createTemplateFromFile('OrdenCompra');
-  template.datos = datosCompra;
-  template.items = listaItems;
-
-  // 3. Generar PDF
-  const html = template.evaluate().getContent();
-  // Limpiamos el nombre del archivo de caracteres raros
-  const nombreArchivo = "OC_" + (datosCompra.comprobante || "SN").replace(/[^a-zA-Z0-9]/g, '_') + ".pdf";
-  
-  const blob = Utilities.newBlob(html, "text/html", nombreArchivo);
-  const pdf = blob.getAs("application/pdf").setName(nombreArchivo);
-  
-  // 4. Guardar y retornar URL
-  const archivo = carpeta.createFile(pdf);
-  // Permisos para que se pueda ver en la web
-  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  
-  return archivo.getUrl(); 
-}
-
-//CUENTA PROVEEDORES
-
-function obtenerCuentasPorPagar() {
   try {
+    // Esperamos el bloqueo para evitar duplicados de IDs o carpetas
+    lock.waitLock(30000);
+    
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('COMPRAS_CABECERA');
-    const shProv = ss.getSheetByName('PROVEEDORES');
-    
-    if (!sh || sh.getLastRow() <= 1) return [];
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+    const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
 
-    // Mapa Proveedores
-    const mapProv = {};
-    if (shProv) {
-       const d = shProv.getDataRange().getValues();
-       for(let i=1; i<d.length; i++) mapProv[String(d[i][0])] = d[i][1];
+    // --- 1. VALIDACIONES PREVIAS ---
+    if (!projectData.id_tipo_proyecto) throw new Error("Falta el ID del Tipo de Proyecto.");
+    
+    // Generación de ID y Timestamps
+    if (!projectData.id) projectData.id = Utilities.getUuid();
+    const timestamp = new Date();
+    projectData.created_at = timestamp;
+
+    // --- 2. LECTURA DE CONFIGURACIÓN (JOIN EN MEMORIA) ---
+    // Leemos etapas y filtramos por el tipo seleccionado
+    const etapasRaw = readConfig("CONF_ETAPAS"); // Asumimos que readConfig devuelve objetos limpios
+    const etapasTipo = etapasRaw
+                        .filter(e => e.id_tipo_proyecto === projectData.id_tipo_proyecto)
+                        .sort((a,b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
+
+    if (etapasTipo.length === 0) {
+      throw new Error("El Tipo de Proyecto seleccionado no tiene etapas configuradas. Configure CONF_ETAPAS primero.");
     }
 
-    const data = sh.getDataRange().getValues();
-    const cuentas = [];
-    const hoy = new Date();
-    
-    // Indices:
-    // 0:id, 1:fecha, 2:prov, 4:total, 5:estado, 7:nro, 9:saldo, 11:vencimiento
-    
-    for (let i = 1; i < data.length; i++) {
-       const row = data[i];
-       const saldo = Number(row[9] || 0);
-       const estado = row[5];
-       
-       // Filtro: Solo mostramos lo que se debe y no está anulado
-       if (row[0] && estado !== 'ANULADO' && saldo > 0) {
-         
-         let vencimiento = row[11]; // Columna L (nueva)
-         // Si es una compra vieja sin vencimiento, usamos la fecha de emisión
-         if (!vencimiento || vencimiento === "") vencimiento = row[1];
+    const idsEtapasValidas = etapasTipo.map(e => e.id);
 
-         // Calcular días restantes
-         const venc = new Date(vencimiento);
-         const diffTime = venc - hoy;
-         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-         
-         cuentas.push({
-           id_compra: row[0],
-           fecha_emision: new Date(row[1]).toLocaleDateString('es-PY'),
-           nombre_proveedor: mapProv[row[2]] || 'Prov. ' + row[2],
-           id_proveedor: row[2],
-           comprobante: row[7],
-           total_original: Number(row[4]),
-           saldo_pendiente: saldo,
-           fecha_vencimiento: venc.toLocaleDateString('es-PY'),
-           dias_restantes: diffDays,
-           estado_semaforo: diffDays < 0 ? 'ROJO' : (diffDays <= 7 ? 'AMARILLO' : 'VERDE')
-         });
-       }
+    // Leemos tareas y filtramos solo las que coinciden con las etapas del tipo
+    const tareasTemplate = readConfig("CONF_TAREAS")
+                            .filter(t => idsEtapasValidas.includes(t.etapa_id));
+
+    // --- 3. GESTIÓN ROBUSTA DE GOOGLE DRIVE ---
+    // Primero obtenemos la configuración de la carpeta raíz
+    let driveUrl = "";
+    let driveId = "";
+    
+    try {
+      const generalData = sheetGeneral.getDataRange().getValues();
+      const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
+      
+      if (rootUrlRow && rootUrlRow[1]) {
+        // Extraemos ID de la URL
+        const match = rootUrlRow[1].match(/[-\w]{25,}/);
+        const rootFolderId = match ? match[0] : null;
+        
+        if (rootFolderId) {
+          const rootFolder = DriveApp.getFolderById(rootFolderId);
+          const folderName = `${projectData.codigo} - ${projectData.nombre_obra}`;
+          
+          // Crear carpeta del proyecto
+          const projectFolder = rootFolder.createFolder(folderName);
+          driveId = projectFolder.getId();
+          driveUrl = projectFolder.getUrl();
+          
+          // Crear subcarpetas de etapas (Iteración limpia)
+          etapasTipo.forEach(e => {
+            if (e.nombre_etapa) {
+               projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
+            }
+          });
+        }
+      }
+    } catch (driveError) {
+      console.warn("Advertencia: No se pudo crear estructura en Drive.", driveError);
+      driveUrl = "ERROR_DRIVE";
+      driveId = "NO_CREADO";
+      // No detenemos el proceso, pero dejamos constancia
     }
+
+    // Asignamos resultados de Drive al objeto de datos
+    projectData.drive_folder_id = driveId;
+    projectData.drive_url = driveUrl;
+
+    // --- 4. GUARDAR EN DB_PROYECTOS (Mapeo Inteligente) ---
+    // Función helper para normalizar encabezados: "Nombre Obra" -> "nombre_obra"
+    const normalizeHeader = (h) => h.toString().toLowerCase().trim().replace(/\s+/g, '_');
+
+    const headersProj = sheetProyectos.getRange(1, 1, 1, sheetProyectos.getLastColumn()).getValues()[0];
+    const newRowProj = headersProj.map(header => {
+      const key = normalizeHeader(header);
+      // Buscamos la clave exacta o la normalizada en projectData
+      return projectData[key] !== undefined ? projectData[key] : (projectData[header] || "");
+    });
     
-    // Ordenar: Lo más urgente (menor días restantes) primero
-    return cuentas.sort((a, b) => a.dias_restantes - b.dias_restantes);
+    sheetProyectos.appendRow(newRowProj);
+
+    // --- 5. BATCH INSERT EN DB_EJECUCION ---
+    if (tareasTemplate.length > 0) {
+      const headersEjec = sheetEjecucion.getRange(1, 1, 1, sheetEjecucion.getLastColumn()).getValues()[0];
+      
+      const rowsToInsert = tareasTemplate.map(tpl => {
+        // Objeto temporal de la nueva tarea
+        const nuevaTarea = {
+          id: Utilities.getUuid(),
+          proyecto_id: projectData.id,
+          etapa_id: tpl.etapa_id,
+          nombre_tarea: tpl.nombre_tarea,
+          requiere_evidencia: tpl.requiere_evidencia,
+          tipo_entrada: tpl.tipo_entrada || 'text',
+          checklist_id: tpl.checklist_id || '',
+          estado: '',
+          responsable_id: '',
+          datos_evidencia: '',
+          comentarios: '',
+          updated_at: timestamp
+        };
+
+        // Mapeo seguro contra las columnas reales de la hoja
+        return headersEjec.map(header => {
+          const key = normalizeHeader(header);
+          return nuevaTarea[key] !== undefined ? nuevaTarea[key] : "";
+        });
+      });
+
+      // Escritura en bloque (Una sola llamada a API)
+      sheetEjecucion.getRange(
+        sheetEjecucion.getLastRow() + 1, 
+        1, 
+        rowsToInsert.length, 
+        rowsToInsert[0].length
+      ).setValues(rowsToInsert);
+    }
+
+    SpreadsheetApp.flush();
+    return { success: true, message: `Proyecto [${projectData.nombre_obra}] y su ciclo de vida creados correctamente.` };
+
+  } catch (e) {
+    console.error("Error crítico en createProjectFull:", e);
+    throw new Error(e.message || e.toString());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * ELIMINACIÓN EN CASCADA DE PROYECTO
+ * Elimina: Drive Folder + Tareas de Ejecución + Registro de Proyecto
+ */
+function deleteProjectFull(projectId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     
+    // 1. BORRAR CARPETA DE DRIVE
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    const dataProyectos = sheetProyectos.getDataRange().getValues();
+    const idIndex = dataProyectos[0].indexOf("id");
+    const driveIndex = dataProyectos[0].indexOf("drive_folder_id");
+    
+    let driveId = null;
+    let rowIndex = -1;
+
+    // Buscar el proyecto y su ID de Drive
+    for (let i = 1; i < dataProyectos.length; i++) {
+      if (dataProyectos[i][idIndex] === projectId) {
+        driveId = dataProyectos[i][driveIndex];
+        rowIndex = i + 1; // Fila real en la hoja (1-based)
+        break;
+      }
+    }
+
+    if (driveId && driveId !== "NO_CONFIGURADO") {
+      try {
+        DriveApp.getFolderById(driveId).setTrashed(true); // Enviamos a la papelera
+      } catch (e) {
+        console.warn("No se pudo borrar la carpeta Drive (quizás ya no existe): " + e.message);
+      }
+    }
+
+    // 2. BORRAR TAREAS DE EJECUCIÓN (DB_EJECUCION)
+    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+    const dataEjecucion = sheetEjecucion.getDataRange().getValues();
+    const projIdIndexEjec = dataEjecucion[0].indexOf("proyecto_id");
+    
+    // Recorremos hacia atrás para borrar sin afectar los índices
+    for (let i = dataEjecucion.length - 1; i >= 1; i--) {
+      if (dataEjecucion[i][projIdIndexEjec] === projectId) {
+        sheetEjecucion.deleteRow(i + 1);
+      }
+    }
+
+    // 3. BORRAR REGISTRO DE PROYECTO (DB_PROYECTOS)
+    if (rowIndex !== -1) {
+      sheetProyectos.deleteRow(rowIndex);
+    } else {
+      throw new Error("Proyecto no encontrado");
+    }
+
+    return { success: true };
+
   } catch (e) {
     console.error(e);
-    return [];
+    throw new Error("Error al eliminar proyecto: " + e.toString());
+  } finally {
+    lock.releaseLock();
   }
 }
 
-function registrarPagoProveedor(pago) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "El sistema está ocupado."; }
-
+/**
+ * Obtiene la configuración detallada (Árbol: Tipo -> Etapas -> Tareas)
+ * Optimizado para renderizado directo en Vue.js (Preview y Configuración).
+ * * @param {string} idTipo - El UUID del tipo de proyecto (CONF_TIPO_PROYECTO)
+ * @returns {Object} Objeto con metadatos del tipo, resumen y estructura jerárquica.
+ */
+function getTipoDetailedConfig(idTipo) {
+  // No necesitamos LockService aquí porque es una operación de LECTURA pura.
+  
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetPagos = ss.getSheetByName('PAGOS_PROVEEDORES');
-    const sheetCompras = ss.getSheetByName('COMPRAS_CABECERA');
+    // 1. Carga de datos en paralelo (conceptualmente)
+    // Asumimos que readConfig devuelve arrays de objetos limpios
+    const tipos = readConfig(CONFIG_SHEETS.TIPOS || "CONF_TIPO_PROYECTO");
+    const etapasRaw = readConfig(CONFIG_SHEETS.ETAPAS || "CONF_ETAPAS");
+    const tareasRaw = readConfig(CONFIG_SHEETS.TAREAS || "CONF_TAREAS");
 
-    const idPago = Utilities.getUuid();
-    const fechaHoy = new Date();
-
-    sheetPagos.appendRow([
-        idPago,
-        fechaHoy,
-        pago.id_compra,
-        pago.id_proveedor, 
-        pago.monto,
-        pago.metodo,
-        pago.referencia || "",
-        pago.observacion || "",
-        pago.usuario_nombre,
-    ]);
-
-    const data = sheetCompras.getDataRange().getValues();
-    let compraEncontrada = false;
-
-    const COL_ID_COMPRA = 0; 
-    const COL_ESTADO = 5;    
-    const COL_SALDO = 9;     
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][COL_ID_COMPRA]) === String(pago.id_compra)) {
-        compraEncontrada = true;
-        const saldoActual = Number(data[i][COL_SALDO] || 0);
-        
-        if (pago.monto > (saldoActual + 500)) { 
-             throw "El monto a pagar supera la deuda pendiente.";
-        }
-
-        let nuevoSaldo = saldoActual - pago.monto;
-        if (nuevoSaldo < 0) nuevoSaldo = 0;
-        const nuevoEstado = nuevoSaldo <= 100 ? 'PAGADO' : 'PENDIENTE';
-
-        sheetCompras.getRange(i + 1, COL_SALDO + 1).setValue(nuevoSaldo);
-        sheetCompras.getRange(i + 1, COL_ESTADO + 1).setValue(nuevoEstado);
-        break;
-      }
+    // 2. Validación de Existencia
+    const tipoInfo = tipos.find(t => t.id === idTipo);
+    if (!tipoInfo) {
+      throw new Error(`Tipo de proyecto con ID ${idTipo} no encontrado.`);
     }
 
-    if (!compraEncontrada) throw "No se encontró la compra original para descontar el saldo.";
-    return { success: true };
+    // 3. Filtrado y Ordenamiento de Etapas (O(n))
+    // Convertimos orden a Number para asegurar sort correcto (1, 2, 10 en vez de 1, 10, 2)
+    const misEtapas = etapasRaw
+      .filter(e => e.id_tipo_proyecto === idTipo)
+      .sort((a, b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
+
+    // Creamos un Set de IDs para búsqueda O(1) en el paso siguiente
+    const idsEtapasSet = new Set(misEtapas.map(e => e.id));
+
+    // 4. Filtrado de Tareas (O(m))
+    const misTareas = tareasRaw.filter(t => idsEtapasSet.has(t.etapa_id));
+
+    // 5. Construcción del Árbol Jerárquico (Nesting)
+    // Esto facilita enormemente la vida al Frontend
+    const estructuraCicloVida = misEtapas.map(etapa => {
+      // Filtramos las tareas de esta etapa específica
+      const tareasDeEtapa = misTareas.filter(t => t.etapa_id === etapa.id);
+      
+      return {
+        ...etapa, // Heredamos id, nombre, color, orden
+        tareas: tareasDeEtapa, // Array anidado
+        stats: {
+          cantidad_tareas: tareasDeEtapa.length,
+          con_evidencia: tareasDeEtapa.filter(t => String(t.requiere_evidencia).toLowerCase() === 'true').length
+        }
+      };
+    });
+
+    // 6. Retorno de Payload Completo
+    return {
+      success: true,
+      data: {
+        info: {
+          id: tipoInfo.id,
+          nombre: tipoInfo.nombre_tipo,
+          descripcion: tipoInfo.descripcion,
+          color: tipoInfo.color_representativo
+        },
+        resumen: {
+          total_etapas: misEtapas.length,
+          total_tareas: misTareas.length,
+          estimacion_complejidad: misTareas.length > 20 ? 'Alta' : 'Baja'
+        },
+        ciclo_vida: estructuraCicloVida // Array listo para v-for en Vue
+      }
+    };
 
   } catch (e) {
+    console.error("Error en getTipoDetailedConfig:", e);
+    return { 
+      success: false, 
+      error: e.message 
+    };
+  }
+}
+
+// ==========================================
+// MÓDULO DE EJECUCIÓN (COCKPIT)
+// ==========================================
+
+/**
+ * 1. Obtiene las tareas operativas de un proyecto específico
+ * BLINDADA: Convierte Fechas a ISOString para evitar error de servidor.
+ */
+function getProjectExecutionData(projectId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("DB_EJECUCION");
+  
+  if (!sheet) return []; 
+
+  // Usamos getValues para respetar tipos (Booleanos), pero debemos cuidar las Fechas
+  const data = sheet.getDataRange().getValues();
+  
+  if (data.length <= 1) return []; // Solo encabezados o vacía
+
+  const originalHeaders = data.shift();
+  // Normalizamos encabezados para que coincidan con lo que espera Vue
+  const headers = originalHeaders.map(h => h.toString().trim().toLowerCase().replace(/\s+/g, '_'));
+
+  // Convertimos la matriz en objetos JSON seguros
+  const allTasks = data.map(row => {
+    let task = {};
+    headers.forEach((header, index) => {
+      let value = row[index];
+
+      // --- SANITIZACIÓN CRÍTICA (Evita el error de servidor) ---
+      if (value instanceof Date) {
+        // Si hay una fecha válida, la pasamos a texto. Si es inválida, cadena vacía.
+        value = !isNaN(value) ? value.toISOString() : ""; 
+      }
+      // ---------------------------------------------------------
+
+      // Normalización de Booleanos (Legacy Data)
+      if (typeof value === 'string') {
+          if (value.toUpperCase() === 'TRUE') value = true;
+          if (value.toUpperCase() === 'FALSE') value = false;
+      }
+
+      task[header] = value;
+    });
+    return task;
+  });
+
+  // Filtramos por el ID del proyecto solicitado
+  return allTasks.filter(t => t.proyecto_id === projectId);
+}
+
+/**
+ * Sube una evidencia al Drive y actualiza la tarea con la URL.
+ * Valida tipos: PDF, DOCX, XLSX, PPTX, TXT, Imágenes.
+ */
+function uploadTaskEvidence(taskId, fileData, fileName, mimeType) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. Validaciones
+    const allowedMimes = [
+      'application/pdf', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
+      'text/plain',
+      'image/jpeg', 'image/png'
+    ];
+    
+    if (!allowedMimes.includes(mimeType)) {
+      throw new Error("Formato no permitido. Solo PDF, Word, Excel, PPT, TXT o Imágenes.");
+    }
+
+    // 2. Obtener Proyecto y Carpeta
+    const taskInfo = getTaskInfo(taskId); 
+    if (!taskInfo || !taskInfo.drive_folder_id) throw new Error("No se encontró la carpeta del proyecto.");
+
+    const folder = DriveApp.getFolderById(taskInfo.drive_folder_id);
+    
+    // 3. Crear Blob y Archivo
+    const blob = Utilities.newBlob(Utilities.base64Decode(fileData), mimeType, fileName);
+    const file = folder.createFile(blob);
+    const fileUrl = file.getUrl();
+
+    // 4. Actualizar DB_EJECUCION (Llamamos a la función global)
+    // Liberamos el lock actual momentáneamente o confiamos en que updateExecutionTask maneje su propio lock rápido
+    // Nota: Como updateExecutionTask tiene su propio lock, es seguro llamarla.
+    
+    updateExecutionTask({
+      id: taskId,
+      datos_evidencia: fileUrl
+    });
+
+    return { success: true, url: fileUrl };
+
+  } catch (e) {
+    console.error("Error upload:", e);
     throw e;
   } finally {
     lock.releaseLock();
   }
 }
 
-//CLIENTE
-
-function obtenerClientes() {
-  const ss = SpreadsheetApp.openById(SS_ID); // Tu ID
-  const sheet = ss.getSheetByName('CLIENTES');
-  
-  if (!sheet || sheet.getLastRow() <= 1) return [];
-
-  const datos = sheet.getDataRange().getValues();
-  const clientes = [];
-
-  // Empezamos en i=1 para saltar la cabecera
-  for (let i = 1; i < datos.length; i++) {
-    const fila = datos[i];
-    if (fila[0]) { // Si tiene ID
-      clientes.push({
-        id_cliente: fila[0],
-        razon_social: fila[1],    // Col B
-        doc_identidad: fila[2],   // Col C
-        email: fila[3],           // Col D (Nueva)
-        telefono: fila[4],        // Col E
-        direccion: fila[5],       // Col F
-        datos_adicionales: fila[6] ? JSON.parse(fila[6]) : {} // Col G
-      });
-    }
-  }
-  return clientes;
-}
-
-function guardarCliente(form) {
-  const ss = SpreadsheetApp.openById(SS_ID); // Tu ID
-  const ws = ss.getSheetByName('CLIENTES');
-  const id = Utilities.getUuid();
-  
-  // Orden exacto de tu hoja: A, B, C, D, E, F, G
-  ws.appendRow([
-    id,
-    form.razon_social,
-    form.doc_identidad,
-    form.email || "", // Incluimos email
-    form.telefono,
-    form.direccion,
-    JSON.stringify(form.datos_adicionales || {})
-  ]);
-  
-  return { status: 'ok', id: id };
-}
-
-function actualizarCliente(form) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('CLIENTES');
-  const datos = ws.getDataRange().getValues();
-  
-  // Buscar fila por ID (Columna 0)
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][0] == form.id_cliente) {
-      // Actualizamos filas B, C, D, E, F, G (Indices 1 a 6)
-      // fila + 1 porque getRange es base 1
-      ws.getRange(i + 1, 2, 1, 6).setValues([[
-        form.razon_social,
-        form.doc_identidad,
-        form.email || "",
-        form.telefono,
-        form.direccion,
-        JSON.stringify(form.datos_adicionales || {})
-      ]]);
-      return { success: true };
-    }
-  }
-  throw new Error("Cliente no encontrado.");
-}
-
-function eliminarCliente(idCliente) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  
-  // 1. VALIDACIÓN DE SEGURIDAD: ¿Tiene ventas?
-  const hojaVentas = ss.getSheetByName('VENTAS_CABECERA');
-  if (hojaVentas && hojaVentas.getLastRow() > 1) {
-    const datosVentas = hojaVentas.getDataRange().getValues();
-    // Columna 2 (índice 2) es id_cliente en VENTAS_CABECERA
-    const tieneVentas = datosVentas.some(fila => fila[2] == idCliente);
-    
-    if (tieneVentas) {
-      return { success: false, error: "⛔ No se puede eliminar: El cliente tiene facturas registradas." };
-    }
-  }
-
-  // 2. Si no tiene ventas, procedemos a borrar
-  const hojaCli = ss.getSheetByName('CLIENTES');
-  const datos = hojaCli.getDataRange().getValues();
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][0] == idCliente) {
-      hojaCli.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  return { success: false, error: "Cliente no encontrado" };
-}
-
-//VENTA
-
-function guardarVenta(venta) {
+/**
+ * updateExecutionTask (VERSIÓN GLOBAL CORREGIDA)
+ * Esta función DEBE estar fuera de cualquier otra para ser accesible desde el HTML.
+ */
+function updateExecutionTask(data) {
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
   try {
+    lock.waitLock(5000);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("DB_EJECUCION");
     
-    const sheetProd = ss.getSheetByName('PRODUCTOS');
-    const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
-    const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
-    const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-    const sheetCli = ss.getSheetByName('CLIENTES');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const map = {};
+    headers.forEach((h, i) => map[h.toString().toLowerCase().trim()] = i + 1);
 
-    // 1. Validaciones y Configuración
-    const config = obtenerConfigGeneral();
-    const depositoDefault = config['DEPOSITO_DEFAULT'] || "1"; 
-    const depositoUsado = venta.id_deposito || depositoDefault;
+    if (!map['id']) throw new Error("Columna ID no encontrada en DB.");
 
-    // Lógica de Crédito
-    const esCredito = venta.condicion === 'CREDITO';
-    const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
-    const saldoInicial = esCredito ? venta.total : 0;
+    // Búsqueda eficiente
+    const ids = sheet.getRange(2, map['id'], sheet.getLastRow() - 1, 1).getValues().flat();
+    const rowIndex = ids.indexOf(data.id);
 
-    // Obtener nombres
-    const datosProd = sheetProd.getDataRange().getValues();
-    const mapaNombres = {};
-    for(let i=1; i<datosProd.length; i++) {
-        mapaNombres[datosProd[i][0]] = datosProd[i][2]; 
-    }
+    if (rowIndex === -1) return { success: false, message: "Tarea no existe." };
+    const rowNumber = rowIndex + 2;
 
-    // ✅ VALIDAR STOCK (Solo si NO es remisión)
-    if (!venta.es_desde_remision) {
-        for (let item of venta.items) {
-          const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
-          const nombreProd = mapaNombres[item.id_producto] || "Item";
-          if (stockDisponible < item.cantidad) {
-            throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
-          }
-        }
-    }
+    // --- ESCRITURA SELECTIVA ---
 
-    // 2. Generación de Datos
-    const idVenta = Utilities.getUuid();
+    // 1. Estado y Comentarios
+    if (data.estado !== undefined && map['estado']) 
+      sheet.getRange(rowNumber, map['estado']).setValue(data.estado);
     
-    // Asegurar fecha correcta (Mediodía para evitar desfase horario)
-    let fechaSegura;
-    if (venta.fecha && typeof venta.fecha === 'string' && !venta.fecha.includes('T')) {
-        fechaSegura = new Date(venta.fecha + "T12:00:00");
-    } else {
-        fechaSegura = venta.fecha ? new Date(venta.fecha) : new Date();
-    }
-    
-    // Auto-incremental
-    let nroFacturaFinal = venta.nro_factura;
-    if (!nroFacturaFinal) {
-       const ultimoNro = config['ULTIMO_NRO_FACTURA'] || "001-001-0000000";
-       const partes = ultimoNro.split('-');
-       const nuevoSec = Number(partes[2]) + 1;
-       nroFacturaFinal = `${partes[0]}-${partes[1]}-${String(nuevoSec).padStart(7, '0')}`;
-       guardarConfigGeneral('ULTIMO_NRO_FACTURA', nroFacturaFinal);
+    if (data.comentarios !== undefined && map['comentarios']) 
+      sheet.getRange(rowNumber, map['comentarios']).setValue(data.comentarios);
+
+    // 2. Checklist (Nueva Columna)
+    if (data.datos_checklist !== undefined && map['datos_checklist']) {
+      sheet.getRange(rowNumber, map['datos_checklist']).setValue(data.datos_checklist);
     }
 
-    // Buscar Cliente
-    let nombreCli = "Cliente Ocasional";
-    let docCli = "X";
-    let dirCli = "";
-    const dataCli = sheetCli.getDataRange().getValues();
-    for(let i=1; i<dataCli.length; i++){
-        if(String(dataCli[i][0]) === String(venta.id_cliente)){
-            nombreCli = dataCli[i][1];
-            docCli = dataCli[i][2];
-            dirCli = dataCli[i][5] || "";
-            break;
-        }
+    // 3. Evidencia (URL)
+    if (data.datos_evidencia !== undefined && map['datos_evidencia']) {
+      sheet.getRange(rowNumber, map['datos_evidencia']).setValue(data.datos_evidencia);
     }
 
-    // 3. Cálculos e HTML
-    let totalGrabada10 = 0, totalGrabada5 = 0, totalExenta = 0;
+    if (map['updated_at']) 
+      sheet.getRange(rowNumber, map['updated_at']).setValue(new Date());
 
-    // Preparamos la lista de items para el PDF (Array de objetos)
-    const itemsParaPdf = venta.items.map(it => {
-        const precioUnitario = Number(it.precio); 
-        const cantidad = Number(it.cantidad);
-        const subtotal = cantidad * precioUnitario;
-        const tasa = Number(it.tasa_iva || 10); 
-        const nombreProducto = mapaNombres[it.id_producto] || "Producto";
+    return { success: true };
 
-        if (tasa === 10) {
-            totalGrabada10 += subtotal;
-        } else if (tasa === 5) {
-            totalGrabada5 += subtotal;
-        } else {
-            totalExenta += subtotal;
-        }
-
-        return {
-            nombre_prod: nombreProducto, 
-            cantidad: cantidad,
-            precio: precioUnitario,
-            tasa_iva: tasa
-        };
-    });
-
-    const totalGeneral = totalGrabada10 + totalGrabada5 + totalExenta;
-
-    // Generar PDF
-    let urlPdf = "";
-    try {
-        const datosParaPDF = {
-            fecha: fechaSegura.toLocaleDateString('es-PY'),
-            nro_factura: nroFacturaFinal,
-            cliente_nombre: nombreCli,
-            cliente_doc: docCli,
-            cliente_dir: dirCli,
-            condicion: venta.condicion || "CONTADO"
-        };
-        urlPdf = crearPDFFactura(datosParaPDF, itemsParaPdf); 
-    } catch(e) {
-        console.error("Error PDF: " + e);
-        urlPdf = "ERROR_PDF"; 
-    }
-
-    sheetCab.appendRow([
-      idVenta,
-      nroFacturaFinal,
-      fechaSegura,
-      venta.id_cliente,
-      depositoUsado,
-      totalGeneral,
-      estadoVenta, 
-      urlPdf,
-      venta.condicion || 'CONTADO', 
-      saldoInicial,
-      venta.json_pagos || "[]",
-    ]);
-
-    // 5. Guardar Detalle y Movimientos
-    venta.items.forEach(item => {
-      sheetDet.appendRow([
-          Utilities.getUuid(), 
-          idVenta, 
-          item.id_producto, 
-          item.cantidad, 
-          item.precio, 
-          item.tasa_iva || 10,
-          item.cantidad * item.precio 
-      ]);
-      
-      if (!venta.es_desde_remision) { 
-          sheetMov.appendRow([
-              Utilities.getUuid(), 
-              new Date(), 
-              "SALIDA_VENTA", 
-              item.id_producto, 
-              depositoUsado, 
-              item.cantidad * -1, 
-              idVenta
-          ]);
-          actualizarStockDeposito(item.id_producto, depositoUsado, item.cantidad * -1);
-      }
-    });
-
-    return { success: true, pdf_url: urlPdf };
-
-  } catch (error) {
-    throw error;
+  } catch (e) {
+    console.error("Error update:", e);
+    throw e;
   } finally {
     lock.releaseLock();
   }
 }
 
-function crearPDFFactura(datos, listaItems) {
-  // 1. Gestionar Carpeta por ID (FacturaVenta)
-  const idCarpeta = "1Ru3AduQ_jLHtETfp9Xy5kYitzuRuh3gG";
-  const carpeta = DriveApp.getFolderById(idCarpeta);
-
-  // 2. Preparar Plantilla (Usamos el archivo FacturaVenta.html)
-  const template = HtmlService.createTemplateFromFile('FacturaVenta');
+// Helper para buscar ID de carpeta rápido
+function getTaskInfo(taskId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Pasamos los datos a la plantilla
-  template.datos = datos;
-  template.items = listaItems || []; 
-
-  // 3. Generar HTML final
-  const html = template.evaluate().getContent();
-
-  // 4. Convertir a PDF
-  const nombreArchivo = "Factura_" + (datos.nro_factura || "SN").replace(/[^a-zA-Z0-9]/g, '_') + ".pdf";
-  const blob = Utilities.newBlob(html, "text/html", nombreArchivo);
-  const pdf = blob.getAs("application/pdf").setName(nombreArchivo);
+  // Buscar tarea
+  const sheetEjec = ss.getSheetByName("DB_EJECUCION");
+  const dataEjec = sheetEjec.getDataRange().getValues();
+  // Asumimos orden dinámico, buscamos índices
+  const hEjec = dataEjec[0];
+  const idxId = hEjec.indexOf("id");
+  const idxProj = hEjec.indexOf("proyecto_id");
   
-  // 5. Guardar y retornar URL
-  const archivo = carpeta.createFile(pdf);
-  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const rowTask = dataEjec.find(r => r[idxId] === taskId);
+  if (!rowTask) return null;
   
-  return archivo.getUrl(); 
+  const projectId = rowTask[idxProj];
+  
+  // Buscar Proyecto
+  const sheetProj = ss.getSheetByName("DB_PROYECTOS");
+  const dataProj = sheetProj.getDataRange().getValues();
+  const hProj = dataProj[0];
+  const idxIdP = hProj.indexOf("id");
+  const idxFolder = hProj.indexOf("drive_folder_id");
+  
+  const rowProj = dataProj.find(r => r[idxIdP] === projectId);
+  
+  return rowProj ? { drive_folder_id: rowProj[idxFolder] } : null;
 }
 
-function obtenerHistorialVentas() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const hojaVentas = ss.getSheetByName('VENTAS_CABECERA');
-  const hojaClientes = ss.getSheetByName('CLIENTES');
-  
-  if (!hojaVentas || hojaVentas.getLastRow() <= 1) return [];
-
-  const datosVentas = hojaVentas.getDataRange().getValues();
-  const mapaClientes = {};
-  
-  if(hojaClientes && hojaClientes.getLastRow() > 1) {
-    const datosCli = hojaClientes.getDataRange().getValues();
-    for(let i=1; i < datosCli.length; i++) {
-      if(datosCli[i][0]) mapaClientes[datosCli[i][0]] = datosCli[i][1]; 
-    }
-  }
-
-  const historial = [];
-  // Estructura HOJA REAL: 
-  // [0:id, 1:factura, 2:fecha, 3:cliente, 4:deposito, 5:total, 6:estado]
-  for(let i=1; i < datosVentas.length; i++) {
-    const fila = datosVentas[i];
-    if(fila[0]) {
-        historial.push({
-          id_venta: fila[0],
-          factura: fila[1] || 'S/N',      // Col B -> Indice 1
-          fecha: fila[2] instanceof Date ? fila[2].toISOString() : fila[2], // Col C -> Indice 2
-          nombre_cliente: mapaClientes[fila[3]] || 'Cliente Casual', // Col D -> Indice 3
-          total: Number(fila[5]) || 0,    // Col F -> Indice 5 (Total)
-          estado: fila[6] || 'Pagado', // Col G -> Indice 6 (Estado)
-          url_pdf: fila[7],     // Columna H es el PDF
-          condicion: fila[8] || 'CONTADO'
-        });
-    }
-  }
-  
-  return historial.reverse(); 
-}
-
-function obtenerDetalleVenta(idVenta) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const hojaDet = ss.getSheetByName('VENTAS_DETALLE');
-  const hojaProd = ss.getSheetByName('PRODUCTOS');
-
-  if (!hojaDet || !hojaProd) return [{ producto: "❌ Error: Falta hoja VENTAS_DETALLE", cantidad: 0, subtotal: 0 }];
-
-  const datosDet = hojaDet.getDataRange().getValues();
-  const datosProd = hojaProd.getDataRange().getValues();
-
-  const mapaProd = {};
-  for(let i=1; i<datosProd.length; i++) {
-    const idP = String(datosProd[i][0]).trim();
-    mapaProd[idP] = datosProd[i][2];
-  }
-
-  const items = [];
-  const idBuscado = String(idVenta).trim();
-
-  // 3. Recorremos VENTAS (Estructura de 7 columnas)
-  // [0:id_det, 1:id_venta, 2:id_prod, 3:cant, 4:precio, 5:iva, 6:subtotal]
-  for(let i=1; i<datosDet.length; i++) {
-    const row = datosDet[i];
-    const idEnFila = String(row[1]).trim(); // Columna B
-    
-    if(idEnFila === idBuscado) {
-      const idProd = String(row[2]).trim();
-      items.push({
-        producto: mapaProd[idProd] || 'Producto desconocido',
-        cantidad: row[3], // Columna D
-        precio: row[4],   // Columna E
-        // ¡OJO! Aquí saltamos la columna 5 (IVA) y vamos a la 6 (Subtotal)
-        subtotal: row[6]  // Columna G (Subtotal)
-      });
-    }
-  }
-  
-  if (items.length === 0) {
-     return [{ producto: "⚠️ (v5) No encontrado: " + idBuscado, cantidad: 0, precio: 0, subtotal: 0 }];
-  }
-
-  return items;
-}
-
-function anularVenta(idVenta, nombreUsuario) {
+/**
+ * REGENERACIÓN BLINDADA DE TAREAS
+ * Borra las tareas actuales del proyecto y recarga SOLO las correspondientes a su id_tipo_proyecto.
+ * Optimización: Batch Insert y Mapeo Dinámico de Columnas.
+ */
+function regenerateProjectTasks(projectId) {
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
-  // ⚠️ Asegúrate de que este ID sea el correcto de tu hoja actual
-  const ss = SpreadsheetApp.openById(SS_ID);
-  
-  const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
-  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  // const sheetProd = ss.getSheetByName('PRODUCTOS'); // (No se usa directo aquí, sino en la función auxiliar)
-  
-  const dataCab = sheetCab.getDataRange().getValues();
-  
-  // Variables para la Bitácora
-  let nroFactura = "S/N";
-  let totalVenta = 0;
-  let encontrado = false;
-
-  // 1. Marcar como ANULADO y ELIMINAR DEUDA
-  for (let i = 1; i < dataCab.length; i++) {
-    if (String(dataCab[i][0]) === String(idVenta)) {
-      if (dataCab[i][6] === 'ANULADO') {
-        lock.releaseLock();
-        throw "La venta ya estaba anulada.";
-      }
-      
-      // Capturamos datos para el Log antes de borrar nada
-      nroFactura = dataCab[i][3]; // Asumiendo Columna D es Factura
-      totalVenta = dataCab[i][5]; // Asumiendo Columna F es Total
-
-      // A. Cambiar estado a ANULADO (Columna G / índice 6)
-      sheetCab.getRange(i + 1, 7).setValue("ANULADO"); 
-      
-      // B. Borrar saldo pendiente (Columna J / índice 9)
-      // Importante para que no le cobren al cliente una venta cancelada
-      sheetCab.getRange(i + 1, 10).setValue(0);       
-
-      encontrado = true;
-      break;
-    }
-  }
-
-  if (!encontrado) {
-    lock.releaseLock();
-    throw "Venta no encontrada.";
-  }
-
-  // 2. Revertir Movimientos de Stock (Devolver mercadería)
-  const dataMov = sheetMov.getDataRange().getValues();
-  const movimientosRevertir = [];
-
-  for(let i=1; i < dataMov.length; i++){
-     // Si la referencia (Col G/6) coincide con el ID Venta y es una salida
-     if(String(dataMov[i][6]) == String(idVenta) && dataMov[i][2] == 'SALIDA_VENTA'){
-        const idProd = dataMov[i][3];
-        const idDep = dataMov[i][4];
-        const cantSalida = Number(dataMov[i][5]); // Es negativo (ej: -5)
-
-        // Creamos movimiento contrario (positivo) para que sume al stock
-        movimientosRevertir.push([
-           Utilities.getUuid(),
-           new Date(), // Fecha actual de anulación
-           "ANULACION_VENTA",
-           idProd,
-           idDep,
-           Math.abs(cantSalida), // Convertimos a positivo (+5)
-           idVenta
-        ]);
-
-        // Actualizamos Stock Real en hoja PRODUCTOS/DEPOSITOS
-        // (Esta función debe existir en tu archivo Code.gs o Auxiliares.gs)
-        actualizarStockDeposito(idProd, idDep, Math.abs(cantSalida));
-     }
-  }
-
-  // Guardar devoluciones en lotes en MOVIMIENTOS_STOCK
-  if(movimientosRevertir.length > 0){
-    sheetMov.getRange(sheetMov.getLastRow()+1, 1, movimientosRevertir.length, 7).setValues(movimientosRevertir);
-  }
-
-  // 3. 🕵️‍♂️ REGISTRO EN BITÁCORA (NUEVO)
-  // Se guarda: Quién lo hizo, Qué hizo y Detalles (Factura y Monto)
-  const detalleLog = `Se anuló la Factura N° ${nroFactura} por valor de ${totalVenta}. Stock retornado.`;
-  
-  // Usamos el usuario que viene del frontend, o 'Sistema' si falló la captura
-  const usuarioLog = nombreUsuario || "Sistema";
-  
-  // Asegúrate de tener la función registrarEvento en tu Code.gs
-  registrarEvento(usuarioLog, "ANULAR VENTA", detalleLog);
-
-  lock.releaseLock();
-  return { success: true };
-}
-
-function crearPDFVenta(datosVenta, listaItems) {
-  // 1. Gestionar Carpeta en Drive
-  const nombreCarpeta = "CESTA_FACTURAS";
-  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
-  let carpeta;
-  if (carpetas.hasNext()) {
-    carpeta = carpetas.next();
-  } else {
-    carpeta = DriveApp.createFolder(nombreCarpeta);
-  }
-
-  // 2. Preparar Plantilla
-  const template = HtmlService.createTemplateFromFile('Factura');
-  template.datos = datosVenta; // Pasamos objeto cabecera
-  template.items = listaItems; // Pasamos array de items
-
-  // 3. Generar PDF
-  const html = template.evaluate().getContent();
-  const blob = Utilities.newBlob(html, "text/html", "Factura_" + datosVenta.nro_factura + ".html");
-  const pdf = blob.getAs("application/pdf").setName("Factura " + datosVenta.nro_factura + ".pdf");
-  
-  // 4. Guardar archivo
-  const archivo = carpeta.createFile(pdf);
-  
-  // 5. Devolver URL pública (o de descarga)
-  return archivo.getUrl(); 
-}
-
-function generarUrlTicket(idVenta) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheetCab = ss.getSheetByName('VENTAS_CABECERA');
-  const sheetDet = ss.getSheetByName('VENTAS_DETALLE');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  const sheetCli = ss.getSheetByName('CLIENTES');
-
-  // ... (Bloque de obtención de datos igual que antes) ...
-  // 1. Obtener Datos de Cabecera
-  const datosCab = sheetCab.getDataRange().getValues();
-  let venta = null;
-  for(let i=1; i<datosCab.length; i++) {
-    if(datosCab[i][0] == idVenta) {
-      venta = {
-        id: datosCab[i][0],
-        factura: datosCab[i][1],
-        fecha: new Date(datosCab[i][2]).toLocaleDateString('es-PY') + ' ' + new Date(datosCab[i][2]).toLocaleTimeString('es-PY').slice(0,5),
-        idCliente: datosCab[i][3],
-        total: datosCab[i][5]
-      };
-      break;
-    }
-  }
-  if(!venta) throw "Venta no encontrada";
-
-  // 2. Obtener Datos del Cliente
-  let cliente = { nombre: 'Casual', doc: 'X' };
-  const datosCli = sheetCli.getDataRange().getValues();
-  for(let i=1; i<datosCli.length; i++) {
-    if(datosCli[i][0] == venta.idCliente) {
-      cliente = { nombre: datosCli[i][1], doc: datosCli[i][2] };
-      break;
-    }
-  }
-
-  // 3. Obtener Detalles
-  const items = [];
-  const datosDet = sheetDet.getDataRange().getValues();
-  const datosProd = sheetProd.getDataRange().getValues();
-  const mapProd = {};
-  for(let i=1; i<datosProd.length; i++) mapProd[datosProd[i][0]] = datosProd[i][2];
-
-  for(let i=1; i<datosDet.length; i++) {
-    if(datosDet[i][1] == idVenta) {
-      items.push({
-        producto: mapProd[datosDet[i][2]] || 'Item',
-        cantidad: datosDet[i][3],
-        precio: datosDet[i][4],
-        subtotal: datosDet[i][5]
-      });
-    }
-  }
-
-  // 4. Generar PDF Temporal con Plantilla Ticket
-  const template = HtmlService.createTemplateFromFile('Ticket');
-  template.datos = {
-    fecha: venta.fecha,
-    nro_factura: venta.factura,
-    cliente_nombre: cliente.nombre,
-    cliente_doc: cliente.doc,
-    total: venta.total
-  };
-  template.items = items;
-
-  const html = template.evaluate().getContent();
-  const blob = Utilities.newBlob(html, "text/html", "Ticket.html");
-  const pdf = blob.getAs("application/pdf").setName("Ticket_" + venta.factura + ".pdf");
-
-  // 5. Guardar en carpeta Tickets_Ventas (por ID)
-  const idCarpeta = "1p0ta_bYQIIRwmVBYcoKexbd24aU8lvbZ";
-  const folder = DriveApp.getFolderById(idCarpeta);
-  
-  const file = folder.createFile(pdf);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  
-  return file.getUrl();
-}
-
-//COBRANZA
-
-function obtenerClientesConDeuda() {
-  const log = []; // Array para guardar logs de depuración
   try {
+    // 1. Bloqueo de seguridad extendido (las regeneraciones son costosas)
+    lock.waitLock(30000); 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shVentas = ss.getSheetByName('VENTAS_CABECERA');
-    const shClientes = ss.getSheetByName('CLIENTES');
+
+    // ----------------------------------------------------
+    // PASO 1: OBTENER EL ADN DEL PROYECTO (TIPO)
+    // ----------------------------------------------------
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    const dataProyectos = sheetProyectos.getDataRange().getValues();
+    const headersProy = dataProyectos[0];
     
-    if (!shVentas) throw new Error("No se encontró la hoja VENTAS_CABECERA");
-
-    // 1. Obtener Datos (Optimizamos leyendo solo si existen filas)
-    if (shVentas.getLastRow() <= 1) return JSON.stringify({ logs: ["Sin datos"], datos: [] });
+    // Buscamos índices dinámicamente
+    const idxIdProy = headersProy.indexOf("id");
+    const idxTipoProy = headersProy.indexOf("id_tipo_proyecto");
     
-    const dataVentas = shVentas.getDataRange().getValues();
-    const deudasPorCliente = {}; 
+    if (idxIdProy === -1 || idxTipoProy === -1) throw new Error("Estructura de DB_PROYECTOS inválida.");
 
-    // 2. Mapear Nombres de Clientes (Optimizacion: Mapa de acceso rápido)
-    const mapNombres = {};
-    if (shClientes && shClientes.getLastRow() > 1) {
-      const dataCli = shClientes.getDataRange().getValues();
-      for(let i=1; i<dataCli.length; i++) {
-        // Guardamos ID como String para evitar errores de tipo
-        if(dataCli[i][0]) mapNombres[String(dataCli[i][0])] = dataCli[i][1];
-      }
-    }
-
-    // 3. Recorrer Ventas
-    // Estructura esperada: [0:ID, 1:Nro, 2:Fecha, 3:Cliente, 5:Total, 6:Estado, 8:Condicion, 9:Saldo]
-    let contadorFacturas = 0;
-
-    for(let i=1; i<dataVentas.length; i++) {
-      const row = dataVentas[i];
-      if (!row[0]) continue; // Saltar filas vacías
-
-      const idCliente = String(row[3]);
-      
-      // A. LIMPIEZA DE DATOS (Trim y UpperCase seguro)
-      const condicion = String(row[8] || '').toUpperCase().trim(); 
-      const estado = String(row[6] || '').toUpperCase().trim();    
-      
-      // B. LÓGICA DE SALDO INTELIGENTE (CORRECCIÓN PRINCIPAL)
-      // Si la columna Saldo (9) está vacía, usamos el Total (5)
-      let saldo = row[9];
-      if (saldo === "" || saldo == null || saldo === undefined) {
-          saldo = Number(row[5] || 0); 
-      } else {
-          saldo = Number(saldo);
-      }
-
-      // C. FILTRO MAESTRO
-      // Solo Credito, con Deuda y que no esté anulada/pagada
-      if (condicion === 'CREDITO' && saldo > 0 && estado !== 'ANULADO' && estado !== 'PAGADO') {
-        
-        if (!deudasPorCliente[idCliente]) {
-          deudasPorCliente[idCliente] = {
-            id_cliente: idCliente,
-            nombre: mapNombres[idCliente] || 'Cliente Desconocido',
-            total_deuda: 0,
-            facturas_pendientes: [],
-            mostrar_detalle: false 
-          };
-        }
-
-        // Manejo de fecha seguro
-        let fechaFmt = row[2];
-        let fechaObj = null;
-        try { 
-            if (row[2] instanceof Date) {
-                fechaFmt = row[2].toISOString();
-                fechaObj = row[2];
-            } else {
-                fechaObj = new Date(row[2]); // Intentar parsear si es string
-            }
-        } catch(e){}
-
-        deudasPorCliente[idCliente].facturas_pendientes.push({
-          id_venta: String(row[0]),
-          numero: String(row[1]),
-          fecha: fechaFmt,
-          fecha_obj: fechaObj, // Para ordenar
-          total_original: Number(row[5] || 0),
-          saldo: saldo
-        });
-
-        deudasPorCliente[idCliente].total_deuda += saldo;
-        contadorFacturas++;
-      }
-    }
-
-    // 4. Convertir a array y ORDENAR
-    const listaFinal = Object.values(deudasPorCliente);
-
-    // Ordenar facturas internas por antigüedad (la más vieja primero)
-    listaFinal.forEach(cliente => {
-        cliente.facturas_pendientes.sort((a, b) => {
-            if (!a.fecha_obj) return 1;
-            if (!b.fecha_obj) return -1;
-            return a.fecha_obj - b.fecha_obj;
-        });
-    });
-
-    log.push(`Proceso OK. Clientes: ${listaFinal.length}, Facturas: ${contadorFacturas}`);
+    // Buscamos el proyecto
+    let idTipo = null;
+    let nombreObra = "";
     
-    return JSON.stringify({ logs: log, datos: listaFinal });
-
-  } catch (e) {
-    Logger.log("Error Grave: " + e.toString());
-    return JSON.stringify({ logs: ["Error Crítico: " + e.toString()], datos: [] });
-  }
-}
-
-function registrarCobro(datos) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shCob = ss.getSheetByName('COBRANZAS');
-    const shVentas = ss.getSheetByName('VENTAS_CABECERA');
-
-    const data = shVentas.getDataRange().getValues();
-    let filaEncontrada = -1;
-    let saldoActual = 0;
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(datos.id_venta)) { 
-        filaEncontrada = i + 1; 
-        saldoActual = Number(data[i][9]);
-        if ((data[i][9] === "" || data[i][9] == null)) {
-           saldoActual = Number(data[i][5]);
-        }
+    for (let i = 1; i < dataProyectos.length; i++) {
+      if (dataProyectos[i][idxIdProy] === projectId) {
+        idTipo = dataProyectos[i][idxTipoProy];
+        nombreObra = dataProyectos[i][headersProy.indexOf("nombre_obra")] || "Sin nombre";
         break;
       }
     }
 
-    if (filaEncontrada === -1) {
-      throw "No se encontró la factura indicada.";
-    }
+    if (!idTipo) throw new Error("El proyecto no tiene asignado un 'Tipo de Proyecto' o no existe.");
 
-    const montoAPagar = Number(datos.monto);
-    if (montoAPagar > (saldoActual + 0.1)) { 
-      throw "El monto supera el saldo pendiente de la factura.";
-    }
+    // ----------------------------------------------------
+    // PASO 2: OBTENER LA CONFIGURACIÓN FILTRADA (JOIN)
+    // ----------------------------------------------------
+    // Usamos readConfig para obtener objetos limpios de la configuración
+    
+    // A. Filtramos Etapas por Tipo
+    const etapas = readConfig("CONF_ETAPAS")
+                    .filter(e => e.id_tipo_proyecto === idTipo)
+                    .sort((a,b) => a.orden - b.orden); // Respetamos el orden lógico
+    
+    if (etapas.length === 0) throw new Error("El tipo de proyecto asignado no tiene etapas configuradas.");
+    
+    const idsEtapasValidas = etapas.map(e => e.id);
 
-    shCob.appendRow([
-      Utilities.getUuid(),
-      new Date(),
-      datos.id_cliente,
-      montoAPagar,
-      datos.metodo,
-      datos.observacion,
-      datos.id_venta,
-    ]);
+    // B. Filtramos Tareas por Etapas válidas
+    const tareasTemplate = readConfig("CONF_TAREAS")
+                            .filter(t => idsEtapasValidas.includes(t.etapa_id));
 
-    const nuevoSaldo = saldoActual - montoAPagar;
-    shVentas.getRange(filaEncontrada, 10).setValue(nuevoSaldo);
+    // ----------------------------------------------------
+    // PASO 3: LIMPIEZA DE TAREAS VIEJAS (DELETE)
+    // ----------------------------------------------------
+    const sheetExec = ss.getSheetByName("DB_EJECUCION");
+    const dataExec = sheetExec.getDataRange().getValues();
+    const headersExec = dataExec[0];
+    const idxProjIdExec = headersExec.indexOf("proyecto_id");
 
-    if (nuevoSaldo <= 0.1) {
-      shVentas.getRange(filaEncontrada, 7).setValue('PAGADO'); 
-      shVentas.getRange(filaEncontrada, 10).setValue(0); 
-    }
+    if (idxProjIdExec === -1) throw new Error("No se encontró columna 'proyecto_id' en ejecución.");
 
-    return { success: true };
-
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function obtenerHistorialCobranzas() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shCob = ss.getSheetByName('COBRANZAS');
-  const shCli = ss.getSheetByName('CLIENTES');
-  
-  if (!shCob || shCob.getLastRow() <= 1) return [];
-
-  // 1. Obtener Mapa de Clientes (ID -> Nombre)
-  const mapCli = {};
-  if (shCli) {
-    const dataCli = shCli.getDataRange().getValues();
-    for(let i=1; i<dataCli.length; i++) {
-      if(dataCli[i][0]) mapCli[String(dataCli[i][0])] = dataCli[i][1];
-    }
-  }
-
-  // 2. Obtener Cobros
-  const data = shCob.getDataRange().getValues();
-  const resultado = [];
-
-  // Estructura Hoja COBRANZAS:
-  // [0:id, 1:fecha, 2:id_cliente, 3:monto, 4:metodo, 5:obs, 6:id_venta]
-  
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[0]) { // Si tiene ID
-      let fechaFmt = row[1];
-      try { if (row[1] instanceof Date) fechaFmt = row[1].toISOString(); } catch(e){}
-
-      resultado.push({
-        id_cobro: row[0],
-        fecha: fechaFmt,
-        nombre_cliente: mapCli[String(row[2])] || 'Cliente Desconocido',
-        monto: Number(row[3]),
-        metodo: row[4],
-        observacion: row[5],
-        id_venta: row[6] // Por si queremos vincularlo a futuro
-      });
-    }
-  }
-
-  // Devolver invertido para ver lo más reciente primero
-  return resultado.reverse();
-}
-
-//AJUSTE STOCK
-
-function guardarAjusteStock(datos) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const shExist = ss.getSheetByName('STOCK_EXISTENCIAS');
-  const shProd = ss.getSheetByName('PRODUCTOS');
-
-  // 1. Validaciones
-  const cantidad = Number(datos.cantidad);
-  if (cantidad <= 0) throw "La cantidad debe ser mayor a 0.";
-  
-  // Determinar signo y tipo
-  // Si es SALIDA, multiplicamos por -1. Si es ENTRADA, queda positivo.
-  const multiplicador = datos.tipo === 'SALIDA' ? -1 : 1;
-  const cantFinal = cantidad * multiplicador;
-  const tipoMovimiento = datos.tipo === 'SALIDA' ? 'AJUSTE_SALIDA' : 'AJUSTE_ENTRADA'; // O 'FABRICACION'
-
-  // Buscar Producto para validar (y actualizar global)
-  const dataProd = shProd.getDataRange().getValues();
-  let filaProd = -1;
-  let stockGlobalActual = 0;
-
-  for (let i = 1; i < dataProd.length; i++) {
-    if (String(dataProd[i][0]) == String(datos.id_producto)) {
-      filaProd = i + 1;
-      stockGlobalActual = Number(dataProd[i][12] || 0); // Columna M (13)
-      break;
-    }
-  }
-
-  if (filaProd === -1) throw "Producto no encontrado.";
-
-  // 2. ACTUALIZAR STOCK POR DEPÓSITO (STOCK_EXISTENCIAS)
-  const dataExist = shExist.getDataRange().getValues();
-  let encontradoLocal = false;
-  let filaExist = -1;
-  let stockLocalActual = 0;
-
-  for (let k = 1; k < dataExist.length; k++) {
-    // Coincidencia: Producto Y Depósito
-    if (String(dataExist[k][1]) == String(datos.id_producto) && 
-        String(dataExist[k][2]) == String(datos.id_deposito)) {
-      filaExist = k + 1;
-      stockLocalActual = Number(dataExist[k][3] || 0);
-      encontradoLocal = true;
-      break;
-    }
-  }
-
-  // Validación Crítica para Salidas: No dejar en negativo
-  if (datos.tipo === 'SALIDA' && stockLocalActual < cantidad) {
-    throw `Stock insuficiente en este depósito.\nActual: ${stockLocalActual}\nIntentas restar: ${cantidad}`;
-  }
-
-  // A. Guardar en STOCK_EXISTENCIAS
-  if (encontradoLocal) {
-    // Actualizar existente
-    shExist.getRange(filaExist, 4).setValue(stockLocalActual + cantFinal);
-    shExist.getRange(filaExist, 5).setValue(new Date());
-  } else {
-    if (datos.tipo === 'SALIDA') throw "No existe stock de este producto en el depósito seleccionado.";
-    // Crear nuevo registro (solo para entradas)
-    shExist.appendRow([
-      Utilities.getUuid(),
-      datos.id_producto,
-      datos.id_deposito,
-      cantFinal, // Será positivo
-      new Date()
-    ]);
-  }
-
-  // B. Guardar en PRODUCTOS (Global)
-  shProd.getRange(filaProd, 13).setValue(stockGlobalActual + cantFinal);
-
-  // C. Guardar en MOVIMIENTOS_STOCK (Historial)
-  shMov.appendRow([
-    Utilities.getUuid(),
-    new Date(),
-    tipoMovimiento, // AJUSTE_SALIDA o AJUSTE_ENTRADA
-    datos.id_producto,
-    datos.id_deposito,
-    cantFinal,
-    datos.motivo || "Ajuste manual" // Guardamos el motivo como referencia ID o texto
-  ]);
-
-  lock.releaseLock();
-  return { success: true };
-}
-
-//CONFIGURACION
-
-function obtenerConfigCampos() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  let ws = ss.getSheetByName('CONFIG_CAMPOS');
-  
-  // Si no existe la hoja, la creamos con las cabeceras correctas
-  if (!ws) {
-    ws = ss.insertSheet('CONFIG_CAMPOS');
-    ws.appendRow(['id_campo', 'entidad_objetivo', 'key_interno', 'etiqueta_visible', 'tipo_dato', 'opciones_lista', 'es_obligatorio']);
-    return [];
-  }
-  
-  // Usamos la función getData genérica o leemos manualmente
-  const datos = ws.getDataRange().getValues();
-  const lista = [];
-  
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][0]) {
-      lista.push({
-        id_campo: datos[i][0],
-        entidad_objetivo: datos[i][1],
-        key_interno: datos[i][2],
-        etiqueta_visible: datos[i][3],
-        tipo_dato: datos[i][4],
-        opciones_lista: datos[i][5],
-        es_obligatorio: datos[i][6]
-      });
-    }
-  }
-  return lista;
-}
-
-function guardarCampoConfig(form) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  let ws = ss.getSheetByName('CONFIG_CAMPOS');
-  
-  // Seguridad: Crear hoja si fue borrada
-  if (!ws) {
-    ws = ss.insertSheet('CONFIG_CAMPOS');
-    ws.appendRow(['id_campo', 'entidad_objetivo', 'key_interno', 'etiqueta_visible', 'tipo_dato', 'opciones_lista', 'es_obligatorio']);
-  }
-  
-  // Sanitizar datos (evitar undefined)
-  const entidad = form.entidad_objetivo || 'producto';
-  const key = (form.key_interno || '').toLowerCase().replace(/\s+/g, '_'); // Forzar formato snake_case
-  const label = form.etiqueta_visible || 'Nuevo Campo';
-  const tipo = form.tipo_dato || 'text';
-  const opciones = form.opciones_lista || '';
-  const obligatorio = form.es_obligatorio ? true : false;
-
-  if(form.id_campo) {
-    // EDITAR
-    const datos = ws.getDataRange().getValues();
-    for(let i=1; i<datos.length; i++) {
-      if(datos[i][0] == form.id_campo) {
-        ws.getRange(i+1, 2, 1, 6).setValues([[entidad, key, label, tipo, opciones, obligatorio]]);
-        return { success: true };
+    // Recorremos hacia atrás para borrar sin romper índices
+    // Optimización: Solo borramos si encontramos coincidencia
+    let rowsDeleted = 0;
+    for (let i = dataExec.length - 1; i >= 1; i--) {
+      if (dataExec[i][idxProjIdExec] === projectId) {
+        sheetExec.deleteRow(i + 1);
+        rowsDeleted++;
       }
     }
-  } else {
-    // NUEVO
-    ws.appendRow([Utilities.getUuid(), entidad, key, label, tipo, opciones, obligatorio]);
-  }
-  return { success: true };
-}
-
-function eliminarCampoConfig(id) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('CONFIG_CAMPOS');
-  const datos = ws.getDataRange().getValues();
-  for(let i=1; i<datos.length; i++) {
-    if(datos[i][0] == id) {
-      ws.deleteRow(i+1);
-      return { success: true };
-    }
-  }
-  return { error: "Campo no encontrado" };
-}
-
-function obtenerConfigGeneral() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  if (!sheet) return {};
-
-  const datos = sheet.getDataRange().getValues();
-  const config = {};
-
-  // Empezamos en 1 si hay cabecera, o 0 si no. Asumimos cabecera en fila 1.
-  for (let i = 1; i < datos.length; i++) {
-    const clave = datos[i][0];
-    const valor = datos[i][1];
-    if (clave) {
-      config[clave] = valor;
-    }
-  }
-  return config;
-}
-
-function guardarConfigGeneral(clave, valor, usuario) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  let sheet = ss.getSheetByName('CONFIG_GENERAL');
-  
-  // Si no existe, la crea
-  if (!sheet) {
-    sheet = ss.insertSheet('CONFIG_GENERAL');
-    sheet.appendRow(['CLAVE', 'VALOR']);
-    sheet.getRange("A1:B1").setFontWeight("bold");
-  }
-
-  const datos = sheet.getDataRange().getValues();
-  let encontrado = false;
-  let valorAnterior = "";
-
-  // Buscamos si la clave ya existe
-  for (let i = 0; i < datos.length; i++) {
-    if (String(datos[i][0]) === String(clave)) {
-      valorAnterior = datos[i][1];
-      sheet.getRange(i + 1, 2).setValue(valor); // Actualiza valor (Columna B)
-      encontrado = true;
-      break;
-    }
-  }
-
-  // Si no existe, creamos nueva fila
-  if (!encontrado) {
-    sheet.appendRow([clave, valor]);
-  }
-
-  // --- REGISTRO EN BITÁCORA ---
-  // Solo registramos si hubo un cambio real o es un valor nuevo
-  if (String(valorAnterior) !== String(valor)) {
-    const userLog = usuario || "Sistema";
-    let detalle = `Configuración [${clave}] modificada.`;
-    
-    // Personalizamos el mensaje para claves conocidas
-    if (clave === 'DEPOSITO_DEFAULT') {
-      detalle = `Depósito Predeterminado cambiado de '${valorAnterior}' a '${valor}'`;
-    } else if (clave === 'ULTIMO_NRO_FACTURA') {
-      detalle = `Secuencia Factura actualizada a: ${valor}`;
-    } else if (clave === 'ULTIMO_NRO_REMISION') {
-      detalle = `Secuencia Remisión actualizada a: ${valor}`;
-    } else {
-      detalle += ` Valor: ${valor}`;
-    }
-
-    // Llamamos a tu función de bitácora (asegúrate de tenerla en Code.gs)
-    registrarEvento(userLog, "CONFIGURACIÓN", detalle);
-  }
-  
-  return { success: true };
-}
-
-function obtenerValorConfig(clave) {
-  const config = obtenerConfigGeneral(); // Reutilizamos la función anterior para no repetir lógica
-  return config[clave] || null;
-}
-
-function obtenerConfigRemision() {
-  return obtenerValorConfig('ULTIMO_NRO_REMISION') || '001-001-0000000';
-}
-
-function obtenerConfigFactura() {
-  return obtenerValorConfig('ULTIMO_NRO_FACTURA') || "001-001-0000000";
-}
-
-function obtenerConfigRemision() {
-  return obtenerValorConfig('ULTIMO_NRO_REMISION') || "001-001-0000000";
-}
-
-function guardarConfigFactura(nuevoValor, usuario) {
-  return guardarConfigGeneral('ULTIMO_NRO_FACTURA', nuevoValor, usuario);
-}
-
-function incrementarFactura(actual) {
-  // Espera formato XXX-XXX-XXXXXXX
-  const partes = actual.split('-');
-  if(partes.length < 3) return actual; // No tocamos si el formato es raro
-  
-  let numero = parseInt(partes[2], 10); // Tomamos la última parte
-  numero++; 
-  
-  // Reconstruimos con ceros a la izquierda (longitud 7 standard)
-  const nuevoNum = numero.toString().padStart(7, '0');
-  return `${partes[0]}-${partes[1]}-${nuevoNum}`;
-}
-
-function generarSiguienteRemision() {
-  const actual = obtenerConfigRemision();
-  const partes = actual.split('-'); // Separa 001-001-0000001
-  if(partes.length === 3) {
-    let secuencia = parseInt(partes[2], 10);
-    secuencia++;
-    const nuevaSecuencia = String(secuencia).padStart(7, '0');
-    return `${partes[0]}-${partes[1]}-${nuevaSecuencia}`;
-  }
-  return actual; // Si falla el formato, devuelve el actual
-}
-
-//DEPOSITO
-
-function obtenerDepositos() {
-  // Leemos la hoja tal cual la mostraste
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('DEPOSITOS');
-  if(!ws || ws.getLastRow() <= 1) return [];
-  
-  const datos = ws.getDataRange().getValues();
-  const lista = [];
-  
-  for(let i=1; i<datos.length; i++) {
-    if(datos[i][0]) {
-      lista.push({
-        id_deposito: datos[i][0],
-        nombre: datos[i][1],
-        direccion: datos[i][2],
-        responsable: datos[i][3],
-        activo: datos[i][4]
-      });
-    }
-  }
-  return lista;
-}
-
-function guardarDeposito(form) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('DEPOSITOS');
-  
-  if(form.id_deposito) {
-    // EDITAR: Buscamos por ID
-    const datos = ws.getDataRange().getValues();
-    for(let i=1; i<datos.length; i++) {
-      if(datos[i][0] == form.id_deposito) {
-        // Actualizamos Cols B, C, D, E (Indices 1,2,3,4)
-        ws.getRange(i+1, 2, 1, 4).setValues([[
-          form.nombre, 
-          form.direccion, 
-          form.responsable, 
-          form.activo
-        ]]);
-        return { success: true };
-      }
-    }
-  } else {
-    // NUEVO: Generamos ID si no existe, o usamos uno simple
-    const id = Math.floor(Math.random() * 1000000); // ID Numérico simple
-    ws.appendRow([id, form.nombre, form.direccion, form.responsable, form.activo || 'Si']);
-  }
-  return { success: true };
-}
-
-function eliminarDeposito(id) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  
-  // A. VALIDAR USO EN VENTAS (Columna E de VENTAS_CABECERA es index 4)
-  const sheetVentas = ss.getSheetByName('VENTAS_CABECERA');
-  if(sheetVentas) {
-    const datos = sheetVentas.getDataRange().getValues();
-    // Revisamos la columna 4 (id_deposito_origen)
-    const usado = datos.some((r, i) => i > 0 && r[4] == id); 
-    if(usado) return { error: "⛔ No se puede eliminar: Existen ventas registradas desde este depósito." };
-  }
-
-  // B. VALIDAR USO EN COMPRAS (Asumimos Columna D o E, ajusta si tu hoja compras es distinta)
-  // Por defecto en el codigo anterior usabamos "DEP-CENTRAL" fijo, pero si ya tienes datos reales:
-  const sheetCompras = ss.getSheetByName('COMPRAS_CABECERA');
-  if(sheetCompras) {
-    const datos = sheetCompras.getDataRange().getValues();
-    // Revisamos la columna 3 (id_deposito, si existe)
-    const usado = datos.some((r, i) => i > 0 && r[3] == id);
-    if(usado) return { error: "⛔ No se puede eliminar: Existen compras destinadas a este depósito." };
-  }
-
-  // C. ELIMINAR
-  const ws = ss.getSheetByName('DEPOSITOS');
-  const datos = ws.getDataRange().getValues();
-  for(let i=1; i<datos.length; i++) {
-    if(datos[i][0] == id) {
-      ws.deleteRow(i+1);
-      return { success: true };
-    }
-  }
-  return { error: "Depósito no encontrado." };
-}
-
-//CATEGORIA PRODUCTO
-
-function guardarCategoria(datos) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('CATEGORIAS');
-  
-  // Si no tiene ID, es nuevo. Generamos uno simple o UUID.
-  // Usaremos UUID para consistencia con el resto del sistema.
-  const id = datos.id_categoria || Utilities.getUuid();
-  const nombre = datos.nombre.toString().trim();
-
-  const data = sh.getDataRange().getValues();
-  let filaEncontrada = -1;
-
-  // Buscar si ya existe (Modo Edición)
-  if (datos.id_categoria) {
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]) == String(id)) {
-        filaEncontrada = i + 1;
-        break;
-      }
-    }
-  }
-
-  if (filaEncontrada > 0) {
-    // Actualizar
-    sh.getRange(filaEncontrada, 2).setValue(nombre);
-  } else {
-    // Crear Nuevo
-    sh.appendRow([id, nombre]);
-  }
-
-  lock.releaseLock();
-  return { success: true };
-}
-
-function eliminarCategoria(id) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('CATEGORIAS');
-  const data = sh.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) == String(id)) {
-      sh.deleteRow(i + 1);
-      lock.releaseLock();
-      return { success: true };
-    }
-  }
-  
-  lock.releaseLock();
-  return { error: "Categoría no encontrada" };
-}
-
-function obtenerCategorias() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const ws = ss.getSheetByName('CATEGORIAS');
-  
-  // Validación de seguridad: si no existe o está vacía (solo cabecera)
-  if(!ws || ws.getLastRow() <= 1) return [];
-  
-  const datos = ws.getDataRange().getValues();
-  const lista = [];
-  
-  for(let i = 1; i < datos.length; i++) {
-    // Verificamos que el ID no esté vacío
-    if(datos[i][0]) {
-      lista.push({
-        id_categoria: datos[i][0],
-        nombre: datos[i][1]
-      });
-    }
-  }
-  return lista;
-}
-
-//STOCK
-
-function actualizarStockDeposito(idProducto, idDeposito, cantidadCambio) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  
-  // 1. Actualizar/Crear registro en STOCK_EXISTENCIAS
-  const dataStock = sheetStock.getDataRange().getValues();
-  let encontrado = false;
-  let stockLocalActual = 0;
-  
-  for(let i=1; i<dataStock.length; i++){
-    if(dataStock[i][1] == idProducto && dataStock[i][2] == idDeposito){
-      stockLocalActual = Number(dataStock[i][3]);
-      const nuevoStockLocal = stockLocalActual + Number(cantidadCambio);
-      sheetStock.getRange(i+1, 4).setValue(nuevoStockLocal); // Act. Cantidad
-      sheetStock.getRange(i+1, 5).setValue(new Date());      // Act. Fecha
-      encontrado = true;
-      break;
-    }
-  }
-  
-  if(!encontrado){
-    // Si no existe el producto en ese depósito, lo creamos
-    sheetStock.appendRow([Utilities.getUuid(), idProducto, idDeposito, cantidadCambio, new Date()]);
-  }
-  
-  // 2. Actualizar Total Global en PRODUCTOS (Para las tarjetas visuales)
-  // Esto es un poco costoso, pero mantiene la consistencia visual rápida
-  const dataProd = sheetProd.getDataRange().getValues();
-  for(let i=1; i<dataProd.length; i++){
-    if(dataProd[i][0] == idProducto){
-      const stockGlobalAnt = Number(dataProd[i][12] || 0);
-      sheetProd.getRange(i+1, 13).setValue(stockGlobalAnt + Number(cantidadCambio));
-      break;
-    }
-  }
-}
-
-function obtenerStockLocal(idProducto, idDeposito) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
-  
-  // Si no existe la hoja, devolvemos 0 (seguridad para inicio del sistema)
-  if (!sheetStock) return 0;
-
-  const data = sheetStock.getDataRange().getValues();
-  
-  for(let i=1; i<data.length; i++){
-    // Comparamos ID Producto (Col 1) e ID Deposito (Col 2)
-    if(String(data[i][1]) == String(idProducto) && String(data[i][2]) == String(idDeposito)){
-      return Number(data[i][3]); // Col 3 es Cantidad
-    }
-  }
-  return 0; // Si no existe registro, es 0
-}
-
-function obtenerProductosConStock() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  const sheetStock = ss.getSheetByName('STOCK_EXISTENCIAS');
-  const sheetDep = ss.getSheetByName('DEPOSITOS');
-
-  // 1. Obtener Datos Básicos
-  // Usamos getData (tu función genérica) para obtener objetos limpios
-  // Nota: getData debe estar definida en tu script como la tenías antes
-  const productos = getData('PRODUCTOS'); 
-  
-  // Si no hay tabla de existencias (aún no se creó), devolvemos productos tal cual
-  if (!sheetStock) return productos;
-
-  const datosStock = sheetStock.getDataRange().getValues();
-  const datosDep = sheetDep ? sheetDep.getDataRange().getValues() : [];
-
-  // 2. Mapa de Nombres de Depósitos (ID -> Nombre)
-  const mapaDep = {};
-  for (let i = 1; i < datosDep.length; i++) {
-    if(datosDep[i][0]) mapaDep[datosDep[i][0]] = datosDep[i][1];
-  }
-
-  // 3. Agrupar Stock por Producto
-  // Objeto: { "ID_PROD": [ {deposito: "Central", cantidad: 10}, ... ] }
-  const stockPorProd = {};
-  
-  // Empezamos en 1 para saltar cabecera de STOCK_EXISTENCIAS
-  // Col 1: id_producto, Col 2: id_deposito, Col 3: cantidad
-  for (let i = 1; i < datosStock.length; i++) {
-    const idProd = datosStock[i][1];
-    const idDep = datosStock[i][2];
-    const cant = Number(datosStock[i][3]);
-
-    if (!stockPorProd[idProd]) stockPorProd[idProd] = [];
-    
-    // Solo agregamos si hay cantidad (o si quieres mostrar ceros, quita el if)
-    // if (cant !== 0) { 
-      stockPorProd[idProd].push({
-        nombre_deposito: mapaDep[idDep] || 'Depósito ' + idDep,
-        cantidad: cant
-      });
-    // }
-  }
-
-  // 4. Fusionar con Productos
-  return productos.map(p => {
-    // Agregamos la propiedad 'stocks' al objeto producto
-    p.stocks = stockPorProd[p.id_producto] || [];
-    
-    // Recalculamos el total real sumando los depósitos (más seguro que confiar en la columna stock_actual)
-    const totalReal = p.stocks.reduce((sum, s) => sum + s.cantidad, 0);
-    p.stock_actual = totalReal; 
-    
-    return p;
-  });
-}
-
-//TRANSFERENCIA
-
-function guardarTransferencia(datos) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheetCab = ss.getSheetByName('TRANSFERENCIAS_CABECERA');
-  const sheetDet = ss.getSheetByName('TRANSFERENCIAS_DETALLE');
-  const sheetMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const sheetProd = ss.getSheetByName('PRODUCTOS');
-  const sheetDep = ss.getSheetByName('DEPOSITOS');
-
-  // 1. Validaciones y Datos Previos
-  if (datos.origen === datos.destino) throw new Error("El origen y destino no pueden ser iguales.");
-  
-  const mapProd = {};
-  const dProd = sheetProd.getDataRange().getValues();
-  for(let i=1; i<dProd.length; i++) mapProd[dProd[i][0]] = { sku: dProd[i][1], nombre: dProd[i][2] };
-
-  const mapDep = {};
-  const dDep = sheetDep.getDataRange().getValues();
-  for(let i=1; i<dDep.length; i++) mapDep[dDep[i][0]] = dDep[i][1];
-
-  // 2. Verificar Stock en Origen
-  datos.items.forEach(item => {
-    const stockDisp = obtenerStockLocal(item.id_producto, datos.origen);
-    if (stockDisp < item.cantidad) {
-      throw new Error(`Stock insuficiente en origen (${mapDep[datos.origen]}) para ${mapProd[item.id_producto].nombre}.\nHay: ${stockDisp}, Pides: ${item.cantidad}`);
-    }
-  });
-
-  // 3. Generar PDF
-  const idTransf = Utilities.getUuid();
-  const fecha = new Date(datos.fecha);
-  const itemsPDF = datos.items.map(i => ({
-    sku: mapProd[i.id_producto].sku,
-    nombre: mapProd[i.id_producto].nombre,
-    cantidad: i.cantidad
-  }));
-  
-  const datosPDF = {
-    fecha: fecha.toLocaleDateString('es-PY'),
-    id_corto: idTransf.slice(0,8).toUpperCase(),
-    origen: mapDep[datos.origen],
-    destino: mapDep[datos.destino],
-    responsable: datos.responsable,
-    observacion: datos.observacion
-  };
-  
-  const urlPdf = crearPDFTransferencia(datosPDF, itemsPDF);
-
-  // 4. Guardar Base de Datos
-  sheetCab.appendRow([idTransf, fecha, datos.origen, datos.destino, datos.responsable, datos.observacion, urlPdf]);
-
-  datos.items.forEach(item => {
-    // A. Guardar Detalle
-    sheetDet.appendRow([Utilities.getUuid(), idTransf, item.id_producto, item.cantidad]);
-
-    // B. Movimientos Kardex (DOBLE MOVIMIENTO)
-    // Salida del Origen
-    sheetMov.appendRow([Utilities.getUuid(), fecha, "SALIDA_TRANSF", item.id_producto, datos.origen, item.cantidad * -1, idTransf]);
-    actualizarStockDeposito(item.id_producto, datos.origen, item.cantidad * -1);
-
-    // Entrada al Destino
-    sheetMov.appendRow([Utilities.getUuid(), fecha, "ENTRADA_TRANSF", item.id_producto, datos.destino, item.cantidad, idTransf]);
-    actualizarStockDeposito(item.id_producto, datos.destino, item.cantidad);
-  });
-
-  lock.releaseLock();
-  return { success: true, pdf_url: urlPdf };
-}
-
-function obtenerHistorialTransferencias() {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName('TRANSFERENCIAS_CABECERA');
-  const sheetDep = ss.getSheetByName('DEPOSITOS');
-  if(!sheet || sheet.getLastRow() <= 1) return [];
-
-  const mapDep = {};
-  const dDep = sheetDep.getDataRange().getValues();
-  for(let i=1; i<dDep.length; i++) mapDep[dDep[i][0]] = dDep[i][1];
-
-  const data = sheet.getDataRange().getValues();
-  const res = [];
-  for(let i=1; i<data.length; i++){
-    let fechaFmt = data[i][1];
-    if(data[i][1] instanceof Date) fechaFmt = data[i][1].toLocaleDateString();
-
-    res.push({
-      id: data[i][0],
-      fecha: fechaFmt,
-      origen: mapDep[data[i][2]] || 'Desc.',
-      destino: mapDep[data[i][3]] || 'Desc.',
-      responsable: data[i][4],
-      url_pdf: data[i][6]
-    });
-  }
-  return res.reverse();
-}
-
-function crearPDFTransferencia(datos, items) {
-  // 1. Gestionar Carpeta por ID (Transferencia)
-  const idCarpeta = "1G6TFnOLXiCPpKzGi_k8CaXmtazMugTlF";
-  const carpeta = DriveApp.getFolderById(idCarpeta);
-
-  const template = HtmlService.createTemplateFromFile('Transferencia');
-  template.datos = datos;
-  template.items = items;
-  
-  const blob = Utilities.newBlob(template.evaluate().getContent(), "text/html", "TRF_" + datos.id_corto + ".html");
-  const pdf = blob.getAs("application/pdf").setName("Transferencia_" + datos.fecha.replace(/\//g,'-') + "_" + datos.id_corto + ".pdf");
-  
-  const archivo = carpeta.createFile(pdf);
-  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-  return archivo.getUrl();
-}
-
-//REMISION
-
-
-function guardarRemision(datos) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
-  const usuarioActivo = datos.usuario_editor || "Sistema";
-
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const shCab = ss.getSheetByName('REMISIONES_CABECERA');
-  const shDet = ss.getSheetByName('REMISIONES_DETALLE');
-  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const shProd = ss.getSheetByName('PRODUCTOS');
-  const shCli = ss.getSheetByName('CLIENTES');
-
-  // A. Generar Número Automático
-  const nuevoNumero = generarSiguienteRemision();
-
-  // B. Validar Stock
-  for (let item of datos.items) {
-    const stockDisp = obtenerStockLocal(item.id_producto, datos.id_deposito);
-    if (stockDisp < item.cantidad) {
-      throw new Error(`Stock insuficiente para: ${item.nombre_prod || 'un producto'}`);
-    }
-  }
-
-  const idRemision = Utilities.getUuid();
-  
-  // C. Preparar datos para PDF
-  // (Aquí buscamos nombres de cliente si no vienen completos)
-  // ... lógica de nombres ...
-
-  // D. Guardar Cabecera
-  // Estructura: id, fecha, numero, id_cliente, id_deposito, conductor, chapa, estado, url_pdf, total_valorizado
-  const totalValorizado = datos.items.reduce((sum, it) => sum + (it.cantidad * it.precio), 0);
-  
-  // Generar PDF (con precios)
-  const urlPdf = crearPDFRemision({
-    ...datos, 
-    numero: nuevoNumero, 
-    total: totalValorizado
-  });
-
-  shCab.appendRow([
-    idRemision, 
-    datos.fecha, 
-    nuevoNumero, 
-    datos.id_cliente, 
-    datos.id_deposito,
-    datos.entregado_por,
-    datos.recibido_por,
-    'PENDIENTE_FACTURAR', // Estado inicial
-    urlPdf,
-    totalValorizado
-  ]);
-
-  // E. Guardar Detalle y Mover Stock
-  datos.items.forEach(item => {
-    // Guardamos PRECIO UNITARIO en la col 5
-    shDet.appendRow([Utilities.getUuid(), idRemision, item.id_producto, item.cantidad, item.precio]);
-    
-    // Descontar Stock
-    shMov.appendRow([
-      Utilities.getUuid(), new Date(), "SALIDA_REMISION", item.id_producto, datos.id_deposito, item.cantidad * -1, idRemision
-    ]);
-    actualizarStockDeposito(item.id_producto, datos.id_deposito, item.cantidad * -1);
-  });
-
-  // F. Actualizar Configuración con el nuevo número
-  guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoNumero, usuarioActivo);
-
-  lock.releaseLock();
-  return { success: true, pdf_url: urlPdf, numero: nuevoNumero };
-}
-
-function crearPDFRemision(datos) {
-  try {
-    // 1. Gestionar Carpeta por ID (Remisión)
-    const idCarpeta = "148nTZ3zQcpdHrTD4GkT7zG2zYFjLDQoR";
-    const carpeta = DriveApp.getFolderById(idCarpeta);
-
-    // 2. Cargar la plantilla HTML
-    const template = HtmlService.createTemplateFromFile('Remision');
-    template.datos = datos;
-    
-    // 3. Evaluar la plantilla
-    const htmlContenido = template.evaluate().getContent();
-
-    // 4. Crear el Blob y el PDF
-    const blob = Utilities.newBlob(htmlContenido, "text/html", "Remision.html");
-    const pdf = blob.getAs("application/pdf").setName("Remision_" + datos.numero + ".pdf");
-    
-    // 5. Guardar en Drive
-    const archivo = carpeta.createFile(pdf);
-    
-    // Configurar permisos
-    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
-    // 6. Retornar URL
-    return archivo.getUrl();
-    
-  } catch(e) { 
-    return "ERROR_PDF: " + e.message; 
-  }
-}
-
-function obtenerHistorialRemisiones() {
-  try {
-    const ss = SpreadsheetApp.openById(SS_ID);
-    const sh = ss.getSheetByName('REMISIONES_CABECERA');
-    const shCli = ss.getSheetByName('CLIENTES');
-    
-    if (!sh || sh.getLastRow() <= 1) return [];
-    
-    // Mapa de clientes (ID -> Nombre)
-    const mapCli = {};
-    if (shCli) {
-      const d = shCli.getDataRange().getValues();
-      for(let i=1; i<d.length; i++) {
-        mapCli[String(d[i][0]).trim()] = d[i][1]; 
-      }
-    }
-
-    const data = sh.getDataRange().getValues();
-    const result = [];
-
-    // Recorremos los datos (fila 1 en adelante)
-    for(let i=1; i<data.length; i++) {
-      const fila = data[i];
+    console.log(`🧹 Se eliminaron ${rowsDeleted} tareas antiguas.`);
+
+    // ----------------------------------------------------
+    // PASO 4: INSERCIÓN MASIVA DE NUEVAS TAREAS (BATCH INSERT)
+    // ----------------------------------------------------
+    if (tareasTemplate.length > 0) {
+      const timestamp = new Date();
       
-      if (fila[0] && String(fila[0]).trim() !== "") {
-        
-        let fechaSegura = "";
-        try {
-          if (fila[1] instanceof Date) {
-            fechaSegura = fila[1].toISOString();
-          } else {
-            fechaSegura = String(fila[1]); 
-          }
-        } catch(e) {
-          fechaSegura = new Date().toISOString();
-        }
-
-        const idCliente = String(fila[3] || "").trim();
-        const idDeposito = String(fila[4] || "").trim();
-
-        result.push({
-          id_remision: String(fila[0]),
-          fecha: fechaSegura,
-          numero: String(fila[2] || "---"),
-          id_cliente_raw: idCliente,
-          id_deposito_raw: idDeposito,
-          cliente: mapCli[idCliente] || 'Cliente Desconocido', 
-          estado: String(fila[7] || "PENDIENTE"), 
-          url_pdf: String(fila[8] || ""),
-          // --- NUEVO: Agregamos el total (Columna J, índice 9) ---
-          total: Number(fila[9] || 0) 
-        });
-      }
-    }
-    
-    return result.reverse(); 
-
-  } catch (e) {
-    Logger.log("ERROR EN HISTORIAL REMISIONES: " + e.toString());
-    throw new Error("Backend Error: " + e.toString());
-  }
-}
-
-function obtenerDetalleRemisionParaFacturar(idRemision) {
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const data = ss.getSheetByName('REMISIONES_DETALLE').getDataRange().getValues();
-  const items = [];
-  
-  // Estructura Detalle: id_det, id_rem, id_prod, cant, precio
-  for(let i=1; i<data.length; i++) {
-    if(String(data[i][1]) == String(idRemision)) {
-      items.push({
-        id_producto: data[i][2],
-        cantidad: data[i][3],
-        precio: data[i][4],
-        tasa_iva: 10 // Asumimos 10 o buscamos el producto si queremos ser exactos
-      });
-    }
-  }
-  return items;
-}
-
-function facturarRemision(remision) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const shRemCab = ss.getSheetByName('REMISIONES_CABECERA');
-  const shRemDet = ss.getSheetByName('REMISIONES_DETALLE'); // Necesitamos leer los items originales
-  
-  // 1. Recuperar items de la remisión
-  // (Simplificación: asumimos que recibimos los items desde el frontend para reutilizar la lógica de `guardarVenta`, 
-  // pero marcando que NO mueva stock).
-  
-  // TRUCO: Vamos a reutilizar `guardarVenta` pero le pasaremos un flag especial.
-  // Primero modificamos `guardarVenta` (ver abajo).
-  
-  // 2. Actualizar estado de la Remisión a FACTURADO
-  const dataCab = shRemCab.getDataRange().getValues();
-  for(let i=1; i<dataCab.length; i++) {
-    if(String(dataCab[i][0]) == String(remision.id_remision)) {
-      shRemCab.getRange(i+1, 8).setValue('FACTURADO'); // Columna 8 es Estado
-      break;
-    }
-  }
-  
-  lock.releaseLock();
-  return { success: true };
-}
-
-function anularRemision(idRemision) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
-
-  const ss = SpreadsheetApp.openById(SS_ID);
-  const shCab = ss.getSheetByName('REMISIONES_CABECERA');
-  const shDet = ss.getSheetByName('REMISIONES_DETALLE');
-  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
-  const shProd = ss.getSheetByName('PRODUCTOS'); // Necesario para devolver stock visual
-
-  // 1. Buscar la Remisión y Verificar Estado
-  const dataCab = shCab.getDataRange().getValues();
-  let filaCab = -1;
-  let idDepositoOrigen = "";
-  
-  for (let i = 1; i < dataCab.length; i++) {
-    // Col A: id_remision (índice 0)
-    if (String(dataCab[i][0]) === String(idRemision)) {
-      const estadoActual = dataCab[i][7]; // Col H: estado
-      
-      if (estadoActual === 'ANULADO') {
-        lock.releaseLock();
-        throw "Esta remisión ya está anulada.";
-      }
-      
-      if (estadoActual === 'FACTURADO') {
-        lock.releaseLock();
-        throw "⛔ No se puede anular: Esta remisión ya fue facturada. Debes anular la factura primero.";
-      }
-      
-      idDepositoOrigen = dataCab[i][4]; // Col E: id_deposito
-      filaCab = i + 1; // Guardamos la fila para actualizar luego
-      break;
-    }
-  }
-
-  if (filaCab === -1) {
-    lock.releaseLock();
-    throw "Remisión no encontrada.";
-  }
-
-  // 2. Recuperar Items para Devolver Stock
-  const dataDet = shDet.getDataRange().getValues();
-  const itemsADevolver = [];
-  
-  for (let i = 1; i < dataDet.length; i++) {
-    // Col B: id_remision (índice 1)
-    if (String(dataDet[i][1]) === String(idRemision)) {
-      itemsADevolver.push({
-        id_producto: dataDet[i][2], // Col C
-        cantidad: Number(dataDet[i][3]) // Col D
-      });
-    }
-  }
-
-  // 3. Ejecutar Devolución de Stock
-  itemsADevolver.forEach(item => {
-    // A. Registrar Movimiento de Entrada (Corrección)
-    shMov.appendRow([
-      Utilities.getUuid(),
-      new Date(),
-      "ENTRADA_ANULACION_REM", // Tipo movimiento especial
-      item.id_producto,
-      idDepositoOrigen,
-      item.cantidad, // Positivo porque vuelve a entrar
-      idRemision
-    ]);
-
-    // B. Actualizar Stock Real (Tabla Existencias y Productos)
-    actualizarStockDeposito(item.id_producto, idDepositoOrigen, item.cantidad);
-  });
-
-  // 4. Actualizar Estado en Cabecera
-  // Columna 8 (H) es Estado
-  shCab.getRange(filaCab, 8).setValue("ANULADO");
-
-  lock.releaseLock();
-  return { success: true };
-}
-
-
-//GASTO OPERATIVO
-
-function guardarGasto(datos) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('GASTOS');
-    if (!sh) throw "No se encontró la hoja GASTOS.";
-
-    const id = Utilities.getUuid();
-    // Aseguramos que la fecha sea válida
-    const fecha = datos.fecha ? new Date(datos.fecha + "T12:00:00") : new Date();
-
-    const nuevaFila = [
-      id,
-      fecha,
-      datos.categoria || "Varios",
-      datos.descripcion || "",
-      Number(datos.monto || 0),
-      datos.metodo || "Efectivo"
-    ];
-
-    sh.appendRow(nuevaFila);
-
-    return { success: true };
-
-  } catch (error) {
-    console.error("Error en guardarGasto: " + error);
-    // Re-lanzamos el error para que SweetAlert en el frontend lo muestre
-    throw error.toString(); 
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function obtenerGastos() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('GASTOS');
-  if (!sh || sh.getLastRow() <= 1) return [];
-
-  const data = sh.getDataRange().getValues();
-  const lista = [];
-
-  // Recorremos desde la fila 1 (datos)
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[0]) {
-      let fechaFmt = row[1];
-      try { if (row[1] instanceof Date) fechaFmt = row[1].toISOString(); } catch(e){}
-      
-      lista.push({
-        id_gasto: row[0],
-        fecha: fechaFmt,
-        categoria: row[2],
-        descripcion: row[3],
-        monto: Number(row[4]),
-        metodo: row[5]
-      });
-    }
-  }
-  // Retornar invertido para ver lo más nuevo arriba
-  return lista.reverse();
-}
-
-function eliminarGasto(idGasto, usuario) { 
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { throw "Servidor ocupado."; }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('GASTOS');
-  
-  if (!sh) throw "No se encontró la hoja GASTOS.";
-
-  const data = sh.getDataRange().getValues();
-  let filaEncontrada = -1;
-  
-  // Variables temporales para el log
-  let monto = 0;
-  let descripcion = "";
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(idGasto)) {
-      filaEncontrada = i + 1;      
-      descripcion = data[i][3]; 
-      monto = data[i][4];
-      break;
-    }
-  }
-
-  if (filaEncontrada > 0) {
-    const quien = usuario || "Sistema";
-    registrarEvento(quien, "ELIMINAR GASTO", `Se borró gasto de ${monto} Gs. (${descripcion})`);
-    
-    sh.deleteRow(filaEncontrada);
-    lock.releaseLock();
-    return { success: true };
-  } else {
-    lock.releaseLock();
-    throw "Gasto no encontrado o ya eliminado.";
-  }
-}
-
-//USUARIOS
-
-function loginUsuario(user, pass) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ws = ss.getSheetByName('USUARIOS');
-  
-  if(!ws) throw new Error("No existe la hoja de USUARIOS");
-  
-  const data = ws.getDataRange().getValues();
-  
-  for(let i = 1; i < data.length; i++) {
-    // Columna C (2) = Usuario, Columna D (3) = Contraseña
-    // Usamos String() y trim() para evitar errores por espacios invisibles o formatos de número
-    if(String(data[i][2]).trim().toLowerCase() === String(user).trim().toLowerCase() && 
-       String(data[i][3]).trim() === String(pass).trim()) {
-      
-      // --- CORRECCIÓN AQUÍ: Usar índice 6 (Columna G) para Activo ---
-      // Si dice "NO", bloqueamos. Si dice cualquier otra cosa (SI, Si, Admin, vacío), dejamos pasar.
-      if(String(data[i][6]).toUpperCase() === 'NO') throw new Error("Usuario inactivo");
-      
-      const usuarioEncontrado = {
-        id_usuario: data[i][0],
-        nombre: data[i][1],
-        email: data[i][2],
-        password: data[i][3],
-        // Rol estaba en Columna E (índice 4)
-        rol: data[i][4], 
-        // Módulos en Columna F (índice 5)
-        modulos: data[i][5],
-        // Activo en Columna G (índice 6)
-        activo: data[i][6],
-        // Avatar en Columna H (índice 7)
-        avatar: data[i][7] || ''
-      };
-
-      // Generar Token de sesión
-      const token = crearSesion(usuarioEncontrado);
-      usuarioEncontrado.token = token; 
-      
-      return usuarioEncontrado;
-    }
-  }
-  throw new Error("Credenciales incorrectas");
-}
-
-function obtenerUsuarios() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USUARIOS');
-  if (!sh) return [];
-  const data = sh.getDataRange().getValues();
-  const usuarios = [];
-  
-  // Empezamos de 1 para saltar encabezado
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0]) {
-      usuarios.push({
-        id_usuario: data[i][0],
-        nombre: data[i][1],
-        email: data[i][2],
-        password: data[i][3],
-        rol: data[i][4],
-        modulos: data[i][5], // String JSON
-        activo: data[i][6],
-        avatar: data[i][7] || '',
-        id_deposito: data[i][8] || ''
-      });
-    }
-  }
-  return usuarios;
-}
-
-function guardarUsuario(usuario) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USUARIOS');
-  const id = usuario.id_usuario || new Date().getTime().toString();
-  
-  // Convertir array de permisos a String JSON
-  const modulosStr = JSON.stringify(usuario.permisos || []);
-  
-  if (usuario.id_usuario) {
-    // EDITAR
-    const data = sh.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(usuario.id_usuario)) {
-        sh.getRange(i + 1, 2).setValue(usuario.nombre);
-        sh.getRange(i + 1, 3).setValue(usuario.email);
-        sh.getRange(i + 1, 4).setValue(usuario.password);
-        sh.getRange(i + 1, 5).setValue(usuario.rol);
-        sh.getRange(i + 1, 6).setValue(modulosStr);
-        sh.getRange(i + 1, 7).setValue(usuario.activo);
-        sh.getRange(i + 1, 8).setValue(usuario.avatar);
-        sh.getRange(i + 1, 9).setValue(usuario.id_deposito);
-        return { success: true };
-      }
-    }
-  } else {
-    // NUEVO
-    sh.appendRow([id, usuario.nombre, usuario.email, usuario.password, usuario.rol, modulosStr, usuario.activo, usuario.avatar, usuario.id_deposito]);
-  }
-  return { success: true };
-}
-
-function eliminarUsuario(idUsuario) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('USUARIOS');
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(idUsuario)) {
-      sh.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  throw "Usuario no encontrado";
-}
-
-function actualizarDatosPersonales(datos) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('USUARIOS');
-  const data = sh.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(datos.id_usuario)) {
-      
-      // Actualizamos solo Nombre (Col 2) y Avatar (Col 8)
-      sh.getRange(i + 1, 2).setValue(datos.nombre);
-      sh.getRange(i + 1, 8).setValue(datos.avatar);
-      
-      return {
-        success: true,
-        usuarioActualizado: {
-          id_usuario: datos.id_usuario,
-          nombre: datos.nombre,
-          email: data[i][2],
-          password: data[i][3], // Mantenemos la pass actual
-          rol: data[i][4],
-          modulos: data[i][5],
-          activo: data[i][6],
-          avatar: datos.avatar
-        }
-      };
-    }
-  }
-  throw "Usuario no encontrado.";
-}
-
-function cambiarPassword(idUsuario, passActual, passNueva) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('USUARIOS');
-  const data = sh.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(idUsuario)) {
-      
-      // VERIFICACIÓN DE SEGURIDAD
-      const passEnBD = String(data[i][3]);
-      if (passEnBD !== String(passActual)) {
-        throw "La contraseña actual es incorrecta.";
-      }
-      
-      // Si es correcta, guardamos la nueva
-      sh.getRange(i + 1, 4).setValue(passNueva);
-      
-      return { success: true };
-    }
-  }
-  throw "Usuario no encontrado.";
-}
-
-//SESION USUARIO
-
-function crearSesion(usuario) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ws = ss.getSheetByName('SESIONES');
-  
-  // Generar un token aleatorio simple
-  const token = Utilities.getUuid(); 
-  const fecha = new Date();
-  
-  // Guardar en la hoja: Token | ID Usuario | Creación | Último Uso
-  ws.appendRow([token, usuario.id_usuario, fecha, fecha]);
-  
-  return token;
-}
-
-function retomarSesion(token) {
-  if (!token) return null;
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shSes = ss.getSheetByName('SESIONES');
-  if (!shSes) return null;
-  
-  const data = shSes.getDataRange().getValues();
-  
-  // Buscar token en Columna A (0)
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] == token) {
-      const idUsuario = data[i][1]; // El ID está en Columna B (1)
-      return buscarUsuarioPorID(idUsuario);
-    }
-  }
-  return null;
-}
-
-function buscarUsuarioPorID(id) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ws = ss.getSheetByName('USUARIOS');
-  const data = ws.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    // Columna A (0) = ID
-    // Columna G (6) = Activo (Antes estabas mirando la 4)
-    if (String(data[i][0]) === String(id)) {
-      
-       // Si no está activo, retornamos null (forzar logout)
-       if (String(data[i][6]).toUpperCase() !== 'SI') return null;
-
-       return {
-        id_usuario: data[i][0],
-        nombre: data[i][1],
-        email: data[i][2],
-        password: data[i][3], 
-        rol: data[i][4],      // Columna E
-        modulos: data[i][5],  // Columna F
-        activo: data[i][6],   // Columna G
-        avatar: data[i][7] || '' // Columna H
-      };
-    }
-  }
-  return null;
-}
-
-function cerrarSesionServidor(token) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ws = ss.getSheetByName('SESIONES');
-  const data = ws.getDataRange().getValues();
-  
-  // Buscar y borrar la fila del token
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] == token) {
-      ws.deleteRow(i + 1);
-      return true;
-    }
-  }
-  return false;
-}
-
-function obtenerDepositoDeUsuario(idUsuario) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('USUARIOS');
-  const data = sh.getDataRange().getValues();
-  
-  for(let i=1; i<data.length; i++) {
-    // Columna A (0) es ID Usuario
-    if(String(data[i][0]) == String(idUsuario)) {
-       // Asumimos que la Columna I (índice 8) es el ID_DEPOSITO
-       const idDep = data[i][8]; 
-       if(!idDep) throw "El usuario no tiene un depósito asignado.";
-       return String(idDep).trim();
-    }
-  }
-  throw "Usuario no encontrado.";
-}
-
-//DASHBOARD
-
-function obtenerDatosDashboard() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const timeZone = Session.getScriptTimeZone();
-  
-  // Fechas Clave
-  const ahora = new Date();
-  const hoyStr = Utilities.formatDate(ahora, timeZone, "dd/MM/yyyy");
-  const mesActualStr = Utilities.formatDate(ahora, timeZone, "MM/yyyy");
-  
-  // Calcular Mes Pasado
-  let fechaPasado = new Date();
-  fechaPasado.setMonth(fechaPasado.getMonth() - 1);
-  const mesPasadoStr = Utilities.formatDate(fechaPasado, timeZone, "MM/yyyy");
-
-  // --- FUNCIONES AUXILIARES DE LIMPIEZA ---
-  // Convierte cualquier cosa a número real (Maneja "100.000" y 100000)
-  const parseNum = (val) => {
-    if (typeof val === 'number') return val;
-    if (!val) return 0;
-    // Si es texto, quitamos puntos de miles y cambiamos coma decimal por punto
-    let limpio = String(val).replace(/\./g, '').replace(',', '.');
-    return parseFloat(limpio) || 0;
-  };
-
-  // Convierte texto DD/MM/YYYY a Objeto Fecha real
-  const parseFecha = (val) => {
-    if (val instanceof Date) return val;
-    if (!val) return null;
-    try {
-      // Si viene como string "29/01/2026"
-      const partes = String(val).split('/');
-      if (partes.length === 3) {
-        return new Date(partes[2], partes[1] - 1, partes[0]);
-      }
-      return new Date(val); // Intento final estándar
-    } catch(e) { return null; }
-  };
-
-  // ------------------------------------------------
-  // 1. PROCESAR VENTAS (KPIs + Gráfico + Flujo)
-  // ------------------------------------------------
-  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
-  const dataVentas = shVentas ? shVentas.getDataRange().getValues() : [];
-  
-  let ventasHoy = 0;
-  let ventasMes = 0;
-  let ingresoActual = 0;
-  let ingresoPasado = 0;
-
-  // Inicializar Gráfico 7 Días
-  let ultimos7Dias = {}; 
-  let fechasLabels = [];
-  for (let d = 6; d >= 0; d--) {
-    let f = new Date();
-    f.setDate(f.getDate() - d);
-    let fLabel = Utilities.formatDate(f, timeZone, "dd/MM");
-    fechasLabels.push(fLabel);
-    ultimos7Dias[fLabel] = 0; 
-  }
-
-  // Recorremos Ventas (Empezamos en 1 para saltar cabecera)
-  for (let i = 1; i < dataVentas.length; i++) {
-    let row = dataVentas[i];
-    
-    // Verificamos columna Estado (Índice 6)
-    if (String(row[6]).toUpperCase() === 'ANULADO') continue;
-
-    // Parseo Seguro de Fecha (Índice 2)
-    let fechaVenta = parseFecha(row[2]);
-    if (!fechaVenta || isNaN(fechaVenta.getTime())) continue;
-
-    // Parseo Seguro de Monto (Índice 5)
-    let monto = parseNum(row[5]);
-    
-    let diaVentaStr = Utilities.formatDate(fechaVenta, timeZone, "dd/MM/yyyy");
-    let mesVentaStr = Utilities.formatDate(fechaVenta, timeZone, "MM/yyyy");
-    let diaGrafico = Utilities.formatDate(fechaVenta, timeZone, "dd/MM");
-
-    // KPIs
-    if (diaVentaStr === hoyStr) ventasHoy += monto;
-    
-    if (mesVentaStr === mesActualStr) {
-        ventasMes += monto;
-        ingresoActual += monto;
-    }
-    
-    if (mesVentaStr === mesPasadoStr) {
-        ingresoPasado += monto;
-    }
-
-    // Gráfico
-    if (ultimos7Dias.hasOwnProperty(diaGrafico)) {
-      ultimos7Dias[diaGrafico] += monto;
-    }
-  }
-
-  // ------------------------------------------------
-  // 2. PROCESAR GASTOS (KPIs + Flujo)
-  // ------------------------------------------------
-  const shGastos = ss.getSheetByName('GASTOS');
-  const dataGastos = shGastos ? shGastos.getDataRange().getValues() : [];
-  
-  let gastosMes = 0;
-  let gastoActual = 0;
-  let gastoPasado = 0;
-
-  for (let i = 1; i < dataGastos.length; i++) {
-    // Fecha en Índice 1
-    let fechaGasto = parseFecha(dataGastos[i][1]);
-    if (!fechaGasto || isNaN(fechaGasto.getTime())) continue;
-
-    let mesGastoStr = Utilities.formatDate(fechaGasto, timeZone, "MM/yyyy");
-    
-    // Monto en Índice 4
-    let monto = parseNum(dataGastos[i][4]);
-
-    if (mesGastoStr === mesActualStr) {
-      gastosMes += monto;
-      gastoActual += monto;
-    }
-    if (mesGastoStr === mesPasadoStr) {
-      gastoPasado += monto;
-    }
-  }
-
-  // ------------------------------------------------
-  // 3. STOCK BAJO
-  // ------------------------------------------------
-  let alertasStock = 0;
-  const shProd = ss.getSheetByName('PRODUCTOS');
-  if(shProd) {
-      const dataProd = shProd.getDataRange().getValues();
-      for(let i=1; i<dataProd.length; i++) {
-          // Primero verificamos si el producto maneja stock (Columna 9 / Índice 9)
-          // Si dice "False" o "No", lo saltamos
-          let manejaStock = String(dataProd[i][9]).toUpperCase();
-          if(manejaStock === 'FALSE' || manejaStock === 'NO') continue;
-
-          // Stock Mínimo (Índice 7)
-          let min = parseNum(dataProd[i][7]);
-          
-          // Stock Actual (Índice 12)
-          let act = parseNum(dataProd[i][12]);
-          
-          // Solo alertar si el mínimo es mayor a 0 y el actual está por debajo o igual
-          if(min > 0 && act <= min) {
-            alertasStock++;
-          }
-      }
-  }
-
-  // ------------------------------------------------
-  // RETORNO ESTRUCTURADO
-  // ------------------------------------------------
-  return {
-    kpi: {
-      ventasHoy: ventasHoy,
-      ventasMes: ventasMes,
-      gastosMes: gastosMes,
-      stockBajo: alertasStock
-    },
-    flujoCaja: {
-      ingresoActual: ingresoActual,
-      ingresoPasado: ingresoPasado,
-      gastoActual: gastoActual,
-      gastoPasado: gastoPasado,
-      balanceActual: ingresoActual - gastoActual
-    },
-    grafico: {
-      labels: fechasLabels,
-      data: fechasLabels.map(f => ultimos7Dias[f])
-    }
-  };
-}
-
-//REPORTE
-
-function generarReporte(peticion) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const tipo = peticion.tipo;
-  const timeZone = Session.getScriptTimeZone(); // Obtener Zona Horaria del Script
-
-  // --- CORRECCIÓN ZONA HORARIA ---
-  // Usamos cadenas de texto YYYY-MM-DD para comparar, evitando desfases de hora.
-  const inicioStr = peticion.fechaInicio; // Viene como "2026-01-28" desde el HTML
-  const finStr = peticion.fechaFin;       // Viene como "2026-01-28"
-
-  let cabeceras = []; 
-  let filas = [];     
-  let totales = { suma: 0, conteo: 0 };
-  
-  // Función auxiliar para formatear la fecha visualmente en la tabla (dd/MM/yyyy)
-  const fmtFecha = (d) => {
-    if (!d) return "";
-    return Utilities.formatDate(new Date(d), timeZone, "dd/MM/yyyy");
-  };
-
-  // Función para convertir fecha de Excel a String YYYY-MM-DD para comparar
-  const fechaToIso = (d) => {
-    if (!d) return "";
-    return Utilities.formatDate(new Date(d), timeZone, "yyyy-MM-dd");
-  };
-
-  // ======================================================
-  // 1. CARGA DE DICCIONARIOS (ID -> NOMBRE)
-  // ======================================================
-  let mapaNombres = {}; // Clientes, Proveedores, Depósitos, Categorías
-  let mapaProductos = {}; // ID Prod -> Nombre Producto
-
-  // Helper para cargar mapas
-  const cargarMapa = (hoja, colId, colVal) => {
-    const sh = ss.getSheetByName(hoja);
-    if(sh) {
-      const data = sh.getDataRange().getValues();
-      for(let i=1; i<data.length; i++) mapaNombres[data[i][colId]] = data[i][colVal];
-    }
-  };
-
-  cargarMapa('CLIENTES', 0, 1);
-  cargarMapa('PROVEEDORES', 0, 1);
-  cargarMapa('DEPOSITOS', 0, 1);
-  cargarMapa('CATEGORIAS', 0, 1);
-
-  // Cargar Productos Especial (ID -> Nombre)
-  const shProd = ss.getSheetByName('PRODUCTOS');
-  if(shProd) {
-    const data = shProd.getDataRange().getValues();
-    for(let i=1; i<data.length; i++) {
-       mapaProductos[data[i][0]] = data[i][2]; // Col 0: ID, Col 2: Nombre
-    }
-  }
-
-  // ======================================================
-  // 2. PROCESAMIENTO POR TIPO
-  // ======================================================
-
-  switch (tipo) {
-
-    // --- VENTAS ---
-    case 'ventas':
-      // Se agrega "Estado" en la posición 3 (visual)
-      cabeceras = ["Fecha", "Nro Factura", "Cliente", "Estado", "Condición", "Producto", "Cantidad", "Precio Unit.", "Subtotal"];
-      procesarDetalleCompleto({
-         hojaCab: 'VENTAS_CABECERA', 
-         hojaDet: 'VENTAS_DETALLE',
-         colFecha: 2, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [1, 3, 6, 8], // [1:Nro, 3:Cliente, 6:Estado] <--- Agregado índice 6
-         colEstado: 6,        // <--- NUEVO: Indicamos dónde está el estado para la lógica
-         datosDet: [2, 3, 4, 6], 
-         idxCliente: 3, idxProductoEnDet: 2, idxMontoSumar: 6
-      });
-      break;
-
-    // --- COMPRAS ---
-    case 'compras':
-      // Se agrega "Estado" en la posición 3 (visual)
-      cabeceras = ["Fecha", "Nro. Factura", "Proveedor", "Estado", "Condición", "Producto", "Cantidad", "Costo Unit.", "Subtotal"];
-      procesarDetalleCompleto({
-         hojaCab: 'COMPRAS_CABECERA', 
-         hojaDet: 'COMPRAS_DETALLE',
-         colFecha: 1, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [7, 2, 5, 8], // [0:ID, 2:Prov, 5:Estado] <--- Agregado índice 5
-         colEstado: 5,        // <--- NUEVO: Indicamos dónde está el estado para la lógica
-         datosDet: [2, 3, 4, 6], 
-         idxCliente: 2, idxProductoEnDet: 2, idxMontoSumar: 6
-      });
-      break;
-
-    // --- TRANSFERENCIAS ---
-    case 'transferencias':
-      cabeceras = ["Fecha", "Origen", "Destino", "Responsable", "Producto", "Cantidad"];
-      procesarDetalleCompleto({
-         hojaCab: 'TRANSFERENCIAS_CABECERA', 
-         hojaDet: 'TRANSFERENCIAS_DETALLE',
-         colFecha: 1, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [2, 3, 4], // [2:Origen, 3:Destino, 4:Responsable]
-         datosDet: [2, 3],    // [2:Prod, 3:Cant]
-         idxCliente: null, 
-         indicesCabTraducir: [2, 3],
-         idxProductoEnDet: 2, idxMontoSumar: null
-      });
-      break;
-
-  // --- REMISIONES ---
-    case 'remisiones':
-      // Se agrega "Estado" en la posición 4 (visual)
-      cabeceras = ["Fecha", "Nro Remisión", "Cliente", "Destino", "Estado", "Producto", "Cantidad"];
-      procesarDetalleCompleto({
-         hojaCab: 'REMISIONES_CABECERA', 
-         hojaDet: 'REMISIONES_DETALLE',
-         colFecha: 1, colLinkCab: 0, colLinkDet: 1,
-         datosCab: [2, 3, 4, 7], // [2:Nro, 3:Cliente, 4:Destino, 7:Estado] <--- Agregado índice 7
-         colEstado: 7,           // <--- NUEVO: Indicamos dónde está el estado para la lógica
-         datosDet: [2, 3],    
-         idxCliente: 3, 
-         indicesCabTraducir: [4], 
-         idxProductoEnDet: 2, idxMontoSumar: null
-      });
-      break;
-    // --- AJUSTES (CORREGIDO) ---
-    case 'ajustes':
-      cabeceras = ["Fecha", "Motivo", "Producto", "Depósito", "Cantidad"];
-      const shAj = ss.getSheetByName('MOVIMIENTOS_STOCK');
-      if(shAj){
-        const data = shAj.getDataRange().getValues();
-        for(let i=1; i<data.length; i++){
-           // Validamos que sea un ajuste manual (no venta ni compra automática) si quieres filtrar solo ajustes
-           // Si quieres todo movimiento, deja como está.
-           
-           // Comparación de Fechas (CORREGIDA)
-           const fechaFilaStr = fechaToIso(data[i][1]); 
-           
-           if(fechaFilaStr >= inicioStr && fechaFilaStr <= finStr){
-             let nomProd = mapaProductos[data[i][3]] || data[i][3];
-             let nomDep = mapaNombres[data[i][4]] || data[i][4];
-             filas.push([fmtFecha(data[i][1]), data[i][2], nomProd, nomDep, data[i][5]]);
-             totales.conteo++;
-           }
-        }
-      }
-      break;
-
-    // --- GASTOS ---
-    case 'gastos':
-      cabeceras = ["Fecha", "Descripción", "Monto", "Categoría"];
-      procesarSimple('GASTOS', [1, 3, 4, 2], 1, 4, [2]);
-      break;
-      
-    // --- COBRANZAS ---
-    case 'cobranzas':
-      cabeceras = ["ID Recibo", "Fecha", "Cliente", "Monto", "Forma Pago"];
-      procesarSimple('COBRANZAS', [0, 1, 2, 3, 4], 1, 3, [2]);
-      break;
-
-    // --- STOCK / MAESTROS (Sin Cambios de fecha) ---
-    case 'stock_deposito':
-    case 'productos_categoria':
-      cabeceras = ["SKU", "Producto", "Categoría", "Depósito", "Stock Actual", "Costo Prom."];
-      generarReporteStock();
-      break;
-
-    case 'clientes':
-      cabeceras = ["ID", "Nombre / Razón Social", "RUC/CI", "Teléfono", "Dirección"];
-      procesarMaestro('CLIENTES', [0, 1, 2, 4, 5]);
-      break;
-
-    case 'proveedores':
-      cabeceras = ["ID", "Empresa", "RUC", "Contacto", "Datos Adic."];
-      procesarMaestro('PROVEEDORES', [0, 1, 2, 3, 4]);
-      break;
-  }
-
-  // ======================================================
-  // 3. FUNCIONES AUXILIARES INTERNAS
-  // ======================================================
-
-  // A. PROCESAR DETALLE COMPLETO (Cabecera + Detalle + Producto)
-  function procesarDetalleCompleto(cfg) {
-    const shCab = ss.getSheetByName(cfg.hojaCab);
-    const shDet = ss.getSheetByName(cfg.hojaDet);
-    if(!shCab || !shDet) return;
-
-    const dataCab = shCab.getDataRange().getValues();
-    const dataDet = shDet.getDataRange().getValues();
-
-    // 1. Filtrar Cabeceras válidas por Fecha
-    // Ahora guardaremos un objeto: { datosVisuales: [], estadoRaw:Str }
-    let cabecerasValidas = {}; 
-    
-    for(let i=1; i<dataCab.length; i++){
-      const fCabIso = fechaToIso(dataCab[i][cfg.colFecha]);
-      
-      if(fCabIso >= inicioStr && fCabIso <= finStr) {
-        let idLink = dataCab[i][cfg.colLinkCab]; 
-        
-        let datosFilaCab = [];
-        datosFilaCab.push(fmtFecha(dataCab[i][cfg.colFecha])); // Fecha visual
-        
-        cfg.datosCab.forEach(idx => {
-           let val = dataCab[i][idx];
-           // Traducir IDs a Nombres si es necesario
-           if(idx === cfg.idxCliente || (cfg.indicesCabTraducir && cfg.indicesCabTraducir.includes(idx))){
-             val = mapaNombres[val] || val;
-           }
-           datosFilaCab.push(val);
-        });
-
-        // Capturamos el estado "crudo" para la lógica de suma
-        let estadoRaw = 'ACTIVO'; // Valor por defecto si no se define columna
-        if (cfg.colEstado !== undefined) {
-            estadoRaw = String(dataCab[i][cfg.colEstado]).toUpperCase().trim();
-        }
-
-        cabecerasValidas[idLink] = {
-            datos: datosFilaCab,
-            estado: estadoRaw
+      // Mapeamos los datos al orden real de columnas de DB_EJECUCION
+      const rowsToInsert = tareasTemplate.map(tpl => {
+        // Objeto temporal con los datos a insertar
+        const rowData = {
+          id: Utilities.getUuid(),
+          proyecto_id: projectId,
+          etapa_id: tpl.etapa_id,
+          nombre_tarea: tpl.nombre_tarea,
+          requiere_evidencia: tpl.requiere_evidencia,
+          tipo_entrada: tpl.tipo_entrada || 'text', // Fallback default
+          checklist_id: tpl.checklist_id || '',
+          estado: 'Pendiente',
+          responsable_id: '',
+          datos_evidencia: '',
+          comentarios: '',
+          updated_at: timestamp
         };
-      }
-    }
 
-    // 2. Recorrer Detalles y cruzar
-    for(let j=1; j<dataDet.length; j++){
-       let idLink = dataDet[j][cfg.colLinkDet]; 
-       
-       if(cabecerasValidas[idLink]) {
-         let infoCabecera = cabecerasValidas[idLink]; // Objeto {datos, estado}
-         
-         let infoDetalle = cfg.datosDet.map(idx => {
-            let val = dataDet[j][idx];
-            if(idx === cfg.idxProductoEnDet) {
-               return mapaProductos[val] || val;
-            }
-            return val;
-         });
-
-         // Unimos los datos visuales de cabecera + detalle
-         filas.push([...infoCabecera.datos, ...infoDetalle]);
-         
-         totales.conteo++;
-
-         // LÓGICA DE SUMA CONDICIONAL
-         // Solo sumamos si hay monto definido Y el estado NO es ANULADO
-         if(cfg.idxMontoSumar !== null) {
-            if (infoCabecera.estado !== 'ANULADO') {
-                let monto = parseFloat(dataDet[j][cfg.idxMontoSumar]) || 0;
-                totales.suma += monto;
-            }
-         }
-       }
-    }
-  }
-
-  // B. PROCESAR SIMPLE (Solo Cabecera - Gastos, Cobranzas)
-  function procesarSimple(nombreHoja, indicesCols, idxFecha, idxMonto, indicesAtraducir = []) {
-    const sh = ss.getSheetByName(nombreHoja);
-    if (!sh) return;
-    const data = sh.getDataRange().getValues();
-    
-    for (let i = 1; i < data.length; i++) {
-      // CORRECCIÓN DE FECHA
-      const fFilaIso = fechaToIso(data[i][idxFecha]);
-
-      if (fFilaIso >= inicioStr && fFilaIso <= finStr) {
-        let fila = indicesCols.map(idx => {
-            let val = data[i][idx];
-            if (idx === idxFecha) return fmtFecha(val);
-            if (indicesAtraducir.includes(idx)) return mapaNombres[val] || val;
-            return val;
+        // Convertimos el objeto a array ordenado según los encabezados de la hoja
+        return headersExec.map(headerName => {
+            // Normalizamos keys a lowercase para matching seguro
+            const key = Object.keys(rowData).find(k => k.toLowerCase() === headerName.toLowerCase().trim());
+            return key ? rowData[key] : "";
         });
-        filas.push(fila);
-        totales.conteo++;
-        if (idxMonto !== null) totales.suma += parseFloat(data[i][idxMonto]) || 0;
-      }
-    }
-  }
+      });
 
-  // C. MAESTROS
-  function procesarMaestro(nombreHoja, indicesCols) {
-    const sh = ss.getSheetByName(nombreHoja);
-    if (!sh) return;
-    const data = sh.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if(data[i][0] !== "") { 
-        filas.push(indicesCols.map(idx => data[i][idx]));
-        totales.conteo++;
-      }
-    }
-  }
-
-  // D. STOCK
-  function generarReporteStock() {
-      const shProd = ss.getSheetByName('PRODUCTOS'); 
-      const shExist = ss.getSheetByName('STOCK_EXISTENCIAS'); 
-      if(!shProd || !shExist) return;
-
-      const dataProd = shProd.getDataRange().getValues();
-      const dataExist = shExist.getDataRange().getValues();
-      
-      let infoProd = {};
-      for(let i=1; i<dataProd.length; i++){
-          let idCat = dataProd[i][3];
-          infoProd[dataProd[i][0]] = { 
-              sku: dataProd[i][1], nombre: dataProd[i][2], 
-              cat: mapaNombres[idCat] || 'Sin Categoría', 
-              costo: dataProd[i][6] 
-          };
-      }
-      for(let j=1; j<dataExist.length; j++){
-          let p = infoProd[dataExist[j][1]] || { sku:'-', nombre:'?', cat:'-', costo:0 };
-          let deposito = mapaNombres[dataExist[j][2]] || 'General';
-          let cant = parseFloat(dataExist[j][3]) || 0;
-          filas.push([p.sku, p.nombre, p.cat, deposito, cant, p.costo]);
-          totales.conteo++;
-          totales.suma += (cant * (parseFloat(p.costo)||0)); 
-      }
-  }
-
-  return { cabeceras: cabeceras, filas: filas, totales: totales };
-}
-
-//BITACORA
-
-function registrarEvento(usuario, accion, detalle) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let ws = ss.getSheetByName('BITACORA');
-  
-  // 1. Si no existe la hoja, la creamos y configuramos
-  if (!ws) {
-    ws = ss.insertSheet('BITACORA');
-    // Cabeceras
-    ws.appendRow(['FECHA', 'HORA', 'USUARIO', 'ACCIÓN', 'DETALLE']);
-    // Formato visual
-    ws.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#333333').setFontColor('white');
-    ws.setColumnWidth(1, 100); // Fecha
-    ws.setColumnWidth(2, 80);  // Hora
-    ws.setColumnWidth(3, 150); // Usuario
-    ws.setColumnWidth(4, 150); // Acción
-    ws.setColumnWidth(5, 400); // Detalle
-    // Opcional: Ocultar la hoja para que no la toquen manualmente
-    // ws.hideSheet(); 
-  }
-  
-  const fecha = new Date();
-  const fechaStr = Utilities.formatDate(fecha, Session.getScriptTimeZone(), "dd/MM/yyyy");
-  const horaStr = Utilities.formatDate(fecha, Session.getScriptTimeZone(), "HH:mm:ss");
-  
-  // 2. Insertar el registro (appendRow es atómico y seguro)
-  ws.appendRow([fechaStr, horaStr, usuario, accion, detalle]);
-}
-
-//CAJA
-
-function obtenerResumenCaja(idUsuario) {
-  try {
-    // 1. Obtener la sesión activa del depósito del usuario
-    // Usamos nuestra nueva función de confianza
-    const idSesionActiva = obtenerCajaActivaPorUsuario(idUsuario);
-    
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shCajas = ss.getSheetByName('CAJA_SESIONES');
-    
-    // 2. Obtener el Monto Inicial de la sesión desde la hoja
-    const dataCajas = shCajas.getDataRange().getValues();
-    const filaCaja = dataCajas.find(r => String(r[0]) === String(idSesionActiva));
-    
-    if (!filaCaja) throw "No se encontró la sesión de caja en la base de datos.";
-    
-    const montoInicial = Number(filaCaja[4]) || 0; // Col E
-
-    // 3. CÁLCULO MEDIANTE EL MOTOR DE AUDITORÍA (Trazabilidad por ID)
-    // Reutilizamos la lógica que ya conoce todas las tablas
-    const auditoria = calcularTotalesSesion(idSesionActiva);
-
-    // 4. CÁLCULO FINAL (Saldo Teórico)
-    const saldoTeorico = montoInicial + auditoria.entradas - auditoria.salidas;
-
-    // 5. RETORNO ESTRUCTURADO PARA VUE.JS
-    // Importante: El nombre de las propiedades debe coincidir con el Frontend
-    return {
-      id_sesion: idSesionActiva,
-      teorico: saldoTeorico,
-      detalle: { 
-        inicial: montoInicial,
-        ventas: auditoria.v_contado || 0, // Desglose que viene de calcularTotalesSesion
-        cobros: auditoria.c_efectivo || 0,
-        compras: auditoria.cp_contado || 0,
-        pagos: auditoria.p_efectivo || 0,
-        gastos: auditoria.g_efectivo || 0
-      }
-    };
-
-  } catch (e) {
-    console.error("Error en obtenerResumenCaja: " + e.toString());
-    throw "Error calculando arqueo: " + e.toString();
-  }
-}
-
-function verificarCajaAbierta(idUsuario) {
-  try {
-    // 1. Saber el depósito del usuario
-    const idDeposito = obtenerDepositoDeUsuario(idUsuario);
-    const CLAVE_MEMORIA = 'CAJA_ACTIVA_DEP_' + idDeposito;
-
-    // 2. Preguntar a MEMORIA
-    const scriptProperties = PropertiesService.getScriptProperties();
-    const memoriaCaja = scriptProperties.getProperty(CLAVE_MEMORIA);
-
-    return;
-
-    if (memoriaCaja) {
-      const datos = JSON.parse(memoriaCaja);
-      return {
-        exito: true,
-        id_sesion: datos.id_sesion,
-        fecha_apertura: datos.fecha,
-        monto_inicial: Number(datos.monto),
-        id_deposito: idDeposito,
-        origen: "MEMORIA"
-      };
+      // Escritura en bloque (Una sola llamada a API)
+      sheetExec.getRange(
+        sheetExec.getLastRow() + 1, 
+        1, 
+        rowsToInsert.length, 
+        rowsToInsert[0].length
+      ).setValues(rowsToInsert);
     }
 
-    // 3. Preguntar a HOJA (Fallback)
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('CAJA_SESIONES');
-    if (!sh) return { exito: false };
-    
-    const data = sh.getDataRange().getValues();
-    
-    // Buscamos de abajo hacia arriba
-    for (let i = data.length - 1; i >= 1; i--) {
-       // Columna 8 (Index 8) = Estado ('ABIERTA')
-       // Columna 9 (Index 9) = ID Depósito (NUEVO CAMPO)
-       
-       // Verificamos que sea "ABIERTA" y que coincida el DEPÓSITO
-       if (String(data[i][8]) === 'ABIERTA' && String(data[i][9]) === String(idDeposito)) {
-          
-          // Restauramos memoria si la encontramos en la hoja
-          const cacheData = { id_sesion: data[i][0], fecha: data[i][2], monto: data[i][3], id_deposito: idDeposito };
-          scriptProperties.setProperty(CLAVE_MEMORIA, JSON.stringify(cacheData));
-          
-          return { exito: true, id_sesion: data[i][0], id_deposito: idDeposito, origen: "HOJA" };
-       }
-    }
-
-    return { exito: false, mensaje: "Caja cerrada" };
-
-  } catch (e) {
-    return { debug_error: true, mensaje: e.toString() };
-  }
-}
-
-function obtenerCajaActivaPorUsuario(idUsuario) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shUsuarios = ss.getSheetByName('USUARIOS');
-  const shCajas = ss.getSheetByName('CAJA_SESIONES');
-
-  console.log("Buscando caja para usuario ID: " + idUsuario);
-
-  // 1. Obtener id_deposito del usuario (Columna I - Índice 8)
-  const dataUsers = shUsuarios.getDataRange().getValues();
-  const usuario = dataUsers.find(row => String(row[0]) === String(idUsuario));
-  
-  if (!usuario) {
-    console.error("Usuario no encontrado en la tabla USUARIOS");
-    throw "Error de seguridad: Usuario no identificado.";
-  }
-  
-  const idDeposito = usuario[8]; 
-  console.log("Depósito asociado: " + idDeposito);
-
-  // 2. Buscar caja ABIERTA para ese depósito (Columna K - Índice 10)
-  const dataCajas = shCajas.getDataRange().getValues();
-  // Estructura: id_sesion(0)... estado(9), id_deposito(10)
-  const caja = dataCajas.find(row => 
-    String(row[10]) === String(idDeposito) && 
-    String(row[9]).toUpperCase() === 'ABIERTA'
-  );
-
-  if (!caja) {
-    console.warn("No se encontró caja abierta para depósito: " + idDeposito);
-    throw "⛔ CAJA CERRADA: No hay una sesión abierta para su depósito.";
-  }
-
-  console.log("ID Sesión encontrada: " + caja[0]);
-  return caja[0]; 
-}
-
-function abrirCaja(montoInicial, usuario) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(5000); } catch (e) { throw "Servidor ocupado."; }
-
-  try {
-    const idUsuarioStr = String(usuario.id_usuario);
-    
-    // 1. Obtenemos el depósito del usuario (función que creamos antes)
-    const idDeposito = obtenerDepositoDeUsuario(idUsuarioStr);
-    const CLAVE_MEMORIA = 'CAJA_ACTIVA_DEP_' + idDeposito;
-
-    // 2. Verificar en memoria si YA hay caja abierta en este depósito
-    const check = verificarCajaAbierta(idUsuarioStr);
-    if (check && check.exito) throw "La caja de este depósito ya está abierta.";
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('CAJA_SESIONES');
-    const idSesion = Utilities.getUuid();
-    const fecha = new Date();
-
-    // 3. GUARDAR EN HOJA CON LA NUEVA ESTRUCTURA
-    sh.appendRow([
-      idSesion,           // 0. ID Sesión
-      idUsuarioStr,       // 1. ID Usuario (Auditoría)
-      fecha,              // 2. Fecha Apertura
-      Number(montoInicial), // 3. Monto Inicial
-      "",                 // 4. Fecha Cierre (Vacío)
-      0,                  // 5. Total Sistema
-      0,                  // 6. Total Real
-      0,                  // 7. Diferencia
-      "ABIERTA",          // 8. Estado
-      idDeposito          // 9. ID DEPOSITO (Nuevo campo) <--- AQUÍ
-    ]);
-
-    // 4. GUARDAR EN MEMORIA
-    const datosCache = { id_sesion: idSesion, fecha: fecha, monto: Number(montoInicial), id_deposito: idDeposito };
-    PropertiesService.getScriptProperties().setProperty(CLAVE_MEMORIA, JSON.stringify(datosCache));
-
-    registrarEvento(usuario.nombre, "APERTURA CAJA DEP " + idDeposito, "Monto: " + montoInicial);
-
-    return { success: true, id_sesion: idSesion };
-
-  } finally { lock.releaseLock(); }
-}
-
-function cerrarCaja(datos) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName('CAJA_SESIONES');
-  const lock = LockService.getScriptLock();
-  
-  try {
-    lock.waitLock(20000);
-
-    const data = sh.getDataRange().getValues();
-    let filaEncontrada = -1;
-    let idDeposito = ""; 
-    let montoInicial = 0;
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(datos.id_sesion)) {
-        filaEncontrada = i + 1;
-        montoInicial = Number(data[i][4]) || 0; 
-        idDeposito = String(data[i][10]);      
-        break;
-      }
-    }
-
-    if (filaEncontrada === -1) throw "Sesión no encontrada.";
-
-    // 🚀 Auditoría basada en movimientos reales de dinero
-    const totales = calcularTotalesSesion(datos.id_sesion);
-    
-    // Cálculo final: Lo que había + lo que entró - lo que salió
-    const montoTeoricoAuditado = montoInicial + totales.entradas - totales.salidas;
-    const montoRealDeclarado = Number(datos.monto_real);
-    const diferencia = montoRealDeclarado - montoTeoricoAuditado;
-
-    // Actualización de la hoja
-    sh.getRange(filaEncontrada, 6).setValue(new Date());              // fecha_cierre
-    sh.getRange(filaEncontrada, 7).setValue(montoTeoricoAuditado);   // total_sistema
-    sh.getRange(filaEncontrada, 8).setValue(montoRealDeclarado);     // total_real
-    sh.getRange(filaEncontrada, 9).setValue(diferencia);             // diferencia
-    sh.getRange(filaEncontrada, 10).setValue("CERRADA");             // estado
-
-    // Limpieza de memoria técnica
-    if (idDeposito) {
-       const CLAVE_MEMORIA = 'CAJA_ACTIVA_DEP_' + idDeposito;
-       PropertiesService.getScriptProperties().deleteProperty(CLAVE_MEMORIA);
-    }
-
+    SpreadsheetApp.flush();
     return { 
       success: true, 
-      monto_teorico: montoTeoricoAuditado, 
-      diferencia: diferencia,
-      detalle: totales 
+      message: `Proyecto '${nombreObra}' regenerado: ${rowsDeleted} tareas borradas, ${tareasTemplate.length} nuevas insertadas según el tipo.` 
     };
 
   } catch (e) {
-    throw "Error en cierre: " + e.toString();
+    console.error("🔥 Error crítico en regeneración:", e);
+    throw new Error(e.message); // Re-lanzamos limpio para el Frontend
   } finally {
     lock.releaseLock();
   }
 }
 
-function calcularTotalesSesion(idSesion) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+/**
+ * Calcula Estadísticas Globales.
+ * Versión segura: Evita errores con nulos en datos_evidencia.
+ */
+function getGlobalProgressStats() {
+  const tasks = readConfig("DB_EJECUCION");
+  const etapas = readConfig("CONF_ETAPAS").sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
   
-  // Inicializamos variables de desglose
-  let v_contado = 0; // Ventas Contado
-  let c_efectivo = 0; // Cobranzas
-  let cp_contado = 0; // Compras Contado
-  let p_efectivo = 0; // Pagos a Proveedores
-  let g_efectivo = 0; // Gastos Operativos
+  const map = {};
+  
+  tasks.forEach(t => {
+    if (!t.proyecto_id) return;
+    
+    if (!map[t.proyecto_id]) {
+      map[t.proyecto_id] = { 
+        totalTasks: 0, completedTasks: 0,
+        totalEvidence: 0, completedEvidence: 0,
+        stages: {} 
+      };
+    }
+    
+    // 1. Tareas
+    map[t.proyecto_id].totalTasks++;
+    if (t.estado === 'Completado') map[t.proyecto_id].completedTasks++;
 
-  // 1. VENTAS CONTADO (Dinero inmediato)
-  const shVentas = ss.getSheetByName('VENTAS_CABECERA');
-  if (shVentas) {
-    const ventas = shVentas.getDataRange().getValues();
-    ventas.shift(); 
-    ventas.forEach(f => {
-      // Col L(11): id_sesion, Col I(8): Condición, Col F(5): Total
-      if (String(f[11]) === String(idSesion) && f[8] === 'CONTADO' && f[6] !== 'ANULADO') {
-        v_contado += Number(f[5] || 0);
+    // 2. Evidencias (Manejo seguro de tipos)
+    const requiere = String(t.requiere_evidencia).toLowerCase() === 'true';
+    if (requiere) {
+      map[t.proyecto_id].totalEvidence++;
+      // Validación segura: Existe y tiene longitud > 5
+      if (t.datos_evidencia && t.datos_evidencia.toString().length > 5) {
+        map[t.proyecto_id].completedEvidence++;
       }
-    });
+    }
+
+    // 3. Etapas
+    if (!map[t.proyecto_id].stages[t.etapa_id]) {
+      map[t.proyecto_id].stages[t.etapa_id] = { total: 0, completed: 0 };
+    }
+    map[t.proyecto_id].stages[t.etapa_id].total++;
+    if (t.estado === 'Completado') {
+      map[t.proyecto_id].stages[t.etapa_id].completed++;
+    }
+  });
+
+  const result = {};
+  Object.keys(map).forEach(pid => {
+    const data = map[pid];
+    const percent = data.totalTasks > 0 ? Math.round((data.completedTasks / data.totalTasks) * 100) : 0;
+
+    let currentStageName = "Planificación";
+    let currentStageColor = "#999";
+    let found = false;
+
+    for (let i = 0; i < etapas.length; i++) {
+      const etapa = etapas[i];
+      const stageData = data.stages[etapa.id];
+      if (stageData && stageData.completed < stageData.total) {
+          currentStageName = etapa.nombre_etapa;
+          currentStageColor = etapa.color_hex;
+          found = true;
+          break;
+      }
+    }
+
+    if (!found && data.totalTasks > 0 && percent === 100) {
+      currentStageName = "Finalizado";
+      currentStageColor = "#198754";
+    }
+
+    result[pid] = {
+      progress: percent,
+      stageText: currentStageName,
+      stageColor: currentStageColor,
+      taskCount: { total: data.totalTasks, pending: data.totalTasks - data.completedTasks },
+      evidenceCount: { total: data.totalEvidence, pending: data.totalEvidence - data.completedEvidence }
+    };
+  });
+
+  return result;
+}
+
+/**
+ * Actualiza el Tipo de Proyecto y REGENERA toda su estructura de tareas.
+ * ADVERTENCIA: Acción destructiva.
+ */
+function updateProjectTypeAndReset(projectId, newTypeId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. Actualizar la cabecera del proyecto (DB_PROYECTOS)
+    const sheetProy = ss.getSheetByName("DB_PROYECTOS");
+    const data = sheetProy.getDataRange().getValues();
+    const headers = data[0];
+    const idIdx = headers.indexOf("id");
+    const typeIdx = headers.indexOf("id_tipo_proyecto"); // Asegúrate de que este nombre sea exacto en tu hoja
+    
+    if (idIdx === -1 || typeIdx === -1) throw new Error("Columnas ID o TIPO no encontradas en DB_PROYECTOS");
+
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idIdx] === projectId) {
+        // Actualizamos celda directa (i+1 porque es base 1, typeIdx+1 porque es base 1)
+        sheetProy.getRange(i + 1, typeIdx + 1).setValue(newTypeId);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) throw new Error("Proyecto no encontrado");
+
+    // 2. Liberar el lock aquí para permitir que la regeneración (que tiene su propio lock) funcione
+    lock.releaseLock(); 
+
+    // 3. Llamar a la regeneración (Esta función ya lee el nuevo tipo de la DB)
+    return regenerateProjectTasks(projectId);
+
+  } catch (e) {
+    console.error(e);
+    throw new Error("Error al cambiar tipo: " + e.message);
+  } finally {
+    // Seguridad extra por si falla antes del release manual
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+function addChecklistDataColumn() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("DB_EJECUCION");
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  // Normalizar headers para buscar
+  const cleanHeaders = headers.map(h => h.toString().toLowerCase().trim());
+  
+  if (!cleanHeaders.includes("datos_checklist")) {
+    // Insertamos la columna después de checklist_id (o al final si prefieres)
+    // Buscamos un buen lugar, por ejemplo antes de 'estado' o 'updated_at'
+    const targetCol = headers.length + 1; 
+    
+    sheet.getRange(1, targetCol).setValue("datos_checklist")
+         .setBackground("#556B2F")
+         .setFontColor("white")
+         .setFontWeight("bold");
+         
+    console.log("✅ Columna 'datos_checklist' creada en DB_EJECUCION");
+  } else {
+    console.log("ℹ️ La columna 'datos_checklist' ya existe.");
+  }
+}
+
+/* ==========================================================================
+   SEGURIDAD Y ASIGNACIONES (NUEVO)
+   ========================================================================== */
+
+/**
+ * 1. Obtiene el perfil del usuario actual desde CONF_PROFESIONALES
+ */
+function getCurrentUserProfile() {
+  const email = Session.getActiveUser().getEmail();
+  // Leemos la tabla de profesionales
+  const raw = readConfig("CONF_PROFESIONALES"); 
+  
+  // Buscamos al usuario por email (normalizando a minúsculas)
+  const user = raw.find(p => p.email && p.email.trim().toLowerCase() === email.toLowerCase());
+  
+  if (!user) {
+    // CAMBIO CRÍTICO: Retornamos null.
+    // Esto le indica al Frontend que debe mostrar la pantalla de "Acceso Denegado".
+    return null; 
   }
 
-  // 2. COBRANZAS (Percibido)
-  const shCob = ss.getSheetByName('COBRANZAS');
-  if (shCob) {
-    const cobranzas = shCob.getDataRange().getValues();
-    cobranzas.shift();
-    cobranzas.forEach(f => {
-      // Col H(7): id_sesion, Col D(3): Monto
-      if (String(f[7]) === String(idSesion)) {
-        c_efectivo += Number(f[3] || 0);
-      }
-    });
-  }
-
-  // 3. COMPRAS CONTADO (Salida inmediata)
-  const shCompras = ss.getSheetByName('COMPRAS_CABECERA');
-  if (shCompras) {
-    const compras = shCompras.getDataRange().getValues();
-    compras.shift();
-    compras.forEach(f => {
-      // Col M(12): id_sesion, Col I(8): Condición, Col E(4): Total
-      if (String(f[12]) === String(idSesion) && f[8] === 'CONTADO' && f[5] !== 'ANULADO') {
-        cp_contado += Number(f[4] || 0);
-      }
-    });
-  }
-
-  // 4. PAGOS A PROVEEDORES
-  const shPagos = ss.getSheetByName('PAGOS_PROVEEDORES');
-  if (shPagos) {
-    const pagos = shPagos.getDataRange().getValues();
-    pagos.shift();
-    pagos.forEach(f => {
-      // Col J(9): id_sesion, Col E(4): Monto
-      if (String(f[9]) === String(idSesion)) {
-        p_efectivo += Number(f[4] || 0);
-      }
-    });
-  }
-
-  // 5. GASTOS OPERATIVOS
-  const shGastos = ss.getSheetByName('GASTOS');
-  if (shGastos) {
-    const gastos = shGastos.getDataRange().getValues();
-    gastos.shift();
-    gastos.forEach(f => {
-      // Col G(6): id_sesion, Col E(4): Monto
-      if (String(f[6]) === String(idSesion)) {
-        g_efectivo += Number(f[4] || 0);
-      }
-    });
-  }
-
-  // RETORNO ESTRUCTURADO: Totales generales + Desglose detallado
   return {
-    entradas: (v_contado + c_efectivo),
-    salidas: (cp_contado + p_efectivo + g_efectivo),
-    v_contado: v_contado,
-    c_efectivo: c_efectivo,
-    cp_contado: cp_contado,
-    p_efectivo: p_efectivo,
-    g_efectivo: g_efectivo
+    id: user.id,
+    nombre: user.nombre_completo,
+    email: user.email,
+    rol_sistema: user.perfil_sistema || 'Operador' // Si está vacío en Excel, es Operador
   };
 }
 
-function forzarResetCaja(idUsuario) {
-   const idStr = String(idUsuario).trim();
-   PropertiesService.getScriptProperties().deleteProperty('CAJA_ACTIVA_' + idStr);
-   return "Memoria de caja reiniciada para usuario " + idStr;
+/**
+ * 2. Lectura Segura de Proyectos (Row-Level Security)
+ * Reemplaza el uso directo de readConfig("DB_PROYECTOS") en el frontend
+ */
+function getSecureProjects() {
+  const user = getCurrentUserProfile();
+  const allProjects = readConfig("DB_PROYECTOS");
+
+  // A. Si es Admin, ve todo
+  if (user.rol_sistema === 'Admin') {
+    return allProjects;
+  }
+
+  // B. Si es Operador, filtramos por asignación
+  if (user.rol_sistema === 'Operador') {
+    const asignaciones = readConfig("CONF_REL_ASIGNACIONES");
+    
+    // Obtenemos IDs de proyectos asignados a este usuario
+    const misProyectosIds = asignaciones
+      .filter(a => a.id_profesional === user.id)
+      .map(a => a.id_proyecto);
+
+    return allProjects.filter(p => misProyectosIds.includes(p.id));
+  }
+
+  // C. Si no es nada (Invitado), no ve nada
+  return [];
 }
 
-function obtenerHistorialCajas() {
+/**
+ * 3. Transacción: Guardar Proyecto + Actualizar Asignaciones
+ * Recibe: (Objeto Proyecto, Array de IDs de Profesionales)
+ */
+function saveProjectWithAssignments(projectData, asignadosIds) {
+  const lock = LockService.getScriptLock();
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const shCaja = ss.getSheetByName('CAJA_SESIONES');
-    const shUser = ss.getSheetByName('USUARIOS');
+    lock.waitLock(10000); // Esperar hasta 10 seg
+
+    // --- PASO A: Guardar el Proyecto ---
+    if (!projectData.id) projectData.id = Utilities.getUuid();
+    // Guardamos el proyecto usando tu función base (asumiendo que existe saveConfigRecord)
+    saveConfigRecord("DB_PROYECTOS", projectData);
+
+    // --- PASO B: Actualizar Asignaciones (CONF_REL_ASIGNACIONES) ---
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONF_REL_ASIGNACIONES");
+    const data = sheet.getDataRange().getValues();
+    const headers = data.shift(); // Sacamos cabecera
     
-    if (!shCaja || shCaja.getLastRow() <= 1) return [];
+    // Índices
+    const idxId = 0;
+    const idxProj = 1;
+    const idxProf = 2;
+    const idxDate = 3;
 
-    // 1. Mapa de Usuarios (ID -> Nombre)
-    const mapUser = {};
-    if (shUser) {
-      const dUser = shUser.getDataRange().getValues();
-      for (let i = 1; i < dUser.length; i++) {
-        mapUser[String(dUser[i][0])] = dUser[i][1];
-      }
+    // 1. Filtramos para QUITAR las asignaciones viejas de este proyecto
+    // (Mantenemos todas las filas que NO sean de este proyecto)
+    let newData = data.filter(row => row[idxProj] !== projectData.id);
+
+    // 2. Agregamos las NUEVAS asignaciones
+    const now = new Date();
+    if (asignadosIds && Array.isArray(asignadosIds)) {
+      asignadosIds.forEach(idProf => {
+        newData.push([
+          Utilities.getUuid(), // ID único de la relación
+          projectData.id,      // ID Proyecto
+          idProf,              // ID Profesional
+          now                  // Created At
+        ]);
+      });
     }
 
-    const data = shCaja.getDataRange().getValues();
-    const historial = [];
-
-    // Recorremos (fila 1 en adelante)
-    // Estructura: [0:id, 1:id_user, 2:f_apertura, 3:m_inicial, 4:f_cierre, 5:m_teorico, 6:m_real, 7:dif, 8:estado]
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      if (row[0]) {
-        
-        // Formatear fechas para evitar problemas de zona horaria
-        let aperturaIso = row[2];
-        let cierreIso = row[4];
-        try { if(row[2] instanceof Date) aperturaIso = row[2].toISOString(); } catch(e){}
-        try { if(row[4] instanceof Date) cierreIso = row[4].toISOString(); } catch(e){}
-
-        historial.push({
-          id_sesion: row[0],
-          usuario: mapUser[String(row[1])] || 'Usuario ' + row[1],
-          fecha_apertura: aperturaIso,
-          monto_inicial: Number(row[3] || 0),
-          fecha_cierre: cierreIso,
-          monto_teorico: Number(row[5] || 0), // Sistema
-          monto_real: Number(row[6] || 0),    // Efectivo Real
-          diferencia: Number(row[7] || 0),
-          estado: row[8]
-        });
-      }
+    // 3. Escribimos todo de nuevo (Batch Update)
+    sheet.getRange(2, 1, sheet.getLastRow(), headers.length).clearContent();
+    if (newData.length > 0) {
+      sheet.getRange(2, 1, newData.length, headers.length).setValues(newData);
     }
-
-    return historial.reverse(); // Lo más reciente primero
+    
+    return { success: true, projectId: projectData.id };
 
   } catch (e) {
-    throw "Error al obtener historial caja: " + e.toString();
+    Logger.log("Error en saveProjectWithAssignments: " + e.toString());
+    throw new Error(e.toString());
+  } finally {
+    lock.releaseLock();
   }
 }
-
-
-
-
-
-
-
-
-
