@@ -228,159 +228,6 @@ function saveConfigRecord(tableName, item) {
   }
 }
 
-/* AGREGAR ESTO A TU Code.gs EXISTENTE */
-
-function getUserInfo() {
-  return {
-    email: Session.getActiveUser().getEmail(),
-    // En el futuro podemos buscar nombre y rol en la tabla de Profesionales
-    role: 'Admin' 
-  };
-}
-
-/**
- * CreateProjectFull - Versión Optimizada
- * Crea proyecto, estructura en Drive y clona tareas según el Tipo de Proyecto.
- */
-function createProjectFull(projectData) {
-  const lock = LockService.getScriptLock();
-  
-  try {
-    // Esperamos el bloqueo para evitar duplicados de IDs o carpetas
-    lock.waitLock(30000);
-    
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
-    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
-    const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
-
-    // --- 1. VALIDACIONES PREVIAS ---
-    if (!projectData.id_tipo_proyecto) throw new Error("Falta el ID del Tipo de Proyecto.");
-    
-    // Generación de ID y Timestamps
-    if (!projectData.id) projectData.id = Utilities.getUuid();
-    const timestamp = new Date();
-    projectData.created_at = timestamp;
-
-    // --- 2. LECTURA DE CONFIGURACIÓN (JOIN EN MEMORIA) ---
-    // Leemos etapas y filtramos por el tipo seleccionado
-    const etapasRaw = readConfig("CONF_ETAPAS"); // Asumimos que readConfig devuelve objetos limpios
-    const etapasTipo = etapasRaw
-                        .filter(e => e.id_tipo_proyecto === projectData.id_tipo_proyecto)
-                        .sort((a,b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
-
-    if (etapasTipo.length === 0) {
-      throw new Error("El Tipo de Proyecto seleccionado no tiene etapas configuradas. Configure CONF_ETAPAS primero.");
-    }
-
-    const idsEtapasValidas = etapasTipo.map(e => e.id);
-
-    // Leemos tareas y filtramos solo las que coinciden con las etapas del tipo
-    const tareasTemplate = readConfig("CONF_TAREAS")
-                            .filter(t => idsEtapasValidas.includes(t.etapa_id));
-
-    // --- 3. GESTIÓN ROBUSTA DE GOOGLE DRIVE ---
-    // Primero obtenemos la configuración de la carpeta raíz
-    let driveUrl = "";
-    let driveId = "";
-    
-    try {
-      const generalData = sheetGeneral.getDataRange().getValues();
-      const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
-      
-      if (rootUrlRow && rootUrlRow[1]) {
-        // Extraemos ID de la URL
-        const match = rootUrlRow[1].match(/[-\w]{25,}/);
-        const rootFolderId = match ? match[0] : null;
-        
-        if (rootFolderId) {
-          const rootFolder = DriveApp.getFolderById(rootFolderId);
-          const folderName = `${projectData.codigo} - ${projectData.nombre_obra}`;
-          
-          // Crear carpeta del proyecto
-          const projectFolder = rootFolder.createFolder(folderName);
-          driveId = projectFolder.getId();
-          driveUrl = projectFolder.getUrl();
-          
-          // Crear subcarpetas de etapas (Iteración limpia)
-          etapasTipo.forEach(e => {
-            if (e.nombre_etapa) {
-               projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
-            }
-          });
-        }
-      }
-    } catch (driveError) {
-      console.warn("Advertencia: No se pudo crear estructura en Drive.", driveError);
-      driveUrl = "ERROR_DRIVE";
-      driveId = "NO_CREADO";
-      // No detenemos el proceso, pero dejamos constancia
-    }
-
-    // Asignamos resultados de Drive al objeto de datos
-    projectData.drive_folder_id = driveId;
-    projectData.drive_url = driveUrl;
-
-    // --- 4. GUARDAR EN DB_PROYECTOS (Mapeo Inteligente) ---
-    // Función helper para normalizar encabezados: "Nombre Obra" -> "nombre_obra"
-    const normalizeHeader = (h) => h.toString().toLowerCase().trim().replace(/\s+/g, '_');
-
-    const headersProj = sheetProyectos.getRange(1, 1, 1, sheetProyectos.getLastColumn()).getValues()[0];
-    const newRowProj = headersProj.map(header => {
-      const key = normalizeHeader(header);
-      // Buscamos la clave exacta o la normalizada en projectData
-      return projectData[key] !== undefined ? projectData[key] : (projectData[header] || "");
-    });
-    
-    sheetProyectos.appendRow(newRowProj);
-
-    // --- 5. BATCH INSERT EN DB_EJECUCION ---
-    if (tareasTemplate.length > 0) {
-      const headersEjec = sheetEjecucion.getRange(1, 1, 1, sheetEjecucion.getLastColumn()).getValues()[0];
-      
-      const rowsToInsert = tareasTemplate.map(tpl => {
-        // Objeto temporal de la nueva tarea
-        const nuevaTarea = {
-          id: Utilities.getUuid(),
-          proyecto_id: projectData.id,
-          etapa_id: tpl.etapa_id,
-          nombre_tarea: tpl.nombre_tarea,
-          requiere_evidencia: tpl.requiere_evidencia,
-          tipo_entrada: tpl.tipo_entrada || 'text',
-          checklist_id: tpl.checklist_id || '',
-          estado: '',
-          responsable_id: '',
-          datos_evidencia: '',
-          comentarios: '',
-          updated_at: timestamp
-        };
-
-        // Mapeo seguro contra las columnas reales de la hoja
-        return headersEjec.map(header => {
-          const key = normalizeHeader(header);
-          return nuevaTarea[key] !== undefined ? nuevaTarea[key] : "";
-        });
-      });
-
-      // Escritura en bloque (Una sola llamada a API)
-      sheetEjecucion.getRange(
-        sheetEjecucion.getLastRow() + 1, 
-        1, 
-        rowsToInsert.length, 
-        rowsToInsert[0].length
-      ).setValues(rowsToInsert);
-    }
-
-    SpreadsheetApp.flush();
-    return { success: true, message: `Proyecto [${projectData.nombre_obra}] y su ciclo de vida creados correctamente.` };
-
-  } catch (e) {
-    console.error("Error crítico en createProjectFull:", e);
-    throw new Error(e.message || e.toString());
-  } finally {
-    lock.releaseLock();
-  }
-}
 
 /**
  * ELIMINACIÓN EN CASCADA DE PROYECTO
@@ -430,7 +277,19 @@ function deleteProjectFull(projectId) {
       }
     }
 
-    // 3. BORRAR REGISTRO DE PROYECTO (DB_PROYECTOS)
+        // 3. BORRAR RELACION RESPONSABLES (CONF_REL_ASIGNACIONES)
+    const sheetAsign = ss.getSheetByName("CONF_REL_ASIGNACIONES");
+    const dataAsign = sheetAsign.getDataRange().getValues();
+    const projIdIndexAsign = dataAsign[0].indexOf("id_proyecto");
+    
+    // Recorremos hacia atrás para borrar sin afectar los índices
+    for (let i = dataAsign.length - 1; i >= 1; i--) {
+      if (dataAsign[i][projIdIndexAsign] === projectId) {
+        sheetAsign.deleteRow(i + 1);
+      }
+    }
+
+    // 4. BORRAR REGISTRO DE PROYECTO (DB_PROYECTOS)
     if (rowIndex !== -1) {
       sheetProyectos.deleteRow(rowIndex);
     } else {
@@ -716,133 +575,98 @@ function getTaskInfo(taskId) {
 }
 
 /**
- * REGENERACIÓN BLINDADA DE TAREAS
- * Borra las tareas actuales del proyecto y recarga SOLO las correspondientes a su id_tipo_proyecto.
- * Optimización: Batch Insert y Mapeo Dinámico de Columnas.
+ * REGENERA UN PROYECTO COMPLETO (Drive y Tareas)
+ * @param {string} projectId ID del proyecto (UUID)
  */
 function regenerateProjectTasks(projectId) {
   const lock = LockService.getScriptLock();
   try {
-    // 1. Bloqueo de seguridad extendido (las regeneraciones son costosas)
-    lock.waitLock(30000); 
+    // Esperar hasta 30 segundos para obtener el bloqueo
+    lock.waitLock(30000);
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // ----------------------------------------------------
-    // PASO 1: OBTENER EL ADN DEL PROYECTO (TIPO)
-    // ----------------------------------------------------
     const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
-    const dataProyectos = sheetProyectos.getDataRange().getValues();
-    const headersProy = dataProyectos[0];
-    
-    // Buscamos índices dinámicamente
-    const idxIdProy = headersProy.indexOf("id");
-    const idxTipoProy = headersProy.indexOf("id_tipo_proyecto");
-    
-    if (idxIdProy === -1 || idxTipoProy === -1) throw new Error("Estructura de DB_PROYECTOS inválida.");
+    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+    const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
+    const sheetTareas = ss.getSheetByName("CONF_TAREAS");
 
-    // Buscamos el proyecto
-    let idTipo = null;
-    let nombreObra = "";
-    
-    for (let i = 1; i < dataProyectos.length; i++) {
-      if (dataProyectos[i][idxIdProy] === projectId) {
-        idTipo = dataProyectos[i][idxTipoProy];
-        nombreObra = dataProyectos[i][headersProy.indexOf("nombre_obra")] || "Sin nombre";
-        break;
+    // 1. OBTENER DATOS DEL PROYECTO
+    const proyData = sheetProyectos.getDataRange().getValues();
+    const proyHeaders = proyData.shift();
+    const idxProyId = proyHeaders.indexOf("id");
+    const idxTipoProy = proyHeaders.indexOf("id_tipo_proyecto");
+    const idxDriveId = proyHeaders.indexOf("drive_folder_id");
+    const idxNombre = proyHeaders.indexOf("nombre_obra");
+
+    const proyectoFila = proyData.find(r => r[idxProyId] === projectId);
+    if (!proyectoFila) throw new Error("Proyecto no encontrado.");
+
+    const tipoId = proyectoFila[idxTipoProy];
+    const oldFolderId = proyectoFila[idxDriveId];
+    const nombreObra = proyectoFila[idxNombre];
+
+    // 2. GESTIÓN DE DRIVE (Acción Destructiva)
+    // Borrar carpeta anterior si existe
+    if (oldFolderId) {
+      try {
+        DriveApp.getFolderById(oldFolderId).setTrashed(true);
+      } catch (e) {
+        console.warn("No se pudo borrar la carpeta vieja: " + e.message);
       }
     }
+    // Crear nueva carpeta (Obtener raíz de CONF_GENERAL)
+    const newFolder = DriveApp.createFolder(`PROY - ${nombreObra}`);
+    const newDriveUrl = newFolder.getUrl();
+    const newDriveId = newFolder.getId();
 
-    if (!idTipo) throw new Error("El proyecto no tiene asignado un 'Tipo de Proyecto' o no existe.");
+    // Actualizar DB_PROYECTOS con nuevo Drive y resetear estado
+    const rowIdx = proyData.findIndex(r => r[idxProyId] === projectId) + 2;
+    sheetProyectos.getRange(rowIdx, idxDriveId + 1).setValue(newDriveId);
+    sheetProyectos.getRange(rowIdx, proyHeaders.indexOf("drive_url") + 1).setValue(newDriveUrl);
+    sheetProyectos.getRange(rowIdx, proyHeaders.indexOf("estado") + 1).setValue("Roadmap");
 
-    // ----------------------------------------------------
-    // PASO 2: OBTENER LA CONFIGURACIÓN FILTRADA (JOIN)
-    // ----------------------------------------------------
-    // Usamos readConfig para obtener objetos limpios de la configuración
-    
-    // A. Filtramos Etapas por Tipo
-    const etapas = readConfig("CONF_ETAPAS")
-                    .filter(e => e.id_tipo_proyecto === idTipo)
-                    .sort((a,b) => a.orden - b.orden); // Respetamos el orden lógico
-    
-    if (etapas.length === 0) throw new Error("El tipo de proyecto asignado no tiene etapas configuradas.");
-    
-    const idsEtapasValidas = etapas.map(e => e.id);
+    // 3. GENERAR NUEVAS TAREAS (Lógica en Memoria)
+    const etapasData = sheetEtapas.getDataRange().getValues();
+    const etapasHeaders = etapasData.shift();
+    const etapasIds = etapasData
+      .filter(r => String(r[etapasHeaders.indexOf("id_tipo_proyecto")]) === String(tipoId))
+      .map(r => r[0]);
 
-    // B. Filtramos Tareas por Etapas válidas
-    const tareasTemplate = readConfig("CONF_TAREAS")
-                            .filter(t => idsEtapasValidas.includes(t.etapa_id));
+    const tareasData = sheetTareas.getDataRange().getValues();
+    const tareasHeaders = tareasData.shift();
+    const tareasTemplate = tareasData.filter(t => etapasIds.includes(t[tareasHeaders.indexOf("etapa_id")]));
 
-    // ----------------------------------------------------
-    // PASO 3: LIMPIEZA DE TAREAS VIEJAS (DELETE)
-    // ----------------------------------------------------
-    const sheetExec = ss.getSheetByName("DB_EJECUCION");
-    const dataExec = sheetExec.getDataRange().getValues();
-    const headersExec = dataExec[0];
-    const idxProjIdExec = headersExec.indexOf("proyecto_id");
+    const newRows = tareasTemplate.map(t => [
+      Utilities.getUuid(),
+      projectId,
+      t[tareasHeaders.indexOf("etapa_id")],
+      t[tareasHeaders.indexOf("nombre_tarea")],
+      t[tareasHeaders.indexOf("requiere_evidencia")],
+      t[tareasHeaders.indexOf("tipo_entrada")],
+      t[tareasHeaders.indexOf("checklist_id")],
+      "Pendiente", "", "", "", new Date(), ""
+    ]);
 
-    if (idxProjIdExec === -1) throw new Error("No se encontró columna 'proyecto_id' en ejecución.");
+    // 4. TRANSACCIÓN ATÓMICA EN DB_EJECUCION
+    const dataEjec = sheetEjecucion.getDataRange().getValues();
+    const headerEjec = dataEjec.shift();
+    const idxProyEjec = headerEjec.indexOf("proyecto_id");
 
-    // Recorremos hacia atrás para borrar sin romper índices
-    // Optimización: Solo borramos si encontramos coincidencia
-    let rowsDeleted = 0;
-    for (let i = dataExec.length - 1; i >= 1; i--) {
-      if (dataExec[i][idxProjIdExec] === projectId) {
-        sheetExec.deleteRow(i + 1);
-        rowsDeleted++;
-      }
-    }
-    console.log(`🧹 Se eliminaron ${rowsDeleted} tareas antiguas.`);
+    // Filtrar lo que NO es de este proyecto
+    const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
+    const finalEjecucion = [...dataCleaned, ...newRows];
 
-    // ----------------------------------------------------
-    // PASO 4: INSERCIÓN MASIVA DE NUEVAS TAREAS (BATCH INSERT)
-    // ----------------------------------------------------
-    if (tareasTemplate.length > 0) {
-      const timestamp = new Date();
-      
-      // Mapeamos los datos al orden real de columnas de DB_EJECUCION
-      const rowsToInsert = tareasTemplate.map(tpl => {
-        // Objeto temporal con los datos a insertar
-        const rowData = {
-          id: Utilities.getUuid(),
-          proyecto_id: projectId,
-          etapa_id: tpl.etapa_id,
-          nombre_tarea: tpl.nombre_tarea,
-          requiere_evidencia: tpl.requiere_evidencia,
-          tipo_entrada: tpl.tipo_entrada || 'text', // Fallback default
-          checklist_id: tpl.checklist_id || '',
-          estado: 'Pendiente',
-          responsable_id: '',
-          datos_evidencia: '',
-          comentarios: '',
-          updated_at: timestamp
-        };
-
-        // Convertimos el objeto a array ordenado según los encabezados de la hoja
-        return headersExec.map(headerName => {
-            // Normalizamos keys a lowercase para matching seguro
-            const key = Object.keys(rowData).find(k => k.toLowerCase() === headerName.toLowerCase().trim());
-            return key ? rowData[key] : "";
-        });
-      });
-
-      // Escritura en bloque (Una sola llamada a API)
-      sheetExec.getRange(
-        sheetExec.getLastRow() + 1, 
-        1, 
-        rowsToInsert.length, 
-        rowsToInsert[0].length
-      ).setValues(rowsToInsert);
+    // Escribir todo de una sola vez
+    sheetEjecucion.clearContents();
+    if (finalEjecucion.length > 0) {
+      sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
+      sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length).setValues(finalEjecucion);
     }
 
-    SpreadsheetApp.flush();
-    return { 
-      success: true, 
-      message: `Proyecto '${nombreObra}' regenerado: ${rowsDeleted} tareas borradas, ${tareasTemplate.length} nuevas insertadas según el tipo.` 
-    };
+    return { success: true, folderUrl: newDriveUrl };
 
   } catch (e) {
-    console.error("🔥 Error crítico en regeneración:", e);
-    throw new Error(e.message); // Re-lanzamos limpio para el Frontend
+    throw new Error("GAS_ERROR: " + e.message);
   } finally {
     lock.releaseLock();
   }
@@ -931,51 +755,48 @@ function getGlobalProgressStats() {
 }
 
 /**
- * Actualiza el Tipo de Proyecto y REGENERA toda su estructura de tareas.
- * ADVERTENCIA: Acción destructiva.
+ * Acción Destructiva: Cambia el tipo y resetea tareas
  */
 function updateProjectTypeAndReset(projectId, newTypeId) {
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    // 1. Actualizar la cabecera del proyecto (DB_PROYECTOS)
+    // 1. Actualizar el TIPO en DB_PROYECTOS
     const sheetProy = ss.getSheetByName("DB_PROYECTOS");
     const data = sheetProy.getDataRange().getValues();
     const headers = data[0];
     const idIdx = headers.indexOf("id");
-    const typeIdx = headers.indexOf("id_tipo_proyecto"); // Asegúrate de que este nombre sea exacto en tu hoja
+    const typeIdx = headers.indexOf("id_tipo_proyecto"); 
     
-    if (idIdx === -1 || typeIdx === -1) throw new Error("Columnas ID o TIPO no encontradas en DB_PROYECTOS");
+    if (idIdx === -1 || typeIdx === -1) throw new Error("Estructura DB_PROYECTOS inválida");
 
-    let found = false;
+    let foundRow = -1;
     for (let i = 1; i < data.length; i++) {
-      if (data[i][idIdx] === projectId) {
-        // Actualizamos celda directa (i+1 porque es base 1, typeIdx+1 porque es base 1)
-        sheetProy.getRange(i + 1, typeIdx + 1).setValue(newTypeId);
-        found = true;
+      if (String(data[i][idIdx]) === String(projectId)) {
+        foundRow = i + 1; // +1 por base 1
         break;
       }
     }
 
-    if (!found) throw new Error("Proyecto no encontrado");
+    if (foundRow === -1) throw new Error("Proyecto no encontrado");
 
-    // 2. Liberar el lock aquí para permitir que la regeneración (que tiene su propio lock) funcione
-    lock.releaseLock(); 
+    // Actualizamos solo la celda del tipo
+    sheetProy.getRange(foundRow, typeIdx + 1).setValue(newTypeId);
 
-    // 3. Llamar a la regeneración (Esta función ya lee el nuevo tipo de la DB)
-    return regenerateProjectTasks(projectId);
+    // 2. Regenerar Tareas (Borra viejas, crea nuevas)
+    regenerateProjectTasks(projectId, newTypeId);
+
+    return { success: true };
 
   } catch (e) {
     console.error(e);
-    throw new Error("Error al cambiar tipo: " + e.message);
+    throw new Error("Error al resetear proyecto: " + e.message);
   } finally {
-    // Seguridad extra por si falla antes del release manual
-    try { lock.releaseLock(); } catch(e) {}
+    lock.releaseLock();
   }
 }
-
 function addChecklistDataColumn() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("DB_EJECUCION");
@@ -1059,59 +880,740 @@ function getSecureProjects() {
 }
 
 /**
- * 3. Transacción: Guardar Proyecto + Actualizar Asignaciones
- * Recibe: (Objeto Proyecto, Array de IDs de Profesionales)
+ * VERSIÓN COMPLETA Y CORREGIDA
+ * Guarda proyecto + Drive + Asignaciones + Tareas
  */
 function saveProjectWithAssignments(projectData, asignadosIds) {
   const lock = LockService.getScriptLock();
+  
   try {
-    lock.waitLock(10000); // Esperar hasta 10 seg
-
-    // --- PASO A: Guardar el Proyecto ---
-    if (!projectData.id) projectData.id = Utilities.getUuid();
-    // Guardamos el proyecto usando tu función base (asumiendo que existe saveConfigRecord)
-    saveConfigRecord("DB_PROYECTOS", projectData);
-
-    // --- PASO B: Actualizar Asignaciones (CONF_REL_ASIGNACIONES) ---
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONF_REL_ASIGNACIONES");
-    const data = sheet.getDataRange().getValues();
-    const headers = data.shift(); // Sacamos cabecera
+    lock.waitLock(30000);
     
-    // Índices
-    const idxId = 0;
-    const idxProj = 1;
-    const idxProf = 2;
-    const idxDate = 3;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 1. DETECCIÓN DE ESTADO ---
+    const isNew = !projectData.id; 
+    if (isNew) {
+      projectData.id = Utilities.getUuid();
+      projectData.created_at = new Date();
+    }
 
-    // 1. Filtramos para QUITAR las asignaciones viejas de este proyecto
-    // (Mantenemos todas las filas que NO sean de este proyecto)
-    let newData = data.filter(row => row[idxProj] !== projectData.id);
+    // --- 2. CREACIÓN DE ESTRUCTURA EN DRIVE (SOLO SI ES NUEVO) ---
+    if (isNew) {
+      let driveUrl = "";
+      let driveId = "";
+      
+      try {
+        const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
+        const generalData = sheetGeneral.getDataRange().getValues();
+        const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
+        
+        if (rootUrlRow && rootUrlRow[1]) {
+          // Extraer ID de la URL raíz
+          const match = rootUrlRow[1].match(/[-\w]{25,}/);
+          const rootFolderId = match ? match[0] : null;
+          
+          if (rootFolderId) {
+            const rootFolder = DriveApp.getFolderById(rootFolderId);
+            const folderName = `${projectData.codigo} - ${projectData.nombre_obra}`;
+            
+            // Crear carpeta principal del proyecto
+            const projectFolder = rootFolder.createFolder(folderName);
+            driveId = projectFolder.getId();
+            driveUrl = projectFolder.getUrl();
+            
+            // Crear subcarpetas de etapas
+            const etapasRaw = readConfig("CONF_ETAPAS");
+            const etapasTipo = etapasRaw
+              .filter(e => e.id_tipo_proyecto === projectData.id_tipo_proyecto)
+              .sort((a, b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
+            
+            etapasTipo.forEach(e => {
+              if (e.nombre_etapa) {
+                projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
+              }
+            });
+          }
+        }
+      } catch (driveError) {
+        console.warn("Advertencia: No se pudo crear estructura en Drive.", driveError);
+        driveUrl = "ERROR_DRIVE";
+        driveId = "NO_CREADO";
+      }
+      
+      // Asignar URLs de Drive al objeto
+      projectData.drive_folder_id = driveId;
+      projectData.drive_url = driveUrl;
+    }
 
-    // 2. Agregamos las NUEVAS asignaciones
+    // --- 3. GUARDAR EN DB_PROYECTOS (SIN LOCK ANIDADO) ---
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    if (!sheetProyectos) throw new Error("La hoja DB_PROYECTOS no existe");
+    
+    const dataProyectos = sheetProyectos.getDataRange().getValues();
+    if (dataProyectos.length === 0) throw new Error("DB_PROYECTOS está vacía");
+    
+    const headersProyectos = dataProyectos[0].map(h => h.toString().trim().toLowerCase());
+    
+    if (isNew) {
+      // CREAR NUEVO REGISTRO
+      const newRow = headersProyectos.map(h => {
+        const itemKey = Object.keys(projectData).find(k => k.toLowerCase() === h);
+        return itemKey ? projectData[itemKey] : "";
+      });
+      sheetProyectos.appendRow(newRow);
+      
+    } else {
+      // ACTUALIZAR REGISTRO EXISTENTE
+      const idColIndex = headersProyectos.indexOf("id");
+      if (idColIndex === -1) throw new Error("No se encuentra columna 'id'");
+      
+      let found = false;
+      for (let i = 1; i < dataProyectos.length; i++) {
+        if (dataProyectos[i][idColIndex] === projectData.id) {
+          const rowRange = sheetProyectos.getRange(i + 1, 1, 1, headersProyectos.length);
+          
+          const updatedRow = headersProyectos.map((h, colIdx) => {
+            const itemKey = Object.keys(projectData).find(k => k.toLowerCase() === h);
+            return itemKey !== undefined ? projectData[itemKey] : dataProyectos[i][colIdx];
+          });
+          
+          rowRange.setValues([updatedRow]);
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) throw new Error("No se encontró el proyecto para actualizar");
+    }
+
+    // --- 4. ACTUALIZAR ASIGNACIONES ---
+    const sheetAsig = ss.getSheetByName("CONF_REL_ASIGNACIONES");
+    if (!sheetAsig) throw new Error("La hoja CONF_REL_ASIGNACIONES no existe");
+    
+    const dataAsig = sheetAsig.getDataRange().getValues();
+    
+    let headersAsig = [];
+    let bodyAsig = [];
+    if (dataAsig.length > 0) {
+      headersAsig = dataAsig.shift(); 
+      bodyAsig = dataAsig;
+    }
+
+    const idxProj = 1; // Columna id_proyecto
+
+    // Eliminar asignaciones viejas de este proyecto
+    let finalData = bodyAsig.filter(row => row[idxProj] !== projectData.id);
+
+    // Agregar nuevas asignaciones
     const now = new Date();
     if (asignadosIds && Array.isArray(asignadosIds)) {
       asignadosIds.forEach(idProf => {
-        newData.push([
-          Utilities.getUuid(), // ID único de la relación
-          projectData.id,      // ID Proyecto
-          idProf,              // ID Profesional
-          now                  // Created At
+        finalData.push([
+          Utilities.getUuid(),
+          projectData.id,
+          idProf,
+          now
         ]);
       });
     }
 
-    // 3. Escribimos todo de nuevo (Batch Update)
-    sheet.getRange(2, 1, sheet.getLastRow(), headers.length).clearContent();
-    if (newData.length > 0) {
-      sheet.getRange(2, 1, newData.length, headers.length).setValues(newData);
+    // Reescribir tabla de asignaciones
+    if (finalData.length > 0 && headersAsig.length > 0) {
+      if (sheetAsig.getLastRow() > 1) {
+         sheetAsig.getRange(2, 1, sheetAsig.getLastRow() - 1, headersAsig.length).clearContent();
+      }
+      sheetAsig.getRange(2, 1, finalData.length, headersAsig.length).setValues(finalData);
     }
+
+    // --- 5. GENERACIÓN DE TAREAS SI ES NUEVO ---
+    if (isNew && projectData.id_tipo_proyecto) {
+      regenerateProjectTasksInternal(ss, projectData.id, projectData.id_tipo_proyecto);
+    }
+    
+    SpreadsheetApp.flush(); // Forzar escritura
     
     return { success: true, projectId: projectData.id };
 
   } catch (e) {
-    Logger.log("Error en saveProjectWithAssignments: " + e.toString());
-    throw new Error(e.toString());
+    console.error("Error saveProjectWithAssignments:", e);
+    throw new Error("Error al guardar proyecto: " + e.message);
   } finally {
     lock.releaseLock();
   }
 }
+
+/**
+ * Versión interna de regenerateProjectTasks (sin lock propio)
+ */
+function regenerateProjectTasksInternal(ss, projectId, tipoId) {
+  const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+  const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
+  const sheetTareas = ss.getSheetByName("CONF_TAREAS");
+
+  const etapasData = sheetEtapas.getDataRange().getValues();
+  const etapasHeaders = etapasData.shift();
+  const idxTipoEnEtapa = etapasHeaders.indexOf("id_tipo_proyecto");
+  const idxIdEtapa = 0;
+
+  if (idxTipoEnEtapa === -1) throw new Error("No hay id_tipo_proyecto en CONF_ETAPAS");
+
+  const etapasIds = etapasData
+    .filter(r => String(r[idxTipoEnEtapa]) === String(tipoId))
+    .map(r => r[idxIdEtapa]);
+
+  if (etapasIds.length === 0) {
+    console.warn("No hay etapas configuradas para el tipo: " + tipoId);
+    return;
+  }
+
+  const tareasData = sheetTareas.getDataRange().getValues();
+  const tareasHeaders = tareasData.shift();
+  const idxEtapaEnTarea = tareasHeaders.indexOf("etapa_id"); 
+  
+  const tareasTemplate = tareasData.filter(r => etapasIds.includes(r[idxEtapaEnTarea]));
+
+  const tIdxName = tareasHeaders.indexOf("nombre_tarea");
+  const tIdxEvidencia = tareasHeaders.indexOf("requiere_evidencia");
+  const tIdxInput = tareasHeaders.indexOf("tipo_entrada");
+  const tIdxChecklist = tareasHeaders.indexOf("checklist_id");
+
+  const newRows = tareasTemplate.map(t => [
+    Utilities.getUuid(),
+    projectId,
+    t[idxEtapaEnTarea],
+    t[tIdxName],
+    t[tIdxEvidencia],
+    t[tIdxInput],
+    t[tIdxChecklist],
+    "Pendiente",
+    "",
+    "",
+    "",
+    new Date(),
+    ""
+  ]);
+
+  const dataEjec = sheetEjecucion.getDataRange().getValues();
+  const headerEjec = dataEjec.shift();
+  const idxProyEjec = headerEjec.indexOf("proyecto_id");
+
+  const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
+  const finalEjecucion = [...dataCleaned, ...newRows];
+
+  sheetEjecucion.clearContents();
+  sheetEjecucion.appendRow(headerEjec);
+  if (finalEjecucion.length > 0) {
+    sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length).setValues(finalEjecucion);
+  }
+}
+
+/**
+ * MAPA DE RELACIONES (Integridad Referencial)
+ * Define qué tablas dependen de otras.
+ * Clave: Tabla Padre (La que intentas borrar)
+ * Valor: Array de objetos con la Tabla Hija y la Columna FK que apunta al padre.
+ */
+const SCHEMA_DEPENDENCIES = {
+  "CONF_TIPO_PROYECTO": [
+    { table: "CONF_ETAPAS", fk: "id_tipo_proyecto"},
+    { table: "CONF_CHECKLISTS", fk: "id_tipo_proyecto"},
+    { table: "DB_PROYECTOS", fk: "id_tipo_proyecto"}
+  ],
+  "CONF_ETAPAS": [
+    { table: "CONF_TAREAS", fk: "etapa_id"},
+    { table: "DB_EJECUCION", fk: "etapa_id"}
+  ],
+  "CONF_TAREAS": [
+    { table: "DB_EJECUCION", fk: "nombre_tarea"}
+  ],
+  "CONF_CHECKLISTS": [
+    { table: "CONF_TAREAS", fk: "checklist_id"},
+    { table: "DB_EJECUCION", fk: "checklist_id"}
+  ],
+  "CONF_PROFESIONALES": [
+    { table: "CONF_REL_ASIGNACIONES", fk: "id_profesional" },
+    { table: "DB_EJECUCION", fk: "responsable_id"}
+  ],
+  "DB_PROYECTOS": [
+    { table: "DB_EJECUCION", fk: "proyecto_id"},
+    { table: "CONF_REL_ASIGNACIONES", fk: "id_proyecto"}
+  ],
+};
+
+/**
+ * Función Principal de Borrado Seguro
+ * @param {string} sheetName - Nombre de la hoja (Tabla)
+ * @param {string} id - UUID del registro a borrar
+ */
+function deleteConfigRecord(sheetName, id) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getScriptLock();
+  
+  try {
+    lock.waitLock(5000);
+
+    // 1. VERIFICACIÓN DE DEPENDENCIAS
+    const dependencyError = checkDependencies(ss, sheetName, id);
+    if (dependencyError) {
+      return { 
+        success: false, 
+        message: dependencyError 
+      };
+    }
+
+    // 2. EJECUCIÓN DEL BORRADO
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) throw new Error(`La hoja ${sheetName} no existe.`);
+
+    const data = sheet.getDataRange().getValues();
+    // Asumimos que la columna ID siempre es la primera (índice 0). 
+    // Si no, habría que buscar el índice de la columna "id".
+    const rowIndex = data.findIndex(row => row[0] == id);
+
+    if (rowIndex === -1) {
+      return { success: false, message: "Registro no encontrado." };
+    }
+
+    // rowIndex es base 0, deleteRow es base 1
+    sheet.deleteRow(rowIndex + 1);
+    
+    return { success: true, message: "Registro eliminado correctamente." };
+
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: "Error del sistema: " + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Helper para revisar si el ID existe en tablas hijas
+ */
+function checkDependencies(ss, parentTable, id) {
+  const dependencies = SCHEMA_DEPENDENCIES[parentTable];
+  
+  if (!dependencies) return null; // No tiene dependencias configuradas
+
+  for (const dep of dependencies) {
+    const sheet = ss.getSheetByName(dep.table);
+    if (!sheet) continue; // Si la hoja no existe, saltamos (o logueamos error)
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) continue; // Solo encabezados
+
+    const headers = data[0];
+    const colIndex = headers.indexOf(dep.fk);
+
+    if (colIndex === -1) {
+      console.warn(`Columna FK '${dep.fk}' no encontrada en '${dep.table}'`);
+      continue;
+    }
+
+    // Buscamos si el ID existe en la columna FK
+    // Empezamos en i=1 para saltar el header
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][colIndex]) === String(id)) {
+        return `No se puede eliminar: Este registro está siendo usado en la tabla '${dep.table}'.`;
+      }
+    }
+  }
+
+  return null; // Todo limpio
+}
+
+/**
+ * Obtiene estructura completa para reportes
+ * Incluye: Proyectos -> Etapas -> Tareas con todos los detalles
+ */
+function getReportData() {
+  try {
+    // Obtener datos base
+    const proyectos = readConfig("DB_PROYECTOS");
+    const etapas = readConfig("CONF_ETAPAS");
+    const tareas = readConfig("DB_EJECUCION");
+    const tipos = readConfig("CONF_TIPO_PROYECTO");
+    const asignaciones = readConfig("CONF_REL_ASIGNACIONES");
+    const profesionales = readConfig("CONF_PROFESIONALES");
+    const progressStats = getGlobalProgressStats();
+    
+    // Construir estructura jerárquica
+    const reportData = proyectos.map(proyecto => {
+      // Info del tipo
+      const tipo = tipos.find(t => t.id === proyecto.id_tipo_proyecto) || {};
+      
+      // Profesionales asignados
+      const asignadosIds = asignaciones
+        .filter(a => a.id_proyecto === proyecto.id)
+        .map(a => a.id_profesional);
+      
+      const equipo = profesionales.filter(p => asignadosIds.includes(p.id));
+      
+      // Estadísticas de progreso
+      const stats = progressStats[proyecto.id] || {
+        progress: 0,
+        stageText: 'Planificación',
+        stageColor: '#999'
+      };
+      
+      // Etapas del proyecto
+      const etapasProyecto = etapas
+        .filter(e => e.id_tipo_proyecto === proyecto.id_tipo_proyecto)
+        .sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0))
+        .map(etapa => {
+          // Tareas de la etapa
+          const tareasEtapa = tareas
+            .filter(t => t.proyecto_id === proyecto.id && t.etapa_id === etapa.id)
+            .map(tarea => ({
+              id: tarea.id,
+              nombre: tarea.nombre_tarea,
+              estado: tarea.estado || 'Pendiente',
+              comentarios: tarea.comentarios || '',
+              requiere_evidencia: tarea.requiere_evidencia,
+              tiene_evidencia: tarea.datos_evidencia && String(tarea.datos_evidencia).length > 5,
+              evidencia_url: tarea.datos_evidencia || '',
+              tipo_entrada: tarea.tipo_entrada || 'text',
+              updated_at: tarea.updated_at
+            }));
+          
+          const completadas = tareasEtapa.filter(t => t.estado === 'Completado').length;
+          const progreso = tareasEtapa.length > 0 
+            ? Math.round((completadas / tareasEtapa.length) * 100) 
+            : 0;
+          
+          return {
+            id: etapa.id,
+            nombre: etapa.nombre_etapa,
+            orden: etapa.orden,
+            color: etapa.color_hex,
+            progreso: progreso,
+            tareas: tareasEtapa,
+            total_tareas: tareasEtapa.length,
+            tareas_completadas: completadas
+          };
+        });
+      
+      return {
+        // Datos del proyecto
+        id: proyecto.id,
+        codigo: proyecto.codigo,
+        nombre: proyecto.nombre_obra,
+        cliente: proyecto.cliente,
+        ubicacion: proyecto.ubicacion,
+        fecha_inicio: proyecto.fecha_inicio,
+        fecha_fin: proyecto.fecha_fin,
+        drive_url: proyecto.drive_url,
+        
+        // Info del tipo
+        tipo_id: proyecto.id_tipo_proyecto,
+        tipo_nombre: tipo.nombre_tipo || 'Sin tipo',
+        tipo_color: tipo.color_representativo || '#6c757d',
+        
+        // Progreso
+        progreso_global: stats.progress,
+        etapa_actual: stats.stageText,
+        etapa_color: stats.stageColor,
+        
+        // Equipo
+        equipo: equipo.map(p => ({
+          id: p.id,
+          nombre: p.nombre_completo,
+          rol: p.rol,
+          email: p.email
+        })),
+        
+        // Estructura jerárquica
+        etapas: etapasProyecto
+      };
+    });
+    
+    return {
+      success: true,
+      data: reportData,
+      tipos: tipos,
+      profesionales: profesionales
+    };
+    
+  } catch (e) {
+    console.error("Error en getReportData:", e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+}
+
+/**
+ * Genera un reporte PDF con diseño profesional corporativo (High-End).
+ */
+function generatePDFReport(data, requesterEmail) {
+  try {
+    const userEmail = requesterEmail || Session.getActiveUser().getEmail();
+    const now = new Date();
+    const fechaReporte = Utilities.formatDate(now, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
+    const logoBase64 = getLogoBase64(); 
+
+    // Definición de Colores
+    const COLOR_PRIMARY = "#556B2F"; // Olive Drab (Tu color base)
+    const COLOR_LIGHT = "#f4f6f2";   // Un verde muy pálido para filas alternas
+    const COLOR_TEXT = "#333333";
+    const COLOR_MUTED = "#666666";
+    const COLOR_BORDER = "#dddddd";
+
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        @page { size: A4 landscape; margin: 1.5cm; } /* Márgenes más amplios para elegancia */
+        
+        body { 
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+          color: ${COLOR_TEXT}; 
+          font-size: 9pt; 
+          line-height: 1.4;
+        }
+
+        /* --- HEADER SECTION --- */
+        .header-wrapper {
+          width: 100%;
+          border-bottom: 2px solid ${COLOR_PRIMARY};
+          padding-bottom: 15px;
+          margin-bottom: 25px;
+        }
+        .header-table { width: 100%; border-collapse: collapse; }
+        .logo-img { height: 45px; display: block; margin-bottom: 5px; }
+        .company-name { font-size: 8pt; color: ${COLOR_PRIMARY}; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
+        .report-title { font-size: 18pt; font-weight: 700; color: ${COLOR_TEXT}; margin: 5px 0 0 0; }
+        
+        .meta-box { text-align: right; font-size: 8pt; color: ${COLOR_MUTED}; }
+        .meta-label { font-weight: bold; color: ${COLOR_PRIMARY}; text-transform: uppercase; font-size: 7pt; }
+
+        /* --- DATA TABLE --- */
+        .data-table { width: 100%; border-collapse: collapse; border-spacing: 0; }
+        
+        /* Encabezados de tabla: Minimalistas y limpios */
+        .data-table th { 
+          background-color: ${COLOR_PRIMARY}; 
+          color: white; 
+          padding: 10px 8px; 
+          text-align: left; 
+          font-size: 8pt; 
+          font-weight: 600; 
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          border-bottom: 1px solid ${COLOR_PRIMARY};
+        }
+
+        /* Celdas */
+        .data-table td { 
+          padding: 12px 8px; /* Más padding vertical */
+          border-bottom: 1px solid ${COLOR_BORDER}; 
+          vertical-align: middle; 
+          font-size: 8.5pt;
+        }
+
+        /* Filas alternas sutiles */
+        .data-table tr:nth-child(even) { background-color: ${COLOR_LIGHT}; }
+        
+        /* Tipografía específica por columna */
+        .col-code { font-family: 'Courier New', monospace; font-weight: bold; color: ${COLOR_MUTED}; font-size: 8pt; }
+        .col-name { font-weight: bold; font-size: 9pt; color: #000; display: block; }
+        .col-subtext { font-size: 7.5pt; color: ${COLOR_MUTED}; margin-top: 2px; }
+        .col-client { color: ${COLOR_MUTED}; font-style: italic; }
+
+        /* --- COMPONENTES --- */
+        /* Badges (Píldoras) */
+        .badge { 
+          padding: 3px 8px; 
+          border-radius: 12px; /* Más redondeado */
+          font-size: 7pt; 
+          font-weight: 700; 
+          text-transform: uppercase;
+          display: inline-block; 
+          white-space: nowrap;
+          border: 1px solid transparent;
+        }
+
+        /* Barra de Progreso */
+        .progress-wrapper { display: flex; align-items: center; } /* Flex a veces falla en PDF GAS, usamos tabla interna o inline-block */
+        .progress-track { 
+          background-color: #e0e0e0; 
+          border-radius: 4px; 
+          width: 60px; 
+          height: 6px; 
+          display: inline-block; 
+          vertical-align: middle; 
+          overflow: hidden;
+        }
+        .progress-fill { 
+          height: 100%; 
+          background-color: ${COLOR_PRIMARY}; 
+        }
+        .progress-text { 
+          font-size: 7.5pt; 
+          font-weight: bold; 
+          color: ${COLOR_PRIMARY}; 
+          margin-left: 6px; 
+          vertical-align: middle;
+        }
+
+        /* Footer */
+        .footer { 
+          position: fixed; 
+          bottom: 0; 
+          left: 0; 
+          right: 0;
+          text-align: center; 
+          font-size: 7pt; 
+          color: #aaa; 
+          border-top: 1px solid #eee; 
+          padding-top: 10px; 
+        }
+      </style>
+    </head>
+    <body>
+
+      <div class="header-wrapper">
+        <table class="header-table">
+          <tr>
+            <td width="60%" style="vertical-align: bottom;">
+              ${logoBase64 ? `<img src="${logoBase64}" class="logo-img">` : ''}
+              <div class="company-name">Lock - Gestión Integral de Proyectos</div>
+              <h1 class="report-title">Reporte Ejecutivo de Proyectos</h1>
+            </td>
+            <td width="40%" class="meta-box" style="vertical-align: bottom;">
+              <div><span class="meta-label">Creado por:</span> ${userEmail}</div>
+              <div style="margin-top:4px;"><span class="meta-label">FECHA DE EMISIÓN:</span> ${fechaReporte}</div>
+              <div style="margin-top:4px;"><span class="meta-label">TOTAL REGISTROS:</span> ${data ? data.length : 0}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th width="8%">CÓDIGO</th>
+            <th width="25%">OBRA / TIPO</th> <th width="15%">CLIENTE</th>
+            <th width="15%">ETAPA ACTUAL</th>
+            <th width="20%">PLAZO DE EJECUCIÓN</th>
+            <th width="12%">AVANCE</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    if (data && data.length > 0) {
+      data.forEach(p => {
+        const avance = Math.round(p.avance || 0);
+        const colorEtapa = p.etapa_color || '#999';
+        const colorTipo = p.tipo_color || '#666';
+
+        html += `
+          <tr>
+            <td class="col-code">${p.codigo}</td>
+
+            <td>
+              <span class="col-name">${p.nombre}</span>
+              <div class="col-subtext">
+                 <span style="color:${colorTipo}; font-weight:bold;">● ${p.tipo_nombre || 'General'}</span>
+              </div>
+            </td>
+
+            <td class="col-client">${p.cliente}</td>
+
+            <td>
+               <span class="badge" style="background-color: ${hexToRgba(colorEtapa, 0.1)}; color: ${colorEtapa}; border-color: ${hexToRgba(colorEtapa, 0.3)};">
+                 ${p.etapa_actual}
+               </span>
+            </td>
+
+            <td style="font-size: 8pt; color: #444;">${p.plazo}</td>
+
+            <td>
+              <div class="progress-track">
+                <div class="progress-fill" style="width: ${avance}%;"></div>
+              </div>
+              <span class="progress-text">${avance}%</span>
+            </td>
+          </tr>
+        `;
+      });
+    } else {
+      html += `<tr><td colspan="6" style="text-align:center; padding:30px; color:#999; font-style:italic;">No hay datos disponibles para mostrar.</td></tr>`;
+    }
+
+    html += `
+        </tbody>
+      </table>
+
+      <div class="footer">
+        Documento confidencial - Generado automáticamente por Lock - Gestión Integral de Proyectos
+      </div>
+
+    </body>
+    </html>
+    `;
+
+    const blob = Utilities.newBlob(html, MimeType.HTML).getAs(MimeType.PDF);
+    const fileName = `Reporte_Ejecutivo_${Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd")}.pdf`;
+    blob.setName(fileName);
+    
+    const file = DriveApp.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return file.getUrl(); 
+
+  } catch (e) {
+    console.error("Error PDF:", e);
+    throw new Error("Fallo al generar PDF: " + e.message);
+  }
+}
+
+// --- HELPERS ---
+
+/**
+ * Convierte fecha ISO o string a formato DD/MM/YYYY
+ */
+function formatDateRaw(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString; // Si no es fecha válida, devolver original
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), "dd/MM/yyyy");
+}
+
+/**
+ * Helper simple para convertir HEX a RGBA (para fondos suaves de etiquetas)
+ */
+function hexToRgba(hex, alpha) {
+  if (!hex) return `rgba(85, 107, 47, ${alpha})`; // Fallback al color expert
+  let r = 0, g = 0, b = 0;
+  if (hex.length === 4) {
+    r = "0x" + hex[1] + hex[1];
+    g = "0x" + hex[2] + hex[2];
+    b = "0x" + hex[3] + hex[3];
+  } else if (hex.length === 7) {
+    r = "0x" + hex[1] + hex[2];
+    g = "0x" + hex[3] + hex[4];
+    b = "0x" + hex[5] + hex[6];
+  }
+  return `rgba(${+r}, ${+g}, ${+b}, ${alpha})`;
+}
+
+/**
+ * Función Placeholder para el logo.
+ * DEBES REEMPLAZAR EL STRING VACÍO CON EL BASE64 REAL DE TU IMAGEN '2-sin_fondo.png'
+ * Puedes obtenerlo usando un convertidor online o leyendo el archivo una vez en GAS.
+ */
+function getLogoBase64() {
+  // Lo ideal: Leer el archivo '2-sin_fondo.png' desde Drive si tienes su ID
+  const fileId = "1QqKv02uZDkIF_-BL8-CyskY9JkWR6iqs"; 
+  const blob = DriveApp.getFileById(fileId).getBlob();
+  return "data:image/png;base64," + Utilities.base64Encode(blob.getBytes());
+  
+}
+
+
+
+
