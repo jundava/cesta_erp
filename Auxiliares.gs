@@ -1,103 +1,83 @@
-const carpeta = "https://drive.google.com/file/d/19JlPNv17CWp8RnF1bdiA7C25K2G17U11/view?usp=drive_link"
-/**
- * @file setupDatabase.gs
- * @summary Inicializa y normaliza la infraestructura de base de datos en Google Sheets.
- * @author GAS Expert
- */
-
+/*** INICIALIZACIÓN DE LA BASE DE DATOS * Ejecuta esta función manualmente una vez para crear todas las pestañas faltantes. */
 function setupDatabase() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const COLOR_BASE = "#556B2F";
-
-  // 1. DEFINICIÓN DEL ESQUEMA MAESTRO (Basado en análisis de CSVs)
-  const schema = {
-    "CONF_GENERAL": ["parametro", "valor", "descripcion", "updated_at"],
-    "CONF_TIPO_PROYECTO": ["id", "nombre_tipo", "descripcion", "color_representativo", "created_at"],
-    "CONF_ETAPAS": ["id", "nombre_etapa", "orden", "color_hex", "descripcion", "id_tipo_proyecto", "created_at"],
-    "CONF_TAREAS": ["id", "etapa_id", "nombre_tarea", "requiere_evidencia", "tipo_entrada", "checklist_id", "created_at"],
-    "CONF_PROFESIONALES": ["id", "nombre_completo", "especialidad", "rol", "telefono", "email", "costo_hora", "estado", "created_at", "perfil_sistema"],
-    "CONF_CHECKLISTS": ["id", "nombre_checklist", "config_json", "id_tipo_proyecto", "created_at"],
-    "CONF_REL_ASIGNACIONES": ["id", "id_proyecto", "id_profesional", "created_at"],
-    "DB_PROYECTOS": ["id", "codigo", "nombre_obra", "cliente", "ubicacion", "fecha_inicio", "fecha_fin", "estado", "drive_folder_id", "drive_url", "id_tipo_proyecto", "created_at"],
-    "DB_EJECUCION": ["id", "proyecto_id", "etapa_id", "nombre_tarea", "requiere_evidencia", "tipo_entrada", "checklist_id", "estado", "responsable_id", "datos_evidencia", "comentarios", "updated_at", "datos_checklist"]
-  };
-
-  const lock = LockService.getScriptLock();
+  const ss = SpreadsheetApp.openById(SS_ID);
   
-  try {
-    // Bloqueo por 30 segundos para operaciones de estructura
-    lock.waitLock(30000);
-    console.log("🚀 Iniciando construcción de infraestructura relacional...");
+  // Definición de estructura basada estrictamente en los CSVs adjuntos
+  const estructura = [
+    // --- CONFIGURACIÓN ---
+    { nombre: "CONFIG_GENERAL", cols: ["clave", "valor"] },
+    { nombre: "CONFIG_CAMPOS", cols: ["id_campo", "entidad_objetivo", "key_interno", "etiqueta_visible", "tipo_dato", "opciones_lista", "es_obligatorio"] },
+    { nombre: "USUARIOS", cols: ["id_usuario", "nombre", "email", "password", "rol", "modulos_permitidos", "activo", "avatar", "id_deposito"] },
+    { nombre: "SESIONES", cols: ["token", "id_usuario", "fecha_creacion", "fecha_ultimo_uso"] },
+    { nombre: "DEPOSITOS", cols: ["id_deposito", "nombre", "direccion", "responsable", "activo"] },
+    
+    // --- MAESTROS ---
+    { nombre: "PRODUCTOS", cols: ["id_producto", "sku", "nombre", "id_categoria", "unidad_medida", "precio_venta_base", "costo_promedio", "stock_minimo", "impuesto_iva", "maneja_stock", "datos_adicionales", "url_imagen", "stock_actual", "metodo_iva"] },
+    { nombre: "CLIENTES", cols: ["id_cliente", "razon_social", "doc_identidad", "email", "telefono", "direccion", "datos_adicionales"] },
+    { nombre: "PROVEEDORES", cols: ["id_proveedor", "razon_social", "doc_identidad", "contacto", "datos_adicionales"] },
+    { nombre: "CATEGORIAS", cols: ["id_categoria", "nombre"] },
+    { nombre: "UNIDADES", cols: ["id_unidad", "nombre", "abreviatura"] },
 
-    Object.keys(schema).forEach(tableName => {
-      let sheet = ss.getSheetByName(tableName);
-      const expectedHeaders = schema[tableName];
+    // --- STOCK ---
+    { nombre: "STOCK_EXISTENCIAS", cols: ["id_existencia", "id_producto", "id_deposito", "cantidad", "fecha_actualizacion"] },
+    { nombre: "MOVIMIENTOS_STOCK", cols: ["id_movimiento", "fecha", "tipo_movimiento", "id_producto", "id_deposito", "cantidad", "referencia_origen"] },
 
-      if (!sheet) {
-        sheet = ss.insertSheet(tableName);
-        console.log(`✅ Hoja creada: ${tableName}`);
-      }
+    // --- OPERACIONES (CABECERAS Y DETALLES) ---
+    // Ventas
+    { nombre: "VENTAS_CABECERA", cols: ["id_venta", "numero_factura", "fecha", "id_cliente", "id_deposito_origen", "total_venta", "estado", "url_pdf", "condicion", "saldo_pendiente", "json_pagos", "id_sesion_caja"] },
+    { nombre: "VENTAS_DETALLE", cols: ["id_detalle", "id_venta", "id_producto", "cantidad", "precio_unitario", "iva_aplicado", "subtotal"] },
+    
+    // Compras
+    { nombre: "COMPRAS_CABECERA", cols: ["id_compra", "fecha", "id_proveedor", "id_deposito_destino", "total_factura", "estado", "url_pdf", "numero_factura", "condicion", "saldo_pendiente", "json_pagos", "fecha_vencimiento", "id_sesion_caja"] },
+    { nombre: "COMPRAS_DETALLE", cols: ["id_detalle", "id_compra", "id_producto", "cantidad", "costo_unitario", "iva_aplicado", "subtotal"] },
 
-      const currentHeaders = sheet.getLastColumn() > 0 
-        ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] 
-        : [];
+    // Remisiones
+    { nombre: "REMISIONES_CABECERA", cols: ["id_remision", "fecha", "numero_comprobante", "id_cliente", "id_deposito", "entregado_por", "recibido_por", "estado", "url_pdf", "total_valorizado"] },
+    { nombre: "REMISIONES_DETALLE", cols: ["id_detalle", "id_remision", "id_producto", "cantidad", "precio_unitario"] },
 
-      // Sincronización de columnas (IDEMPOTENCIA)
-      expectedHeaders.forEach((header, index) => {
-        const colIndex = currentHeaders.indexOf(header);
-        if (colIndex === -1) {
-          // Si la columna no existe, la agregamos
-          const newColPos = index + 1;
-          sheet.insertColumnBefore(newColPos);
-          const cell = sheet.getRange(1, newColPos);
-          cell.setValue(header);
-          
-          // Estilo Profesional
-          cell.setBackground(COLOR_BASE)
-              .setFontColor("white")
-              .setFontWeight("bold")
-              .setHorizontalAlignment("center");
-          
-          console.log(`  + Columna agregada en ${tableName}: ${header}`);
+    // Transferencias
+    { nombre: "TRANSFERENCIAS_CABECERA", cols: ["id_transferencia", "fecha", "id_deposito_origen", "id_deposito_destino", "responsable", "observacion", "url_pdf"] },
+    { nombre: "TRANSFERENCIAS_DETALLE", cols: ["id_detalle", "id_transferencia", "id_producto", "cantidad"] },
+
+    // --- CAJA Y FINANZAS ---
+    { nombre: "CAJA_SESIONES", cols: ["id_sesion", "id_usuario", "responsable_apertura", "fecha_apertura", "monto_inicial", "fecha_cierre", "total_sistema", "total_real", "diferencia", "estado", "id_deposito"] },
+    { nombre: "COBRANZAS", cols: ["id_cobro", "fecha", "id_cliente", "monto", "metodo_pago", "observacion", "id_venta_asociada", "id_sesion_caja"] },
+    { nombre: "PAGOS_PROVEEDORES", cols: ["id_pago", "fecha_pago", "id_compra", "id_proveedor", "monto", "metodo", "referencia", "observacion", "usuario_responsable", "id_sesion_caja"] },
+    { nombre: "GASTOS", cols: ["id_gasto", "fecha", "categoria", "descripcion", "monto", "metodo_pago", "id_sesion_caja"] },
+    
+    // --- AUDITORÍA ---
+    { nombre: "BITACORA", cols: ["Fecha", "Hora", "Usuario", "Acción", "Detalle"] }
+  ];
+
+  // 1. Crear o Actualizar Hojas
+  estructura.forEach(hoja => {
+    let ws = ss.getSheetByName(hoja.nombre);
+    if (!ws) {
+      ws = ss.insertSheet(hoja.nombre);
+      ws.appendRow(hoja.cols);
+    } else {
+      // Si la hoja existe, verificar si faltan columnas comparando longitudes
+      let lastCol = ws.getLastColumn();
+      if (lastCol > 0) {
+        let headerActual = ws.getRange(1, 1, 1, lastCol).getValues()[0];
+        // Si hay menos columnas en la hoja que en la estructura, actualizamos encabezado
+        if (headerActual.length < hoja.cols.length) {
+          ws.getRange(1, 1, 1, hoja.cols.length).setValues([hoja.cols]);
         }
-      });
-
-      // Formato de tabla
-      sheet.setFrozenRows(1);
-      if (sheet.getLastColumn() > 0) {
-        sheet.autoResizeColumns(1, sheet.getLastColumn());
+      } else {
+         // La hoja existe pero está vacía
+         ws.appendRow(hoja.cols);
       }
-    });
+    }
+  });
 
-    // 2. INICIALIZACIÓN DE DATOS SEMILLA (Opcional - CONF_GENERAL)
-    const confSheet = ss.getSheetByName("CONF_GENERAL");
-    const existingParams = confSheet.getDataRange().getValues().map(r => r[0]);
-    
-    const seedData = [
-      ["DRIVE_ROOT_FOLDER_URL", carpeta, "URL raíz para evidencias", new Date()],
-      ["TIPOS_PROYECTO", "Siroque, Expansión, Especial", "Listado de tipos de obra", new Date()]
-    ];
-
-    seedData.forEach(row => {
-      if (!existingParams.includes(row[0])) {
-        confSheet.appendRow(row);
-      }
-    });
-
-    // 3. LIMPIEZA DE CACHE
-    CacheService.getScriptCache().removeAll(["indices_db", "config_app"]);
-    
-    console.log("🎯 Base de datos consolidada con éxito.");
-    
-    // Feedback al usuario (Solo si hay UI)
-    try {
-      SpreadsheetApp.getUi().alert("✅ Infraestructura Lista", "La base de datos ha sido normalizada y las columnas relacionales están activas.", SpreadsheetApp.getUi().ButtonSet.OK);
-    } catch(e) {}
-
-  } catch (e) {
-    console.error("Fatal Error en setupDatabase: " + e.message);
-    throw "Error de Infraestructura: Contacte al administrador.";
-  } finally {
-    lock.releaseLock();
-  }
+  // 2. Reorganizar pestañas alfabéticamente o según orden del array
+  estructura.forEach((hoja, index) => {
+    const sheet = ss.getSheetByName(hoja.nombre);
+    if (sheet) {
+      sheet.activate();
+      ss.moveActiveSheet(index + 1);
+    }
+  });
 }
+
