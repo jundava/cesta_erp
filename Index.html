@@ -210,6 +210,36 @@
 </head>
 <body>
         <div id="app" class="d-flex h-100 flex-column">
+          <!-- ⭐ BANNER DE ESTADO DE SUSCRIPCIÓN -->
+        <div v-if="mostrarBannerSuscripcion && estadoSuscripcion" 
+            :class="['alert', 'm-0', 'rounded-0', 'border-0', 'sticky-top']"
+            :style="getEstiloBanner()"
+            style="z-index: 1050;">
+            
+            <div class="container-fluid d-flex justify-content-between align-items-center py-2">
+                
+                <div class="d-flex align-items-center">
+                    <span v-html="getIconoEstado()" class="me-2" style="font-size: 1.5rem;"></span>
+                    <div>
+                        <strong>{{ getMensajeEstado() }}</strong>
+                        <small class="d-block text-muted" style="font-size: 0.85rem;">
+                            Vencimiento: {{ formatearFecha(estadoSuscripcion.fechaVencimiento) }}
+                        </small>
+                    </div>
+                </div>
+                
+                <button class="btn btn-sm" 
+                        :class="getClaseBoton()"
+                        @click="abrirPagoSuscripcion">
+                    <i class="bi bi-credit-card me-1"></i>
+                    Pagar Ahora
+                </button>
+                
+            </div>
+        </div>
+        
+        <!-- ... resto del contenido existente -->
+
         <div v-if="!usuarioLogueado"
             class="position-fixed top-0 start-0 w-100 h-100 login-bg d-flex align-items-center justify-content-center"
             style="z-index: 9999;">
@@ -408,6 +438,14 @@
                             :class="{active: vistaActual === 'config'}" @click="cambiarVista('config')">
                             <i class="bi bi-gear me-2"></i> Configuración
                         </a>
+
+                        <a v-if="usuarioLogueado && usuarioLogueado.rol === 'ADMIN'"
+                          class="nav-link-desktop" 
+                          :class="{ active: vistaActual === 'dashboard-suscripciones' }"
+                          @click="abrirDashboardSuscripciones">
+                            <i class="bi bi-building me-2"></i>
+                            Suscripciones
+                        </a>
                     </div>
 
                     <div class="mt-4 pt-3 border-top" v-if="usuarioLogueado">
@@ -429,9 +467,9 @@
                                         {{ usuarioLogueado.nombre }}
                                     </div>
 
-                                    <small class='text-success' style="font-size: 10px; line-height: 1.2;">
+                                    <small :class="getClaseConectado()" style="font-size: 10px; line-height: 1.2;">
                                         <i class="bi bi-circle-fill me-1" style="font-size: 9px;"></i>
-                                        Conectado
+                                        {{ getTextoConectado() }}
                                     </small>
 
                                 </div>
@@ -645,7 +683,10 @@
                               </div>
                               <div class="card-footer bg-white p-3 text-end" v-if="carritoVenta.length > 0">
                                   <button class="btn btn-outline-secondary me-2" @click="limpiarCarritoVenta">Cancelar</button>
-                                  <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal"><i class="bi bi-cash-coin me-2"></i>FINALIZAR VENTA</button>                                      
+                                  <button class="btn btn-success btn-lg fw-bold px-5 shadow" @click="guardarVentaFinal" :disabled="estadoSuscripcion?.soloLectura"
+                                          :title="estadoSuscripcion?.soloLectura ? 'Función deshabilitada: Suscripción vencida' : ''">
+                                          <i class="bi bi-cash-coin me-2"></i>FINALIZAR VENTA
+                                  </button>
                               </div>
 
                           </div>
@@ -3240,6 +3281,317 @@
                   </div>
               </div>
 
+              <div v-if="vistaActual === 'dashboard-suscripciones'">
+                  
+                  <!-- Header -->
+                  <div class="d-flex justify-content-between align-items-center mb-4">
+                      <h3 class="fw-bold text-dark mb-0">
+                          <i class="bi bi-building text-brand"></i> Gestión de Suscripciones
+                      </h3>
+                  </div>
+                  
+                  <!-- KPIs -->
+                  <div class="row mb-4">
+                      <div class="col-md-3 mb-3">
+                          <div class="card border-success">
+                              <div class="card-body text-center">
+                                  <h6 class="text-muted mb-2">Activas</h6>
+                                  <h2 class="text-success mb-1">{{ resumenSuscripciones.activas }}</h2>
+                                  <small class="text-muted">{{ calcularPorcentaje(resumenSuscripciones.activas, resumenSuscripciones.total) }}%</small>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="col-md-3 mb-3">
+                          <div class="card border-warning">
+                              <div class="card-body text-center">
+                                  <h6 class="text-muted mb-2">Por Vencer</h6>
+                                  <h2 class="text-warning mb-1">{{ resumenSuscripciones.alertas }}</h2>
+                                  <small class="text-muted">Próximos 7 días</small>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="col-md-3 mb-3">
+                          <div class="card border-danger">
+                              <div class="card-body text-center">
+                                  <h6 class="text-muted mb-2">Problemas</h6>
+                                  <h2 class="text-danger mb-1">{{ resumenSuscripciones.vencidas + resumenSuscripciones.gracia + resumenSuscripciones.bloqueadas }}</h2>
+                                  <small class="text-muted">Requieren atención</small>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="col-md-3 mb-3">
+                          <div class="card border-primary">
+                              <div class="card-body text-center">
+                                  <h6 class="text-muted mb-2">Recaudado (Mes)</h6>
+                                  <h3 class="text-primary mb-1">₲ {{ formatearNumero(resumenSuscripciones.recaudado_mes) }}</h3>
+                                  <small class="text-muted">{{ resumenSuscripciones.total }} clientes</small>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <!-- Tabs -->
+                  <ul class="nav nav-tabs mb-4">
+                      <li class="nav-item">
+                          <a class="nav-link" 
+                            :class="{ active: tabSuscripciones === 'lista' }"
+                            @click="tabSuscripciones = 'lista'">
+                              <i class="bi bi-people"></i> Suscripciones
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link position-relative" 
+                            :class="{ active: tabSuscripciones === 'pagos' }"
+                            @click="tabSuscripciones = 'pagos'">
+                              <i class="bi bi-credit-card"></i> Pagos Pendientes
+                              <span v-if="pagosPendientesAdmin && pagosPendientesAdmin.length > 0" 
+                                    class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                  {{ pagosPendientesAdmin.length }}
+                              </span>
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link" 
+                            :class="{ active: tabSuscripciones === 'config' }"
+                            @click="tabSuscripciones = 'config'">
+                              <i class="bi bi-gear"></i> Configuración
+                          </a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link" 
+                            :class="{ active: tabSuscripciones === 'facturas' }"
+                            @click="tabSuscripciones = 'facturas'; cargarFacturasAdmin()">
+                              <i class="bi bi-receipt"></i> Facturas
+                          </a>
+                      </li>
+                  </ul>
+                  
+                  <!-- Tab: Lista de Suscripciones -->
+                  <div v-show="tabSuscripciones === 'lista'">
+                      <div class="card">
+                          <div class="card-body">
+                              
+                              <!-- Filtros -->
+                              <div class="row mb-3">
+                                  <div class="col-md-4">
+                                      <select class="form-select" v-model="filtroEstadoSub">
+                                          <option value="">Todos los estados</option>
+                                          <option value="ACTIVA">Activas</option>
+                                          <option value="ALERTA">Por vencer</option>
+                                          <option value="VENCIDA">Vencidas</option>
+                                          <option value="GRACIA">En gracia</option>
+                                          <option value="BLOQUEADA">Bloqueadas</option>
+                                      </select>
+                                  </div>
+                                  <div class="col-md-6">
+                                      <input type="text" class="form-control" 
+                                            v-model="busquedaClienteSub"
+                                            placeholder="Buscar por nombre o email">
+                                  </div>
+                                  <div class="col-md-2">
+                                      <button class="btn btn-primary w-100" @click="cargarSuscripcionesAdmin">
+                                          <i class="bi bi-arrow-clockwise"></i>
+                                      </button>
+                                  </div>
+                              </div>
+                              
+                              <!-- Tabla -->
+                              <div class="table-responsive">
+                                  <table class="table table-hover">
+                                      <thead>
+                                          <tr>
+                                              <th>Cliente</th>
+                                              <th>Email</th>
+                                              <th>Estado</th>
+                                              <th>Vencimiento</th>
+                                              <th>Monto</th>
+                                              <th>Acciones</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          <tr v-for="sub in suscripcionesFiltradas" :key="sub.id_suscripcion">
+                                              <td>{{ sub.nombre_cliente }}</td>
+                                              <td>{{ sub.email_principal }}</td>
+                                              <td>
+                                                  <span class="badge" :class="getBadgeEstadoSub(sub.estado_suscripcion)">
+                                                      {{ sub.estado_suscripcion }}
+                                                  </span>
+                                              </td>
+                                              <td>{{ formatearFechaCorta(sub.fecha_vencimiento) }}</td>
+                                              <td>₲ {{ formatearNumero(sub.monto_mensual) }}</td>
+                                              <td>
+                                                  <button class="btn btn-sm btn-outline-primary" 
+                                                          @click="verDetalleSuscripcion(sub)">
+                                                      <i class="bi bi-eye"></i>
+                                                  </button>
+                                              </td>
+                                          </tr>
+                                          <tr v-if="suscripcionesFiltradas && suscripcionesFiltradas.length === 0">
+                                              <td colspan="6" class="text-center text-muted py-4">
+                                                  No hay suscripciones
+                                              </td>
+                                          </tr>
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <!-- Tab: Pagos Pendientes -->
+                  <div v-show="tabSuscripciones === 'pagos'">
+                      <div class="card">
+                          <div class="card-body">
+                              <div class="table-responsive">
+                                  <table class="table table-hover">
+                                      <thead>
+                                          <tr>
+                                              <th>Fecha</th>
+                                              <th>Cliente</th>
+                                              <th>Monto</th>
+                                              <th>Método</th>
+                                              <th>Comprobante</th>
+                                              <th>Acciones</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          <tr v-for="pago in pagosPendientesAdmin" :key="pago.id_pago">
+                                              <td>{{ formatearFechaCorta(pago.fecha_pago) }}</td>
+                                              <td>{{ pago.creado_por }}</td>
+                                              <td class="fw-bold">₲ {{ formatearNumero(pago.monto) }}</td>
+                                              <td>{{ pago.metodo_pago }}</td>
+                                              <td>
+                                                  <a v-if="pago.comprobante_url" 
+                                                    :href="pago.comprobante_url" 
+                                                    target="_blank" 
+                                                    class="btn btn-sm btn-outline-secondary">
+                                                      <i class="bi bi-paperclip"></i> Ver
+                                                  </a>
+                                              </td>
+                                              <td>
+                                                  <button class="btn btn-sm btn-success me-2" 
+                                                          @click="confirmarPagoAdmin(pago)">
+                                                      <i class="bi bi-check-circle"></i> Confirmar
+                                                  </button>
+                                                  <button class="btn btn-sm btn-danger" 
+                                                          @click="rechazarPagoAdmin(pago)">
+                                                      <i class="bi bi-x-circle"></i> Rechazar
+                                                  </button>
+                                              </td>
+                                          </tr>
+                                          <tr v-if="!pagosPendientesAdmin || pagosPendientesAdmin.length === 0">
+                                              <td colspan="6" class="text-center text-muted py-4">
+                                                  <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                                                  <p class="mt-2">No hay pagos pendientes</p>
+                                              </td>
+                                          </tr>
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <!-- Tab: Configuración -->
+                  <div v-show="tabSuscripciones === 'config'">
+                      <div class="row">
+                          <div class="col-md-6">
+                              <div class="card">
+                                  <div class="card-header bg-primary text-white">
+                                      Políticas de Vencimiento
+                                  </div>
+                                  <div class="card-body">
+                                      <div class="mb-3">
+                                          <label class="form-label">Días de alerta previa:</label>
+                                          <input type="number" class="form-control" 
+                                                v-model="configSuscripciones.DIAS_ALERTA_PREVIA">
+                                      </div>
+                                      <div class="mb-3">
+                                          <label class="form-label">Días de gracia:</label>
+                                          <input type="number" class="form-control" 
+                                                v-model="configSuscripciones.DIAS_GRACIA">
+                                      </div>
+                                      <button class="btn btn-primary w-100" @click="guardarConfiguracionSub">
+                                          <i class="bi bi-save"></i> Guardar
+                                      </button>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div class="col-md-6">
+                              <div class="card">
+                                  <div class="card-header bg-success text-white">
+                                      Montos y Notificaciones
+                                  </div>
+                                  <div class="card-body">
+                                      <div class="mb-3">
+                                          <label class="form-label">Monto base (₲):</label>
+                                          <input type="number" class="form-control" 
+                                                v-model="configSuscripciones.MONTO_SUSCRIPCION_BASE">
+                                      </div>
+                                      <div class="mb-3">
+                                          <label class="form-label">Email notificaciones:</label>
+                                          <input type="email" class="form-control" 
+                                                v-model="configSuscripciones.EMAIL_NOTIFICACIONES">
+                                      </div>
+                                      <button class="btn btn-success w-100" @click="guardarConfiguracionSub">
+                                          <i class="bi bi-save"></i> Guardar
+                                      </button>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  <!-- Tab: Facturas -->
+                  <div v-show="tabSuscripciones === 'facturas'">
+                      <div class="card">
+                          <div class="card-body">
+                              <div class="table-responsive">
+                                  <table class="table table-hover">
+                                      <thead>
+                                          <tr>
+                                              <th>Número</th>
+                                              <th>Cliente</th>
+                                              <th>Fecha</th>
+                                              <th>Monto</th>
+                                              <th>Estado</th>
+                                              <th>Acciones</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          <tr v-for="factura in facturasAdmin" :key="factura.id_factura">
+                                              <td class="fw-bold">{{ factura.numero_factura }}</td>
+                                              <td>{{ factura.nombre_cliente }}</td>
+                                              <td>{{ formatearFechaCorta(factura.fecha_emision) }}</td>
+                                              <td>₲ {{ formatearNumero(factura.monto) }}</td>
+                                              <td>
+                                                  <span class="badge bg-success">{{ factura.estado_factura }}</span>
+                                              </td>
+                                              <td>
+                                                  <button class="btn btn-sm btn-outline-primary" 
+                                                          @click="verFacturaDetalle(factura)">
+                                                      <i class="bi bi-eye"></i> Ver
+                                                  </button>
+                                                  <button class="btn btn-sm btn-outline-secondary" 
+                                                          @click="reenviarFactura(factura)">
+                                                      <i class="bi bi-envelope"></i> Reenviar
+                                                  </button>
+                                              </td>
+                                          </tr>
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+              </div>
+
+
                 <div class="modal fade" id="modalCategoria" tabindex="-1">
                     <div class="modal-dialog modal-dialog-centered modal-sm">
                         <div class="modal-content">
@@ -3466,6 +3818,13 @@
                 <button v-if="tengoPermiso('config')" class="nav-mobile-btn" :class="{active: vistaActual === 'config'}"
                     @click="cambiarVista('config'); cerrarMenuMovil()">
                     <i class="bi bi-gear"></i> Configuración
+                </button>
+
+                <button v-if="usuarioLogueado && usuarioLogueado.rol === 'ADMIN'"
+                        class="nav-mobile-btn" 
+                        @click="abrirDashboardSuscripciones(); cerrarMenuMovil()">
+                    <i class="bi bi-building"></i>
+                    Suscripciones
                 </button>
             </div>
 
@@ -3868,6 +4227,8 @@
       createApp({
         data() {
           return {
+            urlWebApp: '<?= urlApp ?>',
+
             cargando: false, 
 
             modoDebug: true,
@@ -3879,6 +4240,32 @@
             usuarioLogueado: null, permisos: [], loginData: { usuario: '', password: '' }, 
             
             vistaActual: 'dashboard',
+
+            estadoSuscripcion: null,
+            
+            mostrarBannerSuscripcion: false,
+
+            mostrarDashboardSuscripciones: false,
+            
+            tabSuscripciones: 'lista',
+            
+            filtroEstadoSub: '',
+
+            busquedaClienteSub: '',
+            resumenSuscripciones: {
+                total: 0,
+                activas: 0,
+                alertas: 0,
+                vencidas: 0,
+                gracia: 0,
+                bloqueadas: 0,
+                recaudado_mes: 0
+            },
+            suscripcionesAdmin: [],
+            pagosPendientesAdmin: [],
+            configSuscripciones: {},
+
+            facturasAdmin: [],
 
             html5QrcodeScanner: null, 
 
@@ -4124,7 +4511,6 @@
             calcularCostoFinal(item) {
                 let costo = Number(item.costo);
                 if (item.metodo_iva === 'EXCLUIDO') {
-                    // Si es excluido, le sumamos el impuesto al costo para saber el total a pagar
                     costo = costo * (1 + (item.tasa_iva / 100));
                 }
                 return costo;
@@ -4259,9 +4645,45 @@
             // Nueva computada para la sumatoria
             totalRemisionesFiltradas() {
                 return this.remisionesFiltradas.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
+            },
+            
+            suscripcionesFiltradas() {
+                // 1. GUARDIA DE SEGURIDAD:
+                // Si la lista original es null o undefined, retornamos array vacío inmediatamente.
+                if (!this.suscripcionesAdmin) return [];
+
+                let filtradas = this.suscripcionesAdmin;
+                
+                if (this.filtroEstadoSub) {
+                    filtradas = filtradas.filter(s => s.estado_suscripcion === this.filtroEstadoSub);
+                }
+                
+                if (this.busquedaClienteSub) {
+                    const busqueda = this.busquedaClienteSub.toLowerCase();
+                    filtradas = filtradas.filter(s => 
+                        // 2. SEGURIDAD EXTRA: Usamos ( ... || '') para evitar error si el nombre es null
+                        (s.nombre_cliente || '').toLowerCase().includes(busqueda) ||
+                        (s.email_principal || '').toLowerCase().includes(busqueda)
+                    );
+                }
+                
+                return filtradas;
             }
+
+
         },
       mounted() {
+            // ⭐ NUEVO: Cargar estado de suscripción
+            try {
+                const estadoString = '<?= estadoSuscripcion ?>';
+                if (estadoString && estadoString !== 'undefined') {
+                    this.estadoSuscripcion = JSON.parse(estadoString);
+                    this.mostrarBannerSuscripcion = this.estadoSuscripcion?.mostrarAlerta || false;
+                }
+            } catch (e) {
+                console.error('Error cargando estado suscripción:', e);
+            }
+
             // 1. Inicializar TODOS los componentes de Bootstrap (Modales)
             this.modalDep = new bootstrap.Modal(document.getElementById('modalDeposito'));
             this.modalCmp = new bootstrap.Modal(document.getElementById('modalCampo'));
@@ -5738,16 +6160,11 @@
 
           // Generar Ticket
           imprimirTicket(h) {
-                this.cargando = true;
-                google.script.run.withSuccessHandler(url => {
-                        this.cargando = false;
-                        window.open(url, 'Ticket', 'width=400,height=600');
-                    })
-                    .withFailureHandler(err => {
-                        this.cargando = false;
-                        this.notificar('error', "Error al generar ticket: " + err);
-                    })
-                    .generarUrlTicket(h.id_venta);
+              // Usamos la URL dinámica que el backend nos pasó a Vue
+              const urlTicket = this.urlWebApp + "?imprimirTicket=" + h.id_venta;
+              
+              // Se abre instantáneamente en una ventanita
+              window.open(urlTicket, 'Ticket', 'width=350,height=600');
           },
             
             // Helpers
@@ -6466,7 +6883,373 @@
                             .anularCompra(h.id_compra, this.usuarioLogueado.nombre);
                     }
                 });
+            },
+   
+            getEstiloBanner() {
+                if (!this.estadoSuscripcion) return {};
+                
+                const estilos = {
+                    'ALERTA': 'background-color: #fff3cd; color: #856404; border-bottom: 3px solid #ffc107;',
+                    'VENCIDA': 'background-color: #f8d7da; color: #721c24; border-bottom: 3px solid #dc3545;',
+                    'GRACIA': 'background-color: #f8d7da; color: #721c24; border-bottom: 3px solid #dc3545;'
+                };
+                
+                return estilos[this.estadoSuscripcion.estado] || '';
+            },
+            
+            getIconoEstado() {
+                if (!this.estadoSuscripcion) return '';
+                
+                const iconos = {
+                    'ALERTA': '⚠️',
+                    'VENCIDA': '🚨',
+                    'GRACIA': '⏰'
+                };
+                
+                return iconos[this.estadoSuscripcion.estado] || '';
+            },
+            
+            getMensajeEstado() {
+                if (!this.estadoSuscripcion) return '';
+                
+                const estado = this.estadoSuscripcion.estado;
+                const dias = this.estadoSuscripcion.diasVencimiento;
+                
+                if (estado === 'ALERTA') {
+                    return `Tu suscripción vence en ${dias} días`;
+                } else if (estado === 'VENCIDA') {
+                    return 'Tu suscripción ha vencido. Período de gracia activo.';
+                } else if (estado === 'GRACIA') {
+                    return 'Modo solo lectura activado. Paga para recuperar acceso completo.';
+                }
+                
+                return '';
+            },
+            
+            getClaseBoton() {
+                if (!this.estadoSuscripcion) return 'btn-primary';
+                
+                const clases = {
+                    'ALERTA': 'btn-warning text-dark',
+                    'VENCIDA': 'btn-danger',
+                    'GRACIA': 'btn-danger'
+                };
+                
+                return clases[this.estadoSuscripcion.estado] || 'btn-primary';
+            },
+            
+            formatearFecha(fecha) {
+                if (!fecha) return '-';
+                const f = new Date(fecha);
+                return f.toLocaleDateString('es-PY');
+            },
+            
+            abrirPagoSuscripcion() {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Renovar Suscripción',
+                    html: `
+                        <p><strong>Monto:</strong> ₲ ${Number(this.estadoSuscripcion.monto).toLocaleString('es-PY')}</p>
+                        <p><strong>Vencimiento:</strong> ${this.formatearFecha(this.estadoSuscripcion.fechaVencimiento)}</p>
+                        <p class="text-muted">Contacta con administración para realizar el pago.</p>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
+            },
+
+            getClaseConectado() {
+                if (!this.estadoSuscripcion) return 'text-success';
+                
+                const clases = {
+                    'ACTIVA': 'text-success',
+                    'ALERTA': 'text-warning',
+                    'VENCIDA': 'text-danger',
+                    'GRACIA': 'text-danger'
+                };
+                
+                return clases[this.estadoSuscripcion.estado] || 'text-success';
+            },
+
+            getTextoConectado() {
+                if (!this.estadoSuscripcion) return 'bash';
+                
+                const textos = {
+                    'ACTIVA': 'Conectado',
+                    'ALERTA': 'Por vencer',
+                    'VENCIDA': 'Vencido',
+                    'GRACIA': 'Solo lectura'
+                };
+                
+                return textos[this.estadoSuscripcion.estado] || 'bash';
+            },
+
+            async abrirDashboardSuscripciones() {
+                this.vistaActual = 'dashboard-suscripciones';
+                this.tabSuscripciones = 'lista';
+                
+                // Cargar datos
+                await this.cargarResumenSuscripciones();
+                await this.cargarSuscripcionesAdmin();
+                await this.cargarPagosPendientesAdmin();
+                await this.cargarConfiguracionSub();
+            },
+            
+            async cargarResumenSuscripciones() {
+                try {
+                    const res = await this.ejecutarFuncionBackend('obtenerResumenEjecutivo');
+                    // Si el servidor devuelve null, ponemos valores por defecto en 0
+                    this.resumenSuscripciones = res || {
+                        total: 0, activas: 0, alertas: 0, vencidas: 0, gracia: 0, bloqueadas: 0, recaudado_mes: 0
+                    };
+                } catch (error) {
+                    console.error('Error cargando resumen:', error);
+                }
+            },
+            
+            async cargarSuscripcionesAdmin() {
+                try {
+                    const res = await this.ejecutarFuncionBackend('obtenerSuscripciones', null);
+                    // Forzamos a que sea un array aunque el servidor devuelva null
+                    this.suscripcionesAdmin = res || []; 
+                } catch (error) {
+                    console.error('Error cargando suscripciones:', error);
+                    this.suscripcionesAdmin = [];
+                }
+            },
+            
+            async cargarPagosPendientesAdmin() {
+                try {
+                    const res = await this.ejecutarFuncionBackend('obtenerPagosPendientes');
+                    // Forzamos a que sea un array
+                    this.pagosPendientesAdmin = res || [];
+                } catch (error) {
+                    console.error('Error cargando pagos:', error);
+                    this.pagosPendientesAdmin = [];
+                }
+            },
+            
+            async cargarConfiguracionSub() {
+                try {
+                    this.configSuscripciones = await this.ejecutarFuncionBackend('leerConfiguracionSuscripciones');
+                } catch (error) {
+                    console.error('Error cargando configuración:', error);
+                }
+            },
+            
+            async confirmarPagoAdmin(pago) {
+                const confirmacion = await Swal.fire({
+                    title: '¿Confirmar Pago?',
+                    html: `
+                        <p><strong>Cliente:</strong> ${pago.creado_por}</p>
+                        <p><strong>Monto:</strong> ₲ ${this.formatearNumero(pago.monto)}</p>
+                    `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, confirmar',
+                    cancelButtonText: 'Cancelar'
+                });
+                
+                if (confirmacion.isConfirmed) {
+                    try {
+                        await this.ejecutarFuncionBackend('confirmarPago', pago.id_pago);
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Confirmado!',
+                            text: 'Pago confirmado y suscripción renovada',
+                            timer: 2000
+                        });
+                        
+                        // Recargar datos
+                        await this.cargarResumenSuscripciones();
+                        await this.cargarPagosPendientesAdmin();
+                        await this.cargarSuscripcionesAdmin();
+                        
+                    } catch (error) {
+                        Swal.fire('Error', 'No se pudo confirmar el pago: ' + error, 'error');
+                    }
+                }
+            },
+            
+            async rechazarPagoAdmin(pago) {
+                const { value: motivo } = await Swal.fire({
+                    title: 'Rechazar Pago',
+                    input: 'textarea',
+                    inputLabel: 'Motivo del rechazo:',
+                    inputPlaceholder: 'Explica por qué se rechaza...',
+                    showCancelButton: true
+                });
+                
+                if (motivo) {
+                    try {
+                        await this.ejecutarFuncionBackend('rechazarPago', pago.id_pago, motivo);
+                        
+                        Swal.fire('Rechazado', 'Pago rechazado correctamente', 'info');
+                        
+                        await this.cargarPagosPendientesAdmin();
+                        
+                    } catch (error) {
+                        Swal.fire('Error', 'No se pudo rechazar: ' + error, 'error');
+                    }
+                }
+            },
+            
+            async guardarConfiguracionSub() {
+                try {
+                    // Guardar cada parámetro
+                    for (let param in this.configSuscripciones) {
+                        await this.ejecutarFuncionBackend('actualizarConfiguracion', param, this.configSuscripciones[param]);
+                    }
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Guardado!',
+                        text: 'Configuración actualizada',
+                        timer: 2000
+                    });
+                    
+                } catch (error) {
+                    Swal.fire('Error', 'No se pudo guardar: ' + error, 'error');
+                }
+            },
+            
+            verDetalleSuscripcion(sub) {
+                Swal.fire({
+                    title: sub.nombre_cliente,
+                    html: `
+                        <div class="text-start">
+                            <p><strong>Email:</strong> ${sub.email_principal}</p>
+                            <p><strong>Estado:</strong> ${sub.estado_suscripcion}</p>
+                            <p><strong>Inicio:</strong> ${this.formatearFechaCorta(sub.fecha_inicio)}</p>
+                            <p><strong>Vencimiento:</strong> ${this.formatearFechaCorta(sub.fecha_vencimiento)}</p>
+                            <p><strong>Monto:</strong> ₲ ${this.formatearNumero(sub.monto_mensual)}</p>
+                            <p><strong>Ciclo:</strong> ${sub.ciclo_facturacion}</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'Cerrar'
+                });
+            },
+            
+            getBadgeEstadoSub(estado) {
+                const badges = {
+                    'ACTIVA': 'bg-success',
+                    'ALERTA': 'bg-warning text-dark',
+                    'VENCIDA': 'bg-danger',
+                    'GRACIA': 'bg-warning text-dark',
+                    'BLOQUEADA': 'bg-dark',
+                    'CANCELADA': 'bg-secondary'
+                };
+                return badges[estado] || 'bg-secondary';
+            },
+            
+            calcularPorcentaje(valor, total) {
+                if (!total || total === 0) return 0;
+                return Math.round((valor / total) * 100);
+            },
+            
+            formatearFechaCorta(fecha) {
+                if (!fecha) return '-';
+                const f = new Date(fecha);
+                return f.toLocaleDateString('es-PY');
+            },
+            
+            // Helper para ejecutar funciones de Apps Script
+            ejecutarFuncionBackend(nombreFuncion, ...args) {
+                return new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        [nombreFuncion](...args);
+                });
+            },
+
+            async cargarFacturasAdmin() {
+                try {
+                    const res = await this.ejecutarFuncionBackend('obtenerFacturas', null);
+                    // Forzamos a que sea un array
+                    this.facturasAdmin = res || [];
+                } catch (error) {
+                    console.error('Error cargando facturas:', error);
+                    this.facturasAdmin = [];
+                }
+            },
+            
+            async verFacturaDetalle(factura) {
+                Swal.fire({
+                    title: factura.numero_factura,
+                    html: `
+                        <div class="text-start">
+                            <p><strong>Cliente:</strong> ${factura.nombre_cliente}</p>
+                            <p><strong>Email:</strong> ${factura.email_cliente}</p>
+                            <p><strong>Fecha:</strong> ${this.formatearFechaCorta(factura.fecha_emision)}</p>
+                            <p><strong>Monto:</strong> ₲ ${this.formatearNumero(factura.monto)}</p>
+                            <p><strong>Método:</strong> ${factura.metodo_pago}</p>
+                            <p><strong>Concepto:</strong> ${factura.concepto}</p>
+                        </div>
+                    `,
+                    width: 600
+                });
+            },
+            
+            async reenviarFactura(factura) {
+                const confirmacion = await Swal.fire({
+                    title: '¿Reenviar Factura?',
+                    text: `Se enviará al email: ${factura.email_cliente}`,
+                    icon: 'question',
+                    showCancelButton: true
+                });
+                
+                if (confirmacion.isConfirmed) {
+                    try {
+                        await this.ejecutarFuncionBackend('enviarFacturaPorEmail', factura.id_factura);
+                        Swal.fire('¡Enviado!', 'Factura reenviada correctamente', 'success');
+                    } catch (error) {
+                        Swal.fire('Error', 'No se pudo reenviar: ' + error, 'error');
+                    }
+                }
+            },
+
+            formatearNumero(numero) {
+                if (!numero && numero !== 0) return '0';
+                return Number(numero).toLocaleString('es-PY');
+            },
+
+            formatearFechaCorta(fecha) {
+                if (!fecha) return '-';
+                try {
+                    const f = new Date(fecha);
+                    return f.toLocaleDateString('es-PY');
+                } catch (error) {
+                    return '-';
+                }
+            },
+
+            calcularPorcentaje(valor, total) {
+                if (!total || total === 0) return 0;
+                return Math.round((valor / total) * 100);
+            },
+            
+            ejecutarFuncionBackend(nombreFuncion, ...args) {
+                return new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        [nombreFuncion](...args);
+                });
+            },
+
+            getBadgeEstadoSub(estado) {
+                const badges = {
+                    'ACTIVA': 'bg-success',
+                    'ALERTA': 'bg-warning text-dark',
+                    'VENCIDA': 'bg-danger',
+                    'GRACIA': 'bg-warning text-dark',
+                    'BLOQUEADA': 'bg-dark',
+                    'CANCELADA': 'bg-secondary'
+                };
+                return badges[estado] || 'bg-secondary';
             }
+
         }
       }).mount('#app');
     </script>

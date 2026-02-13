@@ -1,12 +1,58 @@
 const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
 
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Cesta - Gestión de Stock') // El título de la pestaña del navegador
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1') // Vital para que se vea bien en móviles
+  
+  const userEmail = Session.getActiveUser().getEmail();
+  
+  // 1. Verificar estado de suscripción
+  const estadoSuscripcion = verificarEstadoSuscripcion(userEmail);
+  
+  // 2. Si está bloqueado, mostrar pantalla de pago (PRIORIDAD 1)
+  if (estadoSuscripcion.bloqueado) {
+    const template = HtmlService.createTemplateFromFile('PagoBloqueado');
+    template.estadoSuscripcion = estadoSuscripcion;
+    
+    return template.evaluate()
+      .setTitle('Renovar Suscripción - Cesta')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // ==========================================================================
+  // 3. NUEVO: Si piden imprimir un ticket, devolvemos SOLO el HTML del ticket
+  // ==========================================================================
+  if (e.parameter && e.parameter.imprimirTicket) {
+    const idVenta = e.parameter.imprimirTicket;
+    
+    // Obtener los datos (Asegúrate de que estas funciones existan en tu backend)
+    const historial = obtenerHistorialVentas(); 
+    const datosVenta = historial.find(v => String(v.id_venta) === String(idVenta));
+    const itemsVenta = obtenerDetalleVenta(idVenta); 
+
+    const templateTicket = HtmlService.createTemplateFromFile('Ticket'); 
+    templateTicket.datos = datosVenta || {};
+    templateTicket.items = itemsVenta || [];
+    templateTicket.logoEmpresa = getLogoBase64(); // Inyectamos el logo Base64
+
+    return templateTicket.evaluate()
+      .setTitle('Imprimir Ticket')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  // ==========================================================================
+  
+  // 4. Si no está bloqueado y NO piden un ticket, cargar app normal
+  const template = HtmlService.createTemplateFromFile('Index');
+  template.estadoSuscripcion = JSON.stringify(estadoSuscripcion);
+
+  template.urlApp = ScriptApp.getService().getUrl();
+  
+  return template.evaluate()
+    .setTitle('Cesta - Gestión de Stock')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
+
+
 
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
@@ -679,6 +725,7 @@ function crearPDFOrdenCompra(datosCompra, listaItems) {
   const template = HtmlService.createTemplateFromFile('OrdenCompra');
   template.datos = datosCompra;
   template.items = listaItems;
+  template.logoEmpresa = getLogoBase64();
 
   // 3. Generar PDF
   const html = template.evaluate().getContent();
@@ -1103,7 +1150,8 @@ function crearPDFFactura(datos, listaItems) {
   
   // Pasamos los datos a la plantilla
   template.datos = datos;
-  template.items = listaItems || []; 
+  template.items = listaItems || [];
+  template.logoEmpresa = getLogoBase64();
 
   // 3. Generar HTML final
   const html = template.evaluate().getContent();
@@ -1388,6 +1436,7 @@ function generarUrlTicket(idVenta) {
     total: venta.total
   };
   template.items = items;
+  template.logoEmpresa = getLogoBase64();
 
   const html = template.evaluate().getContent();
   const blob = Utilities.newBlob(html, "text/html", "Ticket.html");
@@ -2397,6 +2446,7 @@ function crearPDFRemision(datos) {
     // 2. Cargar la plantilla HTML
     const template = HtmlService.createTemplateFromFile('Remision');
     template.datos = datos;
+    template.logoEmpresa = getLogoBase64();
     
     // 3. Evaluar la plantilla
     const htmlContenido = template.evaluate().getContent();
@@ -3891,12 +3941,4 @@ function obtenerHistorialCajas() {
     throw "Error al obtener historial caja: " + e.toString();
   }
 }
-
-
-
-
-
-
-
-
 

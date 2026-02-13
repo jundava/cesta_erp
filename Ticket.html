@@ -2,11 +2,10 @@
 <html>
 <head>
   <style>
-    /* Configuración para simular rollo de papel */
-    @page { margin: 0; size: auto; }
+    /* Estilos base */
     body { 
-        font-family: 'Courier New', Courier, monospace; /* Fuente tipo ticket */
-        width: 80mm; /* Ancho estándar 80mm */
+        font-family: 'Courier New', Courier, monospace; 
+        width: 80mm; 
         margin: 0 auto; 
         padding: 5px;
         color: #000;
@@ -14,18 +13,36 @@
         background-color: #fff;
     }
     
+    /* REGLAS CLAVE PARA LA TICKETERA */
+    @media print {
+        @page { 
+            margin: 0; 
+            size: 80mm auto; /* Le dice a la impresora que el ancho es 80mm */
+        }
+        body { 
+            width: 80mm; 
+            margin: 0; 
+            padding: 0; 
+        }
+    }
+    
     .centrado { text-align: center; }
     .derecha { text-align: right; }
     .negrita { font-weight: bold; }
     
+    .ticket-logo {
+        max-width: 180px; 
+        max-height: 80px;
+        object-fit: contain;
+        margin: 0 auto 8px auto;
+        display: block;
+        filter: grayscale(100%) contrast(120%); 
+    }
+    
     .logo { font-size: 18px; margin-bottom: 5px; text-transform: uppercase; }
     .info { font-size: 10px; margin-bottom: 10px; }
     
-    .separador { 
-        border-bottom: 1px dashed #000; 
-        margin: 5px 0; 
-        display: block;
-    }
+    .separador { border-bottom: 1px dashed #000; margin: 5px 0; display: block; }
     
     table { width: 100%; border-collapse: collapse; font-size: 11px; }
     td, th { padding: 2px 0; vertical-align: top; }
@@ -35,14 +52,14 @@
     .col-precio { width: 35%; text-align: right; }
     
     .total-grande { font-size: 16px; margin-top: 5px; }
-    
     .footer { font-size: 10px; margin-top: 15px; text-align: center; }
   </style>
 </head>
 <body>
 
   <div class="centrado">
-    <div class="logo">Multiservicios Luján</div>
+    <img src="<?!= logoEmpresa ?>" alt="Logo" class="ticket-logo">
+    <div class="logo">Multiservice Luján</div>
     <div class="info">
       CESTA ERP - Sistema de Gestión de Stock <br>
       RUC: 8000000-1<br>
@@ -55,9 +72,8 @@
 
   <div class="info">
     <div><strong>FECHA:</strong> <?= datos.fecha ?></div>
-    <div><strong>FACTURA:</strong> <?= datos.nro_factura ?></div>
-    <div><strong>CLIENTE:</strong> <?= datos.cliente_nombre ?></div>
-    <div><strong>RUC/CI:</strong> <?= datos.cliente_doc ?></div>
+    <div><strong>FACTURA:</strong> <?= datos.nro_factura || datos.factura ?></div>
+    <div><strong>CLIENTE:</strong> <?= datos.cliente_nombre || datos.nombre_cliente ?></div>
   </div>
 
   <div class="separador"></div>
@@ -74,8 +90,8 @@
       <? for (var i = 0; i < items.length; i++) { ?>
       <tr>
         <td class="col-cant"><?= items[i].cantidad ?></td>
-        <td class="col-desc"><?= items[i].producto ?><br><small><?= parseInt(items[i].precio).toLocaleString('es-PY') ?> unit</small></td>
-        <td class="col-precio"><?= parseInt(items[i].subtotal).toLocaleString('es-PY') ?></td>
+        <td class="col-desc"><?= items[i].producto || items[i].nombre ?><br><small><?= parseInt(items[i].precio).toLocaleString('es-PY') ?> unit</small></td>
+        <td class="col-precio"><?= parseInt(items[i].subtotal || (items[i].cantidad * items[i].precio)).toLocaleString('es-PY') ?></td>
       </tr>
       <? } ?>
     </tbody>
@@ -95,5 +111,12 @@
     No válido como crédito fiscal
   </div>
 
+  <script>
+    window.onload = function() {
+      window.print();
+      // Opcional: Cerrar la ventanita después de imprimir
+      setTimeout(function(){ window.close(); }, 500); 
+    };
+  </script>
 </body>
 </html>
