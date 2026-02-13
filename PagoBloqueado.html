@@ -1,127 +1,191 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso Bloqueado - Cesta ERP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .card-bloqueado {
-            max-width: 500px;
-            width: 100%;
-            margin: 20px;
-        }
-        .icon-bloqueado {
-            font-size: 4rem;
-            color: #dc3545;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-    </style>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body { background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; }
+    .card-blocked { max-width: 500px; width: 100%; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 5px solid #dc3545; }
+    .loading-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:10; display:none; flex-direction:column; justify-content:center; align-items:center; }
+  </style>
 </head>
 <body>
-    <div class="card card-bloqueado shadow-lg border-0">
-        <div class="card-body p-5 text-center">
-            <!-- Icono -->
-            <div class="mb-4">
-                <i class="bi bi-shield-fill-exclamation icon-bloqueado"></i>
-            </div>
-            
-            <!-- Título -->
-            <h2 class="text-danger fw-bold mb-2">
-                <i class="bi bi-slash-circle me-2"></i>Acceso Bloqueado
-            </h2>
-            <p class="text-muted mb-4">Suscripción Vencida</p>
-            
-            <!-- Datos de la Suscripción -->
-            <div class="alert alert-warning text-start">
-                <div class="row mb-2">
-                    <div class="col-6 fw-bold">Fecha de vencimiento:</div>
-                    <div class="col-6" id="fechaVencimiento">Cargando...</div>
-                </div>
-                <div class="row mb-2">
-                    <div class="col-6 fw-bold">Días vencidos:</div>
-                    <div class="col-6 text-danger fw-bold" id="diasVencidos">...</div>
-                </div>
-                <div class="row">
-                    <div class="col-6 fw-bold">Monto adeudado:</div>
-                    <div class="col-6 text-success fw-bold" id="montoAdeudado">₲ ...</div>
-                </div>
-            </div>
-            
-            <!-- Mensaje -->
-            <p class="text-muted mb-4">
-                Para recuperar el acceso a tu cuenta, realiza el pago de tu suscripción.
-                Una vez confirmado, tu acceso será <strong>restablecido inmediatamente</strong>.
-            </p>
-            
-            <!-- Botones -->
-            <div class="d-grid gap-2">
-                <button class="btn btn-danger btn-lg fw-bold" onclick="abrirPagoSuscripcion()">
-                    <i class="bi bi-credit-card me-2"></i>Realizar Pago Ahora
-                </button>
-                <a href="mailto:soporte@cestaerp.com" class="btn btn-outline-secondary">
-                    <i class="bi bi-envelope me-2"></i>Contactar Soporte
-                </a>
-            </div>
-        </div>
+
+  <div class="card card-blocked">
+    <div class="loading-overlay" id="loader">
+       <div class="spinner-border text-danger mb-2" role="status"></div>
+       <div class="fw-bold text-secondary">Procesando pago...</div>
     </div>
 
-    <script>
-        // ========================================
-        // RECIBIR DATOS DEL SERVIDOR
-        // ========================================
+    <div class="card-body p-4 text-center">
+      <div class="mb-3">
+        <span style="font-size: 3rem;">🚫</span>
+      </div>
+      <h3 class="fw-bold text-danger mb-2">Suscripción Vencida</h3>
+      <p class="text-muted mb-4">Para continuar utilizando el sistema, por favor regulariza tu pago pendiente.</p>
+      
+      <div class="bg-light p-3 rounded border mb-4 text-start">
+         <div class="d-flex justify-content-between mb-2">
+            <span class="fw-bold">Cliente:</span>
+            <span id="emailCliente"><?= userEmail ?></span>
+         </div>
+         <div class="d-flex justify-content-between mb-2">
+            <span>Vencimiento:</span>
+            <span id="fechaVencimiento" class="fw-bold text-danger">Cargando...</span>
+         </div>
+         <div class="d-flex justify-content-between border-top pt-2">
+            <span class="fs-5 fw-bold">Total a Pagar:</span>
+            <span id="montoAdeudado" class="fs-5 fw-bold text-success">---</span>
+         </div>
+      </div>
+
+      <hr>
+
+      <form id="formPago" onsubmit="enviarPago(event)">
+        <h6 class="text-start fw-bold mb-3"><i class="bi bi-credit-card"></i> Informar Pago</h6>
         
-        // Esta función se ejecuta automáticamente cuando se carga la página
+        <div class="mb-3 text-start">
+            <label class="form-label small fw-bold">Método de Pago</label>
+            <select class="form-select" id="metodoPago" required>
+                <option value="TRANSFERENCIA">Transferencia Bancaria</option>
+            </select>
+        </div>
+
+        <div class="mb-3 text-start">
+            <label class="form-label small fw-bold">Nro. Comprobante / Referencia</label>
+            <input type="text" class="form-control" id="referenciaPago" required placeholder="Ej: 1234567">
+        </div>
+
+        <div class="mb-4 text-start">
+            <label class="form-label small fw-bold">Subir Comprobante (Foto/PDF)</label>
+            <input type="file" class="form-control" id="archivoComprobante" accept="image/*,application/pdf" required>
+        </div>
+
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-danger fw-bold py-2">
+                Remitir Comprobante
+            </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    // Variables globales
+    let datosSuscripcion = null;
+    const emailUsuario = '<?= userEmail ?>';
+
+    // 1. Cargar datos al iniciar
+    window.onload = function() {
+        document.getElementById('loader').style.display = 'flex';
         google.script.run
-            .withSuccessHandler(cargarDatosSuscripcion)
-            .withFailureHandler(errorCargando)
-            .verificarEstadoSuscripcion('<?= userEmail ?>'); // El email viene del servidor
-        
-        function cargarDatosSuscripcion(estado) {
-            // Validar que recibimos datos
-            if (!estado || !estado.existe) {
-                document.getElementById('fechaVencimiento').textContent = 'No disponible';
-                document.getElementById('diasVencidos').textContent = 'N/A';
-                document.getElementById('montoAdeudado').textContent = '₲ 0';
-                return;
-            }
-            
-            // Mostrar datos
-            const fechaVenc = new Date(estado.fechaVencimiento);
-            document.getElementById('fechaVencimiento').textContent = fechaVenc.toLocaleDateString('es-PY');
-            
-            const diasVencidos = Math.abs(estado.diasVencimiento);
-            document.getElementById('diasVencidos').textContent = diasVencidos + ' días';
-            
-            const monto = Number(estado.monto) || 0;
-            document.getElementById('montoAdeudado').textContent = '₲ ' + monto.toLocaleString('es-PY');
+            .withSuccessHandler(mostrarDatos)
+            .withFailureHandler(manejarError)
+            .verificarEstadoSuscripcion(emailUsuario);
+    };
+
+    function mostrarDatos(estado) {
+        document.getElementById('loader').style.display = 'none';
+        datosSuscripcion = estado; // Guardamos en variable global
+
+        if (!estado || !estado.existe) {
+            document.getElementById('fechaVencimiento').innerText = "No encontrada";
+            return;
         }
+
+        // Formatear Fecha
+        let fecha = new Date();
+        if(estado.fechaVencimiento) fecha = new Date(estado.fechaVencimiento);
+        document.getElementById('fechaVencimiento').innerText = fecha.toLocaleDateString('es-PY');
         
-        function errorCargando(error) {
-            console.error('Error cargando datos:', error);
-            document.getElementById('fechaVencimiento').textContent = 'Error al cargar';
-            document.getElementById('diasVencidos').textContent = '---';
-            document.getElementById('montoAdeudado').textContent = '---';
-        }
+        // Formatear Monto
+        const monto = Number(estado.monto) || 0;
+        document.getElementById('montoAdeudado').innerText = '₲ ' + monto.toLocaleString('es-PY');
+    }
+
+    function manejarError(e) {
+        document.getElementById('loader').style.display = 'none';
+        console.error(e);
+        Swal.fire('Error', 'No se pudieron cargar los datos.', 'error');
+    }
+
+    // 2. Función Principal: ENVIAR PAGO
+    function enviarPago(e) {
+        e.preventDefault(); // Evitar recarga del form HTML
+
+        if (!datosSuscripcion) return Swal.fire('Error', 'No hay datos de suscripción cargados.', 'warning');
+
+        const fileInput = document.getElementById('archivoComprobante');
+        if (fileInput.files.length === 0) return Swal.fire('Atención', 'Debes adjuntar el comprobante.', 'warning');
+
+        const archivo = fileInput.files[0];
+        const metodo = document.getElementById('metodoPago').value;
+        const referencia = document.getElementById('referenciaPago').value;
         
-        function abrirPagoSuscripcion() {
-            // Redirigir a la pantalla de pago (implementar según tu flujo)
-            alert('Redirigiendo a métodos de pago...');
-            // Aquí podrías abrir un modal o redirigir a otra página
-        }
-    </script>
+        // Mostrar Loader
+        document.getElementById('loader').style.display = 'flex';
+
+        // A. Leer archivo como Base64
+        const reader = new FileReader();
+        reader.readAsDataURL(archivo);
+        
+        reader.onload = function(evento) {
+            const rawBase64 = evento.target.result.split(',')[1]; // Quitamos el "data:image/..."
+            
+            // B. Subir Archivo a Drive (Backend)
+            google.script.run
+                .withSuccessHandler(function(urlImagen) {
+                    
+                    // C. Registrar Pago en Sheet (Backend)
+                    const paquetePago = {
+                        id_suscripcion: datosSuscripcion.id_suscripcion,
+                        monto: datosSuscripcion.monto,
+                        metodo_pago: metodo,
+                        referencia_transaccion: referencia,
+                        banco_origen: 'No especificado', // Opcional: agregar input si quieres
+                        comprobante_url: urlImagen,
+                        email_usuario: emailUsuario,
+                        observaciones: 'Pago desde pantalla de bloqueo'
+                    };
+
+                    google.script.run
+                        .withSuccessHandler(function(res) {
+                            document.getElementById('loader').style.display = 'none';
+                            
+                            Swal.fire({
+                                title: '¡Pago Enviado!',
+                                text: 'Tu comprobante está en revisión. Te notificaremos cuando se habilite el acceso.',
+                                icon: 'success',
+                                confirmButtonText: 'Entendido'
+                            }).then(() => {
+                                // Opcional: Intentar recargar para ver si ya se desbloqueó (aunque suele ser manual)
+                                location.reload(); 
+                            });
+                        })
+                        .withFailureHandler(function(err) {
+                            document.getElementById('loader').style.display = 'none';
+                            Swal.fire('Error', 'No se pudo registrar el pago: ' + err, 'error');
+                        })
+                        .registrarPago(paquetePago);
+
+                })
+                .withFailureHandler(function(err) {
+                    document.getElementById('loader').style.display = 'none';
+                    Swal.fire('Error', 'Fallo al subir la imagen: ' + err, 'error');
+                })
+                .subirComprobanteDrive(rawBase64, archivo.name, archivo.type);
+        };
+
+        reader.onerror = function() {
+            document.getElementById('loader').style.display = 'none';
+            Swal.fire('Error', 'No se pudo leer el archivo local.', 'error');
+        };
+    }
+    
+  </script>
 </body>
 </html>

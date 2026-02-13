@@ -71,96 +71,127 @@ function actualizarConfiguracion(parametro, valor) {
 }
 
 // ============================================================
-// 🔍 MÓDULO 2: VERIFICACIÓN DE ESTADO
+// 🔍 MÓDULO 2: VERIFICACIÓN DE ESTADO (CORREGIDO)
 // ============================================================
 
 /**
- * Verifica el estado de suscripción de un usuario
- * @param {String} email - Email del usuario
- * @return {Object} Estado completo de suscripción
+ * Verifica el estado de suscripción de un usuario.
+ * CORREGIDA: Lectura estricta de columnas según CSV para evitar datos erróneos al bloquear.
  */
 function verificarEstadoSuscripcion(email) {
   try {
     const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
     const sheetSub = ss.getSheetByName('SUSCRIPCIONES');
     
+    // Si no hay hoja o datos, bloqueamos por seguridad
     if (!sheetSub || sheetSub.getLastRow() <= 1) {
-      // No hay suscripciones registradas
       return {
         existe: false,
         estado: 'SIN_SUSCRIPCION',
         bloqueado: true,
         soloLectura: false,
         mostrarAlerta: false,
-        mensaje: 'No tienes una suscripción activa'
+        diasVencimiento: 0,
+        fechaVencimiento: new Date(),
+        monto: 0,
+        mensaje: 'No se encontró registro de suscripciones.'
       };
     }
     
     const data = sheetSub.getDataRange().getValues();
-    const config = leerConfiguracionSuscripciones();
+    const config = leerConfiguracionSuscripciones(); // Asegúrate de tener esta función
     
-    // Buscar suscripción por email (Col F - index 5)
+    // Normalizar email buscado
+    const emailBuscado = String(email).trim().toLowerCase();
+
+    // Recorrer desde fila 1 (saltar encabezados)
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][5]).toLowerCase() === String(email).toLowerCase()) {
-        const fechaVencimiento = new Date(data[i][8]); // Col I
-        const estado = data[i][9]; // Col J
+      // Columna F (índice 5) es el Email Principal según tu CSV
+      const emailFila = String(data[i][5] || '').trim().toLowerCase();
+
+      if (emailFila === emailBuscado) {
+        
+        // --- MAPEO DE DATOS CRÍTICOS ---
+        const idSuscripcion = data[i][0]; // Col A
+        const rawFecha = data[i][8];      // Col I: fecha_vencimiento
+        const estado = String(data[i][9]);// Col J: estado_suscripcion
+        const monto = Number(data[i][10]);// Col K: monto_mensual
+
+        // Manejo seguro de fecha
+        let fechaVencimiento = new Date();
+        if (rawFecha instanceof Date) {
+            fechaVencimiento = rawFecha;
+        } else if (rawFecha) {
+            fechaVencimiento = new Date(rawFecha);
+        }
+
+        // Calcular días restantes
         const diasVencimiento = calcularDiasVencimiento(fechaVencimiento);
         
-        // Determinar permisos según estado
+        // Lógica de permisos
         let bloqueado = false;
         let soloLectura = false;
         let mostrarAlerta = false;
         let mensaje = '';
         
+        // --- REGLAS DE NEGOCIO ---
         if (estado === 'BLOQUEADA') {
           bloqueado = true;
-          mensaje = `Tu suscripción está bloqueada. Vencimiento: ${Math.abs(diasVencimiento)} días atrás.`;
-        } else if (estado === 'GRACIA') {
-          soloLectura = config.PERMITIR_MODO_CONSULTA;
+          mensaje = `Suscripción suspendida. Venció hace ${Math.abs(diasVencimiento)} días.`;
+        } 
+        else if (estado === 'GRACIA') {
+          // Si la config dice PERMITIR_MODO_CONSULTA = true, no bloqueamos, solo restringimos escritura
+          soloLectura = config.PERMITIR_MODO_CONSULTA; 
+          bloqueado = !soloLectura; // Si no permite consulta, se bloquea total
           mostrarAlerta = true;
-          mensaje = `Tu suscripción venció hace ${Math.abs(diasVencimiento)} días. Modo solo lectura activo.`;
-        } else if (estado === 'VENCIDA') {
+          mensaje = `Tu suscripción venció. Tienes ${config.DIAS_GRACIA || 3} días de gracia.`;
+        } 
+        else if (estado === 'VENCIDA') {
           mostrarAlerta = true;
-          mensaje = 'Tu suscripción ha vencido hoy. Por favor realiza el pago.';
-        } else if (estado === 'ALERTA') {
+          mensaje = 'Tu suscripción vence hoy.';
+        } 
+        else if (estado === 'ALERTA') {
           mostrarAlerta = true;
           mensaje = `Tu suscripción vence en ${diasVencimiento} días.`;
         }
         
+        // Retornar objeto de estado limpio
         return {
           existe: true,
-          id_suscripcion: data[i][0],
+          id_suscripcion: idSuscripcion,
           estado: estado,
           bloqueado: bloqueado,
           soloLectura: soloLectura,
           mostrarAlerta: mostrarAlerta,
           diasVencimiento: diasVencimiento,
-          fechaVencimiento: fechaVencimiento,
-          monto: data[i][10],
+          // Convertimos la fecha a ISO string para que viaje bien a Vue/HTML
+          fechaVencimiento: fechaVencimiento.toISOString(), 
+          monto: monto || 0,
           mensaje: mensaje
         };
       }
     }
     
-    // No se encontró suscripción
+    // Si terminamos el loop y no encontramos el email
     return {
       existe: false,
       estado: 'SIN_SUSCRIPCION',
       bloqueado: true,
       soloLectura: false,
       mostrarAlerta: false,
-      mensaje: 'No tienes una suscripción registrada'
+      diasVencimiento: 0,
+      fechaVencimiento: new Date().toISOString(),
+      monto: 0,
+      mensaje: 'Usuario no registrado en suscripciones.'
     };
     
   } catch (error) {
-    Logger.log('Error en verificarEstadoSuscripcion: ' + error.toString());
+    Logger.log('Error crítico en verificarEstadoSuscripcion: ' + error.toString());
     return {
       existe: false,
       estado: 'ERROR',
-      bloqueado: false,
-      soloLectura: false,
-      mostrarAlerta: false,
-      mensaje: 'Error al verificar suscripción'
+      bloqueado: true, // Ante error, bloquear por seguridad
+      mensaje: 'Error verificando suscripción. Contacte soporte.'
     };
   }
 }
@@ -347,6 +378,7 @@ function crearSuscripcion(datos) {
 /**
  * Obtiene todas las suscripciones con filtros opcionales
  */
+
 function obtenerSuscripciones(filtros) {
   const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
   const sheet = ss.getSheetByName('SUSCRIPCIONES');
@@ -354,25 +386,58 @@ function obtenerSuscripciones(filtros) {
   if (!sheet || sheet.getLastRow() <= 1) return [];
   
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
   const suscripciones = [];
   
+  // Función auxiliar para convertir fecha de Sheets a String seguro
+  const safeDate = (val) => {
+    if (!val) return '';
+    if (val instanceof Date) return val.toISOString(); // Formato estándar "2026-02-13T..."
+    return String(val); // Si es texto, devolverlo tal cual
+  };
+
+  // Recorremos desde la fila 1 (índice 1) para saltar encabezados
   for (let i = 1; i < data.length; i++) {
-    const obj = {};
-    headers.forEach((header, idx) => {
-      obj[header] = data[i][idx];
-    });
     
-    // Aplicar filtros si existen
+    // Mapeo manual estricto según tus CSV
+    const obj = {
+      id_suscripcion:         String(data[i][0] || ''),   
+      id_usuario:             String(data[i][1] || ''),   
+      tipo_cliente:           String(data[i][2] || ''),   
+      nombre_cliente:         String(data[i][3] || 'Cliente Sin Nombre'), // Fallback visual
+      ruc_ci:                 String(data[i][4] || ''),   
+      email_principal:        String(data[i][5] || ''),   
+      telefono:               String(data[i][6] || ''),   
+      
+      // ⚠️ AQUÍ ESTÁ LA SOLUCIÓN: Convertir fechas a String ⚠️
+      fecha_inicio:           safeDate(data[i][7]),   
+      fecha_vencimiento:      safeDate(data[i][8]),   
+      
+      estado_suscripcion:     String(data[i][9] || 'PENDIENTE'),   
+      monto_mensual:          Number(data[i][10] || 0),  
+      ciclo_facturacion:      String(data[i][11] || ''),  
+      metodo_pago_preferido:  String(data[i][12] || ''),  
+      ultimo_pago_id:         String(data[i][13] || ''),  
+      dias_hasta_vencimiento: Number(data[i][14] || 0),  
+      alertas_enviadas:       Number(data[i][15] || 0),  
+      notas_internas:         String(data[i][16] || '')   
+    };
+    
+    // Filtros opcionales
+    let pasaFiltro = true;
     if (filtros) {
-      if (filtros.estado && obj.estado_suscripcion !== filtros.estado) continue;
-      if (filtros.tipo_cliente && obj.tipo_cliente !== filtros.tipo_cliente) continue;
+      if (filtros.estado && obj.estado_suscripcion !== filtros.estado) pasaFiltro = false;
+      if (filtros.tipo_cliente && obj.tipo_cliente !== filtros.tipo_cliente) pasaFiltro = false;
     }
     
-    suscripciones.push(obj);
+    if (pasaFiltro) {
+      suscripciones.push(obj);
+    }
   }
   
-  return suscripciones;
+  Logger.log("Suscripciones encontradas: " + suscripciones.length); // Ver en log de ejecución
+  
+  // Devolvemos la lista invertida
+  return suscripciones.reverse();
 }
 
 /**
@@ -448,74 +513,116 @@ function actualizarSuscripcion(datos) {
 /**
  * Registra un nuevo pago
  */
+
 function registrarPago(datosPago) {
   const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
   const sheet = ss.getSheetByName('PAGOS');
   
+  if (!sheet) throw new Error("La hoja PAGOS no existe.");
+
   const idPago = Utilities.getUuid();
+  const fechaHoy = new Date();
   
+  // Calcular periodo (por defecto +30 días si no viene definido)
+  const inicio = datosPago.periodo_inicio ? new Date(datosPago.periodo_inicio) : fechaHoy;
+  const fin = datosPago.periodo_fin ? new Date(datosPago.periodo_fin) : new Date(new Date().setDate(fechaHoy.getDate() + 30));
+
+  // Orden estricto según PAGOS.csv:
+  // A: id_pago, B: id_suscripcion, C: fecha_pago, D: monto, E: metodo_pago, 
+  // F: referencia_transaccion, G: estado_pago, H: comprobante_url, I: banco_origen, 
+  // J: concepto, K: periodo_inicio, L: periodo_fin, M: fecha_confirmacion, 
+  // N: confirmado_por, O: observaciones, P: fecha_creacion, Q: creado_por
+
   const nuevaFila = [
-    idPago,                                    // A: id_pago
-    datosPago.id_suscripcion,                  // B: id_suscripcion
-    new Date(),                                // C: fecha_pago
-    datosPago.monto,                           // D: monto
-    datosPago.metodo_pago,                     // E: metodo_pago
-    datosPago.referencia_transaccion || '',    // F: referencia_transaccion
-    'PENDIENTE',                               // G: estado_pago
-    datosPago.comprobante_url || '',           // H: comprobante_url
-    datosPago.banco_origen || '',              // I: banco_origen
-    datosPago.concepto || 'Pago de suscripción', // J: concepto
-    datosPago.periodo_inicio || new Date(),    // K: periodo_inicio
-    datosPago.periodo_fin || new Date(),       // L: periodo_fin
-    '',                                        // M: fecha_confirmacion
-    '',                                        // N: confirmado_por
-    datosPago.observaciones || '',             // O: observaciones
-    new Date(),                                // P: fecha_creacion
+    idPago,                                         // A: id_pago
+    datosPago.id_suscripcion,                       // B: id_suscripcion
+    fechaHoy,                                       // C: fecha_pago
+    Number(datosPago.monto),                        // D: monto
+    datosPago.metodo_pago,                          // E: metodo_pago
+    datosPago.referencia_transaccion || '',         // F: referencia_transaccion
+    'PENDIENTE',                                    // G: estado_pago
+    datosPago.comprobante_url || '',                // H: comprobante_url
+    datosPago.banco_origen || '',                   // I: banco_origen
+    datosPago.concepto || 'Renovación de servicio', // J: concepto
+    inicio,                                         // K: periodo_inicio
+    fin,                                            // L: periodo_fin
+    '',                                             // M: fecha_confirmacion (vacío)
+    '',                                             // N: confirmado_por (vacío)
+    datosPago.observaciones || '',                  // O: observaciones
+    new Date(),                                     // P: fecha_creacion
     datosPago.email_usuario || Session.getActiveUser().getEmail() // Q: creado_por
   ];
   
   sheet.appendRow(nuevaFila);
   
-  // Enviar notificación al admin
-  enviarNotificacionNuevoPago({
-    id_pago: idPago,
-    monto: datosPago.monto,
-    metodo: datosPago.metodo_pago,
-    usuario: datosPago.email_usuario
-  });
+  // Opcional: Notificar al admin
+  try {
+     enviarNotificacionNuevoPago({
+       id_pago: idPago,
+       monto: datosPago.monto,
+       metodo: datosPago.metodo_pago,
+       usuario: datosPago.email_usuario || Session.getActiveUser().getEmail()
+     });
+  } catch(e) {
+    console.log("No se pudo enviar email de aviso: " + e);
+  }
   
   return { success: true, id_pago: idPago };
 }
-
 /**
  * Obtiene pagos pendientes de confirmación
  */
+
 function obtenerPagosPendientes() {
   const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
   const sheet = ss.getSheetByName('PAGOS');
   
+  // Si no hay datos, retornamos array vacío
   if (!sheet || sheet.getLastRow() <= 1) return [];
   
   const data = sheet.getDataRange().getValues();
   const pagos = [];
   
+  // Función auxiliar para fechas seguras (Evita error de serialización)
+  const safeDate = (val) => {
+    if (!val) return '';
+    if (val instanceof Date) return val.toISOString();
+    return String(val);
+  };
+
+  // Recorremos los datos (saltando encabezado fila 0)
   for (let i = 1; i < data.length; i++) {
-    if (data[i][6] === 'PENDIENTE') { // Col G: estado_pago
-      pagos.push({
-        id_pago: data[i][0],
-        id_suscripcion: data[i][1],
-        fecha_pago: data[i][2],
-        monto: data[i][3],
-        metodo_pago: data[i][4],
-        referencia_transaccion: data[i][5],
-        comprobante_url: data[i][7],
-        concepto: data[i][9],
-        creado_por: data[i][16]
-      });
+    const estado = String(data[i][6]); // Col G: estado_pago
+
+    // Solo nos interesan los PENDIENTES
+    if (estado === 'PENDIENTE') { 
+      
+      // Mapeo manual basado estrictamente en PAGOS.csv
+      const obj = {
+        id_pago:                String(data[i][0] || ''),   // A
+        id_suscripcion:         String(data[i][1] || ''),   // B
+        fecha_pago:             safeDate(data[i][2]),       // C (Fecha)
+        monto:                  Number(data[i][3] || 0),    // D
+        metodo_pago:            String(data[i][4] || ''),   // E
+        referencia_transaccion: String(data[i][5] || ''),   // F
+        estado_pago:            estado,                     // G
+        comprobante_url:        String(data[i][7] || ''),   // H
+        banco_origen:           String(data[i][8] || ''),   // I
+        concepto:               String(data[i][9] || ''),   // J
+        periodo_inicio:         safeDate(data[i][10]),      // K (Fecha)
+        periodo_fin:            safeDate(data[i][11]),      // L (Fecha)
+        // M y N son confirmación (vacíos en pendientes)
+        observaciones:          String(data[i][14] || ''),  // O
+        fecha_creacion:         safeDate(data[i][15]),      // P (Fecha)
+        creado_por:             String(data[i][16] || '')   // Q (Email usuario)
+      };
+
+      pagos.push(obj);
     }
   }
   
-  return pagos;
+  // Retornamos invertido para ver los más nuevos arriba
+  return pagos.reverse();
 }
 
 /**
@@ -539,53 +646,78 @@ function confirmarPago(idPago) {
     }
   }
   
-  if (filaPago === -1) {
-    return { success: false, message: 'Pago no encontrado' };
-  }
+  if (filaPago === -1) return { success: false, message: 'Pago no encontrado' };
   
-  // 2. Actualizar estado del pago
-  sheetPagos.getRange(filaPago, 7).setValue('CONFIRMADO'); // Col G
-  sheetPagos.getRange(filaPago, 13).setValue(new Date()); // Col M: fecha_confirmacion
-  sheetPagos.getRange(filaPago, 14).setValue(Session.getActiveUser().getEmail()); // Col N
+  // 2. Actualizar estado del pago en la hoja PAGOS
+  sheetPagos.getRange(filaPago, 7).setValue('CONFIRMADO');
+  sheetPagos.getRange(filaPago, 13).setValue(new Date());
+  sheetPagos.getRange(filaPago, 14).setValue(Session.getActiveUser().getEmail());
   
   // 3. Actualizar suscripción
   const dataSub = sheetSub.getDataRange().getValues();
+  let suscripcionData = null;
+
   for (let i = 1; i < dataSub.length; i++) {
     if (dataSub[i][0] === idSuscripcion) {
       const filaSub = i + 1;
       const estadoAnterior = dataSub[i][9];
+      const fechaVencimientoActual = dataSub[i][8] ? new Date(dataSub[i][8]) : null;
       
-      // Extender fecha de vencimiento +30 días
-      const nuevaFechaVenc = new Date();
+      // --- LÓGICA DE FECHAS MEJORADA (ACUMULATIVA) ---
+      const hoy = new Date();
+      let fechaBase = hoy;
+
+      // Si la fecha actual de vencimiento es válida y es FUTURA (el cliente paga adelantado)
+      // Usamos esa fecha como base para no "robarle" días.
+      if (fechaVencimientoActual && fechaVencimientoActual > hoy) {
+          fechaBase = fechaVencimientoActual;
+      }
+
+      // Sumamos 30 días a la fecha base (ya sea Hoy o el Vencimiento Futuro)
+      const nuevaFechaVenc = new Date(fechaBase);
       nuevaFechaVenc.setDate(nuevaFechaVenc.getDate() + 30);
       
-      sheetSub.getRange(filaSub, 9).setValue(nuevaFechaVenc); // Col I
-      sheetSub.getRange(filaSub, 10).setValue('ACTIVA'); // Col J: estado
-      sheetSub.getRange(filaSub, 14).setValue(idPago); // Col N: ultimo_pago_id
-      sheetSub.getRange(filaSub, 15).setValue(30); // Col O: dias_hasta_vencimiento
-      sheetSub.getRange(filaSub, 20).setValue(new Date()); // Col T
+      // Calcular nuevos días restantes para mostrar (diferencia entre Nueva Fecha y Hoy)
+      const diferenciaTiempo = nuevaFechaVenc.getTime() - hoy.getTime();
+      const nuevosDiasRestantes = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+
+      // 4. Escribir cambios en la hoja SUSCRIPCIONES
+      sheetSub.getRange(filaSub, 9).setValue(nuevaFechaVenc);  // Col I: Nueva Fecha
+      sheetSub.getRange(filaSub, 10).setValue('ACTIVA');       // Col J: Estado
+      sheetSub.getRange(filaSub, 14).setValue(idPago);         // Col N: ID Pago
+      sheetSub.getRange(filaSub, 15).setValue(nuevosDiasRestantes); // Col O: Días visuales
+      sheetSub.getRange(filaSub, 20).setValue(new Date());     // Col T: Actualización
       
-      // Registrar cambio de estado
-      registrarCambioEstado(idSuscripcion, estadoAnterior, 'ACTIVA', 'Pago confirmado', false);
+      // Registrar en historial
+      registrarCambioEstado(idSuscripcion, estadoAnterior, 'ACTIVA', 'Pago confirmado (Renovación)', false);
+      
+      // Guardar datos para el correo
+      suscripcionData = {
+        nombre_cliente: dataSub[i][3],
+        email_principal: dataSub[i][5],
+        fecha_vencimiento: nuevaFechaVenc,
+        monto_mensual: dataSub[i][10]
+      };
       
       break;
     }
   }
   
+  // Generar Factura
   const resultadoFactura = generarFactura(idPago, idSuscripcion);
   
-  if (resultadoFactura.success) {
-    Logger.log('Factura generada: ' + resultadoFactura.numero_factura);
+  // Enviar Notificación con la nueva fecha correcta
+  if (suscripcionData) {
+      enviarNotificacionPagoConfirmado(suscripcionData);
   }
   
   return { 
     success: true, 
-    message: 'Pago confirmado y suscripción renovada',
+    message: 'Pago confirmado. Suscripción extendida correctamente.',
     factura_generada: resultadoFactura.success,
     numero_factura: resultadoFactura.numero_factura
   };
 }
-
 /**
  * Rechaza un pago
  */
@@ -594,11 +726,31 @@ function rechazarPago(idPago, motivo) {
   const sheet = ss.getSheetByName('PAGOS');
   const data = sheet.getDataRange().getValues();
   
+  let idSuscripcion = null;
+  
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === idPago) {
       const fila = i + 1;
-      sheet.getRange(fila, 7).setValue('RECHAZADO'); // Col G
-      sheet.getRange(fila, 15).setValue(motivo); // Col O: observaciones
+      idSuscripcion = data[i][1]; // Obtener ID suscripción para buscar el email
+      
+      sheet.getRange(fila, 7).setValue('RECHAZADO');
+      sheet.getRange(fila, 15).setValue(motivo);
+      
+      // NUEVO: Buscar datos del cliente y notificar
+      if (idSuscripcion) {
+          const sheetSub = ss.getSheetByName('SUSCRIPCIONES');
+          const dataSub = sheetSub.getDataRange().getValues();
+          for (let j = 1; j < dataSub.length; j++) {
+              if (dataSub[j][0] === idSuscripcion) {
+                  const subData = {
+                      nombre_cliente: dataSub[j][3],
+                      email_principal: dataSub[j][5]
+                  };
+                  enviarNotificacionPagoRechazado(subData, motivo);
+                  break;
+              }
+          }
+      }
       
       return { success: true };
     }
@@ -1638,6 +1790,7 @@ function generarHTMLFactura(factura) {
  * @param {Object} filtros - {id_suscripcion: String, estado: String}
  * @return {Array} Lista de facturas
  */
+
 function obtenerFacturas(filtros) {
   const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
   const sheet = ss.getSheetByName('FACTURAS');
@@ -1647,31 +1800,50 @@ function obtenerFacturas(filtros) {
   const data = sheet.getDataRange().getValues();
   const facturas = [];
   
+  // Función auxiliar para fechas seguras
+  const safeDate = (val) => {
+    if (!val) return '';
+    if (val instanceof Date) return val.toISOString();
+    return String(val);
+  };
+
+  // Recorremos desde la fila 1 (índice 1) para saltar encabezados
   for (let i = 1; i < data.length; i++) {
+    
+    // Mapeo manual basado en el orden de columnas del archivo FACTURAS.csv
     const factura = {
-      id_factura: data[i][0],
-      numero_factura: data[i][1],
-      id_suscripcion: data[i][2],
-      id_pago: data[i][3],
-      nombre_cliente: data[i][4],
-      ruc_ci: data[i][5],
-      email_cliente: data[i][6],
-      fecha_emision: data[i][7],
-      periodo_inicio: data[i][8],
-      periodo_fin: data[i][9],
-      monto: data[i][10],
-      metodo_pago: data[i][11],
-      concepto: data[i][12],
-      estado_factura: data[i][13]
+      id_factura:      String(data[i][0] || ''),   // A
+      numero_factura:  String(data[i][1] || ''),   // B
+      id_suscripcion:  String(data[i][2] || ''),   // C
+      id_pago:         String(data[i][3] || ''),   // D
+      nombre_cliente:  String(data[i][4] || ''),   // E
+      ruc_ci:          String(data[i][5] || ''),   // F
+      email_cliente:   String(data[i][6] || ''),   // G
+      
+      // ⚠️ Conversión crítica de fechas ⚠️
+      fecha_emision:   safeDate(data[i][7]),       // H
+      periodo_inicio:  safeDate(data[i][8]),       // I
+      periodo_fin:     safeDate(data[i][9]),       // J
+      
+      monto:           Number(data[i][10] || 0),   // K
+      metodo_pago:     String(data[i][11] || ''),  // L
+      concepto:        String(data[i][12] || ''),  // M
+      estado_factura:  String(data[i][13] || ''),  // N
+      url_pdf:         String(data[i][14] || ''),  // O
+      fecha_creacion:  safeDate(data[i][15]),      // P
+      creado_por:      String(data[i][16] || '')   // Q
     };
     
     // Aplicar filtros
+    let pasaFiltro = true;
     if (filtros) {
-      if (filtros.id_suscripcion && factura.id_suscripcion !== filtros.id_suscripcion) continue;
-      if (filtros.estado && factura.estado_factura !== filtros.estado) continue;
+      if (filtros.id_suscripcion && factura.id_suscripcion !== filtros.id_suscripcion) pasaFiltro = false;
+      if (filtros.estado && factura.estado_factura !== filtros.estado) pasaFiltro = false;
     }
     
-    facturas.push(factura);
+    if (pasaFiltro) {
+      facturas.push(factura);
+    }
   }
   
   return facturas.reverse(); // Más reciente primero
@@ -1753,5 +1925,100 @@ function listarComprobantesSubidos() {
 function obtenerUrlCarpetaComprobantes() {
   const carpeta = obtenerCarpetaComprobantes();
   return carpeta.getUrl();
+}
+
+/**
+ * Sube un archivo Base64 a la carpeta de comprobantes en Drive
+ */
+function subirComprobanteDrive(dataBase64, nombreArchivo, mimeType) {
+  try {
+    const carpeta = obtenerCarpetaComprobantes(); // Usa la función auxiliar existente
+    const blob = Utilities.newBlob(Utilities.base64Decode(dataBase64), mimeType, nombreArchivo);
+    const archivo = carpeta.createFile(blob);
+    
+    // Hacer público el archivo para que se pueda ver en el ERP (Opcional, depende de tu privacidad)
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return archivo.getUrl();
+  } catch (e) {
+    Logger.log("Error subiendo archivo: " + e.toString());
+    throw new Error("No se pudo guardar la imagen del comprobante.");
+  }
+}
+
+/**
+ * Envía notificación de pago rechazado
+ */
+function enviarNotificacionPagoRechazado(suscripcion, motivo) {
+  const email = suscripcion.email_principal;
+  
+  const asunto = `❌ Problema con tu pago - Cesta ERP`;
+  const cuerpo = `
+    <h2>Hola ${suscripcion.nombre_cliente},</h2>
+    <p>Te informamos que tu pago ha sido <strong>RECHAZADO</strong>.</p>
+    
+    <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; color: #721c24; margin: 15px 0;">
+      <strong>Motivo:</strong> ${motivo}
+    </div>
+
+    <p><strong>¿Qué debo hacer?</strong></p>
+    <ul>
+      <li>Verifica los datos de la transferencia o comprobante.</li>
+      <li>Vuelve a subir el comprobante correcto desde la pantalla de bloqueo.</li>
+    </ul>
+
+    <p>Si crees que esto es un error, por favor contacta a soporte.</p>
+    <hr>
+    <p style="color: #666; font-size: 12px;">Este es un mensaje automático.</p>
+  `;
+  
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: asunto,
+      htmlBody: cuerpo
+    });
+    return true;
+  } catch (error) {
+    Logger.log('Error enviando email rechazo: ' + error.toString());
+    return false;
+  }
+}
+
+/**
+ * Obtiene la lista de usuarios del sistema ERP principal
+ * para vincularlos a una suscripción.
+ */
+function obtenerUsuariosParaSelector() {
+  // Usamos la ID de la hoja del ERP, no la de suscripciones
+  const ss = SpreadsheetApp.openById(SS_ID); 
+  const sheet = ss.getSheetByName('USUARIOS');
+  
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+  
+  const data = sheet.getDataRange().getValues();
+  const usuarios = [];
+  
+  // Asumiendo estructura USUARIOS:
+  // A: id_usuario, B: nombre, C: email
+  for (let i = 1; i < data.length; i++) {
+    const id = String(data[i][0]);
+    const nombre = String(data[i][1]);
+    const email = String(data[i][2]);
+    const rol = String(data[i][4]); 
+    const activo = String(data[i][6]);
+
+    // Solo listar usuarios activos para nueva suscripción
+    if (id && activo === 'SI') {
+      usuarios.push({
+        id_usuario: id,
+        nombre: nombre,
+        email: email,
+        rol: rol
+      });
+    }
+  }
+  
+  return usuarios;
 }
 
