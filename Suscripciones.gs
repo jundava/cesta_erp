@@ -30,7 +30,9 @@ function leerConfiguracionSuscripciones() {
     if (parametro) {
       // Convertir según tipo
       if (tipo === 'number') {
-        config[parametro] = Number(valor);
+        // Limpiamos "Gs", puntos y espacios para asegurar que sea un número válido
+        let valLimpio = String(valor).replace(/[Gs\.\,\s]/g, '');
+        config[parametro] = Number(valLimpio) || 0;
       } else if (tipo === 'boolean') {
         config[parametro] = valor === 'TRUE' || valor === true;
       } else if (tipo === 'array') {
@@ -715,7 +717,8 @@ function confirmarPago(idPago) {
     success: true, 
     message: 'Pago confirmado. Suscripción extendida correctamente.',
     factura_generada: resultadoFactura.success,
-    numero_factura: resultadoFactura.numero_factura
+    numero_factura: resultadoFactura.numero_factura,
+    pdf_url: resultadoFactura.pdf_url
   };
 }
 /**
@@ -1504,6 +1507,7 @@ function ejecutarRecordatoriosManual() {
  * @param {String} idSuscripcion - ID de la suscripción
  * @return {Object} {success: true/false, id_factura: UUID, numero_factura: String}
  */
+
 function generarFactura(idPago, idSuscripcion) {
   const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
   const sheetFacturas = ss.getSheetByName('FACTURAS');
@@ -1511,90 +1515,78 @@ function generarFactura(idPago, idSuscripcion) {
   const sheetPagos = ss.getSheetByName('PAGOS');
   
   try {
-    // 1. Obtener datos de la suscripción
+    // 1. Obtener datos
     const dataSub = sheetSub.getDataRange().getValues();
-    let suscripcion = null;
-    for (let i = 1; i < dataSub.length; i++) {
-      if (dataSub[i][0] === idSuscripcion) {
-        suscripcion = {
-          id_suscripcion: dataSub[i][0],
-          nombre_cliente: dataSub[i][3],
-          ruc_ci: dataSub[i][4],
-          email: dataSub[i][5],
-          monto: dataSub[i][10]
-        };
-        break;
-      }
-    }
+    const suscripcion = dataSub.find(r => r[0] === idSuscripcion);
+    if (!suscripcion) throw new Error('Suscripción no encontrada');
     
-    if (!suscripcion) {
-      throw new Error('Suscripción no encontrada');
-    }
-    
-    // 2. Obtener datos del pago
     const dataPagos = sheetPagos.getDataRange().getValues();
-    let pago = null;
-    for (let i = 1; i < dataPagos.length; i++) {
-      if (dataPagos[i][0] === idPago) {
-        pago = {
-          id_pago: dataPagos[i][0],
-          fecha_pago: dataPagos[i][2],
-          monto: dataPagos[i][3],
-          metodo_pago: dataPagos[i][4],
-          periodo_inicio: dataPagos[i][10],
-          periodo_fin: dataPagos[i][11]
-        };
-        break;
-      }
-    }
+    const pago = dataPagos.find(r => r[0] === idPago);
+    if (!pago) throw new Error('Pago no encontrado');
     
-    if (!pago) {
-      throw new Error('Pago no encontrado');
-    }
-    
-    // 3. Generar número de factura
     const numeroFactura = generarNumeroFactura();
+    const fechaEmision = new Date();
     
-    // 4. Crear factura
+    // 2. Datos consolidados
+    const datosFactura = {
+        numero_factura: numeroFactura,
+        nombre_cliente: suscripcion[3],
+        ruc_ci: suscripcion[4] || '---',
+        email: suscripcion[5],
+        email_cliente: suscripcion[5],
+        fecha_emision: fechaEmision,
+        monto: pago[3],
+        metodo_pago: pago[4],
+        periodo_inicio: pago[10], // Ajustar índices si es necesario
+        periodo_fin: pago[11]
+    };
+
+    // 3. GENERACIÓN DEL PDF
+    // a. Crear HTML limpio (fondo blanco, A4)
+    const htmlContenido = generarHTMLFactura(datosFactura);
+    
+    // b. Crear archivo físico en Drive y obtener objeto File
+    const archivoPDF = guardarPDFEnDrive(htmlContenido, numeroFactura);
+    const urlPdf = archivoPDF ? archivoPDF.getUrl() : '';
+
+    // 4. Guardar en Base de Datos
     const idFactura = Utilities.getUuid();
-    
     const nuevaFactura = [
-      idFactura,                                  // A: id_factura
-      numeroFactura,                              // B: numero_factura
-      idSuscripcion,                              // C: id_suscripcion
-      idPago,                                     // D: id_pago
-      suscripcion.nombre_cliente,                 // E: nombre_cliente
-      suscripcion.ruc_ci,                         // F: ruc_ci
-      suscripcion.email,                          // G: email_cliente
-      new Date(),                                 // H: fecha_emision
-      pago.periodo_inicio || new Date(),          // I: periodo_inicio
-      pago.periodo_fin || new Date(),             // J: periodo_fin
-      pago.monto,                                 // K: monto
-      pago.metodo_pago,                           // L: metodo_pago
-      'Suscripción mensual - Cesta ERP',          // M: concepto
-      'EMITIDA',                                  // N: estado_factura
-      '',                                         // O: url_pdf (vacío por ahora)
-      new Date(),                                 // P: fecha_creacion
-      Session.getActiveUser().getEmail()          // Q: creado_por
+      idFactura,                          
+      numeroFactura,                      
+      idSuscripcion,                      
+      idPago,                             
+      datosFactura.nombre_cliente,        
+      datosFactura.ruc_ci,                
+      datosFactura.email,                 
+      fechaEmision,                       
+      datosFactura.periodo_inicio,        
+      datosFactura.periodo_fin,           
+      datosFactura.monto,                         
+      datosFactura.metodo_pago,                   
+      'Suscripción mensual - Cesta ERP',  
+      'EMITIDA',                          
+      urlPdf, // URL guardada             
+      new Date(),                         
+      Session.getActiveUser().getEmail()  
     ];
     
     sheetFacturas.appendRow(nuevaFactura);
     
-    // 5. Enviar factura por email
-    enviarFacturaPorEmail(idFactura);
+    // 5. ENVIAR EMAIL CON ADJUNTO
+    // Pasamos el objeto archivoPDF directamente para adjuntarlo
+    enviarFacturaPorEmail(datosFactura, archivoPDF);
     
     return {
       success: true,
       id_factura: idFactura,
-      numero_factura: numeroFactura
+      numero_factura: numeroFactura,
+      pdf_url: urlPdf
     };
     
   } catch (error) {
-    Logger.log('Error generando factura: ' + error.toString());
-    return {
-      success: false,
-      error: error.toString()
-    };
+    Logger.log('Error FATAL generando factura: ' + error.toString());
+    return { success: false, error: error.toString() };
   }
 }
 
@@ -1655,54 +1647,45 @@ function generarNumeroFactura() {
  * Envía la factura por email al cliente
  * @param {String} idFactura - ID de la factura
  */
-function enviarFacturaPorEmail(idFactura) {
-  const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
-  const sheet = ss.getSheetByName('FACTURAS');
-  const data = sheet.getDataRange().getValues();
+
+function enviarFacturaPorEmail(datos, archivoPDF) {
+  const asunto = `Factura ${datos.numero_factura} - Cesta ERP`;
   
-  let factura = null;
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === idFactura) {
-      factura = {
-        numero_factura: data[i][1],
-        nombre_cliente: data[i][4],
-        email: data[i][6],
-        fecha_emision: data[i][7],
-        monto: data[i][10],
-        metodo_pago: data[i][11],
-        periodo_inicio: data[i][8],
-        periodo_fin: data[i][9]
-      };
-      break;
-    }
-  }
-  
-  if (!factura) return;
-  
-  // Generar HTML de la factura
-  const htmlFactura = generarHTMLFactura(factura);
-  
-  const asunto = `Factura ${factura.numero_factura} - Cesta ERP`;
+  // Cuerpo Genérico Limpio
   const cuerpo = `
-    <h2>Hola ${factura.nombre_cliente},</h2>
-    <p>Adjuntamos tu factura correspondiente al pago de tu suscripción.</p>
-    <hr>
-    ${htmlFactura}
-    <hr>
-    <p>Gracias por confiar en Cesta ERP.</p>
-    <p style="color: #666; font-size: 12px;">Este es un mensaje automático.</p>
+    <div style="font-family: Arial, sans-serif; color: #333;">
+      <h2>Hola ${datos.nombre_cliente},</h2>
+      <p>Confirmamos la renovación de tu suscripción a <strong>Cesta ERP</strong>.</p>
+      
+      <ul>
+        <li><strong>Plan:</strong> Suscripción Mensual</li>
+        <li><strong>Vencimiento:</strong> ${new Date(datos.periodo_fin).toLocaleDateString('es-PY')}</li>
+        <li><strong>Estado:</strong> Pagado</li>
+      </ul>
+      
+      <p>📎 <strong>Adjunto encontrarás tu factura en formato PDF.</strong></p>
+      
+      <br>
+      <p>Atentamente,<br>El equipo de Cesta ERP</p>
+    </div>
   `;
-  
+
+  const opciones = {
+    to: datos.email,
+    subject: asunto,
+    htmlBody: cuerpo
+  };
+
+  // Si existe el archivo PDF, lo adjuntamos
+  if (archivoPDF) {
+    opciones.attachments = [archivoPDF.getAs(MimeType.PDF)];
+  }
+
   try {
-    MailApp.sendEmail({
-      to: factura.email,
-      subject: asunto,
-      htmlBody: cuerpo
-    });
-    
-    Logger.log('Factura enviada a: ' + factura.email);
+    MailApp.sendEmail(opciones);
+    Logger.log('Correo con adjunto enviado a: ' + datos.email);
   } catch (error) {
-    Logger.log('Error enviando factura: ' + error.toString());
+    Logger.log('Error enviando email con adjunto: ' + error.toString());
   }
 }
 
@@ -1711,78 +1694,97 @@ function enviarFacturaPorEmail(idFactura) {
  * @param {Object} factura - Datos de la factura
  * @return {String} HTML de la factura
  */
-function generarHTMLFactura(factura) {
-  const fecha = new Date(factura.fecha_emision);
-  const fechaFormateada = fecha.toLocaleDateString('es-PY');
-  const montoFormateado = '₲ ' + Number(factura.monto).toLocaleString('es-PY');
+
+function generarHTMLFactura(datos) {
+  const montoF = Number(datos.monto).toLocaleString('es-PY');
+  const fechaEmisionF = new Date(datos.fecha_emision).toLocaleDateString('es-PY');
+  const periodoInicioF = new Date(datos.periodo_inicio).toLocaleDateString('es-PY');
+  const periodoFinF = new Date(datos.periodo_fin).toLocaleDateString('es-PY');
   
-  const html = `
-    <div style="max-width: 600px; margin: 0 auto; border: 2px solid #E06920; padding: 30px; font-family: Arial, sans-serif;">
-      
-      <!-- Header -->
-      <div style="text-align: center; margin-bottom: 30px;">
-        <h1 style="color: #E06920; margin: 0;">CESTA ERP</h1>
-        <p style="color: #666; margin: 5px 0;">Sistema de Gestión Empresarial</p>
-      </div>
-      
-      <!-- Info Factura -->
-      <div style="background: #f8f9fa; padding: 20px; margin-bottom: 20px; border-radius: 8px;">
-        <h2 style="color: #E06920; margin-top: 0;">FACTURA</h2>
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <td style="padding: 5px 0;"><strong>Número:</strong></td>
-            <td style="text-align: right;">${factura.numero_factura}</td>
-          </tr>
-          <tr>
-            <td style="padding: 5px 0;"><strong>Fecha:</strong></td>
-            <td style="text-align: right;">${fechaFormateada}</td>
-          </tr>
-          <tr>
-            <td style="padding: 5px 0;"><strong>Cliente:</strong></td>
-            <td style="text-align: right;">${factura.nombre_cliente}</td>
-          </tr>
-        </table>
-      </div>
-      
-      <!-- Detalle -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-        <thead>
-          <tr style="background: #E06920; color: white;">
-            <th style="padding: 10px; text-align: left;">Concepto</th>
-            <th style="padding: 10px; text-align: right;">Monto</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style="border-bottom: 1px solid #ddd;">
-            <td style="padding: 15px;">
-              <strong>Suscripción mensual - Cesta ERP</strong><br>
-              <small style="color: #666;">Período: ${new Date(factura.periodo_inicio).toLocaleDateString('es-PY')} - ${new Date(factura.periodo_fin).toLocaleDateString('es-PY')}</small>
-            </td>
-            <td style="padding: 15px; text-align: right;">${montoFormateado}</td>
-          </tr>
-        </tbody>
-      </table>
-      
-      <!-- Total -->
-      <div style="text-align: right; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-        <h3 style="margin: 0; color: #E06920;">TOTAL: ${montoFormateado}</h3>
-        <p style="margin: 5px 0; color: #666;">Método de pago: ${factura.metodo_pago}</p>
-      </div>
-      
-      <!-- Footer -->
-      <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-        <p style="color: #666; font-size: 12px; margin: 5px 0;">
-          Gracias por tu preferencia
-        </p>
-        <p style="color: #999; font-size: 11px; margin: 5px 0;">
-          Este documento es una factura electrónica válida
-        </p>
-      </div>
-      
-    </div>
+  // Validar datos para evitar "undefined"
+  const rucCliente = datos.ruc_ci || '---';
+  const direccionCliente = datos.direccion || ''; // Si tuvieras dirección
+
+  return `
+    <html>
+      <body style="margin: 0; padding: 0; background-color: #ffffff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+        
+        <div style="width: 700px; margin: 0 auto; padding: 40px; background-color: #ffffff; color: #333;">
+          
+          <table style="width: 100%; border-bottom: 2px solid #E06920; padding-bottom: 20px; margin-bottom: 30px;">
+            <tr>
+              <td style="vertical-align: top;">
+                 <h1 style="color: #E06920; margin: 0; font-size: 28px;">CESTA ERP</h1>
+                 <p style="margin: 5px 0; color: #555; font-size: 14px;">Servicios Digitales & Software</p>
+              </td>
+              <td style="text-align: right; vertical-align: top;">
+                 <h2 style="color: #333; margin: 0; font-size: 24px;">FACTURA</h2>
+                 <p style="margin: 5px 0; font-size: 14px;"><strong>Nro:</strong> ${datos.numero_factura}</p>
+                 <p style="margin: 5px 0; font-size: 14px;"><strong>Fecha:</strong> ${fechaEmisionF}</p>
+              </td>
+            </tr>
+          </table>
+
+          <div style="margin-bottom: 40px;">
+            <table style="width: 100%;">
+                <tr>
+                    <td style="width: 50%; vertical-align: top;">
+                        <p style="font-size: 12px; text-transform: uppercase; color: #888; margin-bottom: 5px;">Facturar a:</p>
+                        <h3 style="margin: 0 0 5px 0; font-size: 18px;">${datos.nombre_cliente}</h3>
+                        <p style="margin: 2px 0; font-size: 14px;">RUC / CI: ${rucCliente}</p>
+                        <p style="margin: 2px 0; font-size: 14px;">Email: ${datos.email_cliente}</p>
+                    </td>
+                    <td style="width: 50%; vertical-align: top; text-align: right;">
+                        <p style="font-size: 12px; text-transform: uppercase; color: #888; margin-bottom: 5px;">Condición de Pago:</p>
+                        <p style="margin: 0; font-size: 14px; font-weight: bold;">Contado</p>
+                        <p style="margin: 2px 0; font-size: 14px;">Método: ${datos.metodo_pago}</p>
+                    </td>
+                </tr>
+            </table>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <thead>
+              <tr style="background-color: #f4f4f4; color: #333;">
+                <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd;">Descripción</th>
+                <th style="padding: 12px 15px; text-align: right; border-bottom: 1px solid #ddd;">Periodo</th>
+                <th style="padding: 12px 15px; text-align: right; border-bottom: 1px solid #ddd;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 15px; border-bottom: 1px solid #eee;">
+                  <strong>Suscripción Mensual - Cesta ERP</strong><br>
+                  <span style="font-size: 12px; color: #777;">Acceso a plataforma de gestión</span>
+                </td>
+                <td style="padding: 15px; text-align: right; border-bottom: 1px solid #eee; font-size: 14px;">
+                   ${periodoInicioF} <br>al ${periodoFinF}
+                </td>
+                <td style="padding: 15px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">
+                  ₲ ${montoF}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="width: 100%; text-align: right;">
+             <table style="width: 40%; margin-left: auto; border-collapse: collapse;">
+                <tr style="background-color: #E06920; color: white;">
+                    <td style="padding: 10px; font-size: 16px;"><strong>TOTAL A PAGAR</strong></td>
+                    <td style="padding: 10px; font-size: 16px;"><strong>₲ ${montoF}</strong></td>
+                </tr>
+             </table>
+          </div>
+
+          <div style="position: fixed; bottom: 0; left: 0; width: 100%; text-align: center; font-size: 10px; color: #999; padding: 20px;">
+            <p>Gracias por confiar en Cesta ERP.</p>
+            <p>Este documento es un comprobante electrónico válido generado automáticamente.</p>
+          </div>
+
+        </div>
+      </body>
+    </html>
   `;
-  
-  return html;
 }
 
 /**
@@ -2022,3 +2024,129 @@ function obtenerUsuariosParaSelector() {
   return usuarios;
 }
 
+/**
+ * Convierte contenido HTML a PDF, lo guarda en Drive y devuelve la URL
+ */
+
+function guardarPDFEnDrive(htmlContent, nombreArchivo) {
+  try {
+    const carpeta = obtenerCarpetaComprobantes(); 
+    
+    // Configurar PDF
+    const blob = Utilities.newBlob(htmlContent, MimeType.HTML)
+                          .getAs(MimeType.PDF)
+                          .setName(nombreArchivo + ".pdf");
+    
+    // Guardar
+    const archivo = carpeta.createFile(blob);
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    // ⚠️ CAMBIO CLAVE: Retornamos el objeto archivo completo
+    return archivo; 
+  } catch (e) {
+    Logger.log("Error creando PDF: " + e.toString());
+    return null;
+  }
+}
+
+/**
+ * Genera el HTML de la factura para convertir a PDF
+ */
+function generarHTMLFactura(datos) {
+  // Formateo de montos y fechas
+  const montoF = Number(datos.monto).toLocaleString('es-PY');
+  const fechaEmisionF = new Date(datos.fecha_emision).toLocaleDateString('es-PY');
+  const periodoInicioF = new Date(datos.periodo_inicio).toLocaleDateString('es-PY');
+  const periodoFinF = new Date(datos.periodo_fin).toLocaleDateString('es-PY');
+
+  return `
+    <div style="font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: auto;">
+      
+      <table style="width: 100%; margin-bottom: 30px;">
+        <tr>
+          <td style="vertical-align: top;">
+             <h1 style="color: #E06920; margin: 0;">CESTA ERP</h1>
+             <p style="margin: 5px 0; color: #777;">Servicios Digitales</p>
+          </td>
+          <td style="text-align: right; vertical-align: top;">
+             <h3 style="color: #555; margin: 0;">FACTURA</h3>
+             <p style="margin: 5px 0;"><strong>Nro:</strong> ${datos.numero_factura}</p>
+             <p style="margin: 5px 0;"><strong>Fecha:</strong> ${fechaEmisionF}</p>
+          </td>
+        </tr>
+      </table>
+
+      <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+        <p style="margin: 5px 0;"><strong>Cliente:</strong> ${datos.nombre_cliente}</p>
+        <p style="margin: 5px 0;"><strong>RUC / CI:</strong> ${datos.ruc_ci}</p>
+        <p style="margin: 5px 0;"><strong>Email:</strong> ${datos.email_cliente}</p>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+        <thead>
+          <tr style="background-color: #E06920; color: white;">
+            <th style="padding: 12px; text-align: left;">Descripción</th>
+            <th style="padding: 12px; text-align: right;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 15px; border-bottom: 1px solid #eee;">
+              <strong>Suscripción Mensual - Cesta ERP</strong><br>
+              <span style="font-size: 12px; color: #666;">Periodo: ${periodoInicioF} al ${periodoFinF}</span>
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #eee; text-align: right;">
+              ₲ ${montoF}
+            </td>
+          </tr>
+        </tbody>
+        <tfoot>
+           <tr>
+             <td style="padding: 15px; text-align: right;"><strong>Método de Pago:</strong> ${datos.metodo_pago}</td>
+             <td style="padding: 15px; text-align: right; font-size: 18px; color: #E06920;"><strong>₲ ${montoF}</strong></td>
+           </tr>
+        </tfoot>
+      </table>
+
+      <div style="text-align: center; margin-top: 50px; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
+        <p>Gracias por su preferencia.</p>
+        <p>Este comprobante es un documento electrónico generado automáticamente.</p>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Guarda TODA la configuración de una sola vez (Optimizado)
+ */
+function guardarConfiguracionCompleta(nuevasConfigs) {
+  const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
+  const sheet = ss.getSheetByName('CONF_SUSCRIPCIONES');
+  const data = sheet.getDataRange().getValues();
+  const userEmail = Session.getActiveUser().getEmail();
+  const timestamp = new Date();
+
+  // Recorremos la hoja de cálculo
+  for (let i = 1; i < data.length; i++) {
+    const key = data[i][0]; // Columna A: Nombre del parámetro
+    
+    // Si el parámetro de la hoja existe en el objeto que enviamos desde Vue
+    if (nuevasConfigs.hasOwnProperty(key)) {
+      // Obtenemos el valor a guardar
+      let valor = nuevasConfigs[key];
+      
+      // Si es un array (como los métodos de pago), lo convertimos a string
+      if (Array.isArray(valor) || typeof valor === 'object') {
+        valor = JSON.stringify(valor);
+      }
+
+      // Actualizamos solo esa fila (Col B: Valor, Col E: Usuario, Col F: Fecha)
+      // getRange(fila, columna) -> Fila es i+1
+      sheet.getRange(i + 1, 2).setValue(valor); 
+      sheet.getRange(i + 1, 5).setValue(userEmail);
+      sheet.getRange(i + 1, 6).setValue(timestamp);
+    }
+  }
+  
+  return { success: true };
+}

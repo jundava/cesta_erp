@@ -487,7 +487,7 @@
                                         <i class="bi bi-circle-fill me-1" style="font-size: 9px;"></i>
                                         {{ getTextoConectado() }}
                                     </small>
-                                    <small :class="getClaseConectado()" style="font-size: 10px; line-height: 1.2;" v-if="estadoSuscripcion && estadoSuscripcion.estado === 'ACTIVA'">
+                                    <small :class="getClaseConectado()" style="font-size: 10px; line-height: 1.2; top-margin: 5px;" v-if="estadoSuscripcion && estadoSuscripcion.estado === 'ACTIVA'">
                                         {{ estadoSuscripcion.estado }} Vence: {{ formatearFecha(estadoSuscripcion.fechaVencimiento) }}
                                     </small>
 
@@ -3535,52 +3535,118 @@
                   
                   <!-- Tab: Configuración -->
                   <div v-show="tabSuscripciones === 'config'">
-                      <div class="row">
+                      <div class="row g-4">
+                          
                           <div class="col-md-6">
-                              <div class="card">
-                                  <div class="card-header bg-primary text-white">
-                                      Políticas de Vencimiento
+                              <div class="card shadow-sm h-100 border-0">
+                                  <div class="card-header bg-white border-bottom fw-bold text-primary py-3">
+                                      <i class="bi bi-calendar-event me-2"></i> Plazos y Reglas de Acceso
                                   </div>
-                                  <div class="card-body">
-                                      <div class="mb-3">
-                                          <label class="form-label">Días de alerta previa:</label>
-                                          <input type="number" class="form-control" 
-                                                v-model="configSuscripciones.DIAS_ALERTA_PREVIA">
+                                  <div class="card-body bg-light">
+                                      
+                                      <div class="row g-3">
+                                          <div class="col-md-6">
+                                              <label class="form-label small fw-bold text-muted">Días Alerta Previa</label>
+                                              <input type="number" class="form-control" v-model.number="configSuscripciones.DIAS_ALERTA_PREVIA">
+                                              <div class="form-text small">Aviso antes de vencer</div>
+                                          </div>
+                                          <div class="col-md-6">
+                                              <label class="form-label small fw-bold text-muted">Días de Gracia</label>
+                                              <input type="number" class="form-control" v-model.number="configSuscripciones.DIAS_GRACIA">
+                                              <div class="form-text small">Días extra tras vencer</div>
+                                          </div>
+                                          <div class="col-md-6">
+                                              <label class="form-label small fw-bold text-muted">Bloqueo Total (Días)</label>
+                                              <input type="number" class="form-control" v-model.number="configSuscripciones.DIAS_BLOQUEO_TOTAL">
+                                              <div class="form-text small">Restricción final</div>
+                                          </div>
+
+                                          <div class="col-12 mt-3 pt-3 border-top">
+                                              <div class="form-check form-switch mb-2">
+                                                  <input class="form-check-input" type="checkbox" v-model="configSuscripciones.PERMITIR_MODO_CONSULTA">
+                                                  <label class="form-check-label fw-bold small">Permitir Modo Consulta</label>
+                                                  <div class="text-muted" style="font-size: 0.75rem;">
+                                                      Si está activo, los morosos pueden ver pero no editar. Si no, bloqueo total.
+                                                  </div>
+                                              </div>
+                                          </div>
                                       </div>
-                                      <div class="mb-3">
-                                          <label class="form-label">Días de gracia:</label>
-                                          <input type="number" class="form-control" 
-                                                v-model="configSuscripciones.DIAS_GRACIA">
-                                      </div>
-                                      <button class="btn btn-primary w-100" @click="guardarConfiguracionSub">
-                                          <i class="bi bi-save"></i> Guardar
-                                      </button>
+
                                   </div>
                               </div>
                           </div>
 
                           <div class="col-md-6">
-                              <div class="card">
-                                  <div class="card-header bg-success text-white">
-                                      Montos y Notificaciones
+                              <div class="card shadow-sm h-100 border-0">
+                                  <div class="card-header bg-white border-bottom fw-bold text-success py-3">
+                                      <i class="bi bi-cash-coin me-2"></i> Finanzas y Métodos de Pago
                                   </div>
-                                  <div class="card-body">
+                                  <div class="card-body bg-light">
+                                      
                                       <div class="mb-3">
-                                          <label class="form-label">Monto base (₲):</label>
-                                          <input type="number" class="form-control" 
-                                                v-model="configSuscripciones.MONTO_SUSCRIPCION_BASE">
+                                          <label class="form-label small fw-bold text-muted">Monto Mensual Base (Gs)</label>
+                                          <div class="input-group">
+                                              <span class="input-group-text bg-white text-success fw-bold">₲</span>
+                                              <input type="number" class="form-control fw-bold" v-model.number="configSuscripciones.MONTO_SUSCRIPCION_BASE">
+                                          </div>
                                       </div>
+
                                       <div class="mb-3">
-                                          <label class="form-label">Email notificaciones:</label>
-                                          <input type="email" class="form-control" 
-                                                v-model="configSuscripciones.EMAIL_NOTIFICACIONES">
+                                          <label class="form-label small fw-bold text-muted mb-2">Métodos de Pago Activos</label>
+                                          <div class="d-flex gap-3 bg-white p-2 rounded border">
+                                              <div class="form-check">
+                                                  <input class="form-check-input" type="checkbox" value="QR" v-model="configSuscripciones.METODOS_PAGO_ACTIVOS">
+                                                  <label class="form-check-label small">QR</label>
+                                              </div>
+                                              <div class="form-check">
+                                                  <input class="form-check-input" type="checkbox" value="TRANSFERENCIA" v-model="configSuscripciones.METODOS_PAGO_ACTIVOS">
+                                                  <label class="form-check-label small">Transferencia</label>
+                                              </div>
+                                              <div class="form-check">
+                                                  <input class="form-check-input" type="checkbox" value="EFECTIVO" v-model="configSuscripciones.METODOS_PAGO_ACTIVOS">
+                                                  <label class="form-check-label small">Efectivo</label>
+                                              </div>
+                                          </div>
                                       </div>
-                                      <button class="btn btn-success w-100" @click="guardarConfiguracionSub">
-                                          <i class="bi bi-save"></i> Guardar
-                                      </button>
+
+                                      <div class="form-check form-switch mb-2">
+                                          <input class="form-check-input" type="checkbox" v-model="configSuscripciones.GENERAR_QR_AUTOMATICO">
+                                          <label class="form-check-label fw-bold small">Generar QR Automático</label>
+                                      </div>
+                                      
+                                      <div class="form-check form-switch">
+                                          <input class="form-check-input" type="checkbox" v-model="configSuscripciones.PERMITIR_RENOVACION_ANTICIPADA">
+                                          <label class="form-check-label fw-bold small">Permitir Pago Anticipado</label>
+                                      </div>
+
                                   </div>
                               </div>
                           </div>
+
+                          <div class="col-12">
+                              <div class="card shadow-sm border-0">
+                                  <div class="card-header bg-white border-bottom fw-bold text-warning text-dark py-3">
+                                      <i class="bi bi-bell me-2"></i> Configuración de Notificaciones
+                                  </div>
+                                  <div class="card-body bg-light">
+                                      <div class="row align-items-center">
+                                          <div class="col-md-8">
+                                              <label class="form-label small fw-bold text-muted">Email Administrativo</label>
+                                              <input type="email" class="form-control" v-model="configSuscripciones.EMAIL_NOTIFICACIONES" 
+                                                    placeholder="admin@ejemplo.com">
+                                              <div class="form-text small">Recibirá avisos de "Nuevo Pago Pendiente" y errores del sistema.</div>
+                                          </div>
+                                          <div class="col-md-4 text-end">
+                                              <button class="btn btn-primary fw-bold px-4 py-2 shadow-sm" @click="guardarConfiguracionSub" :disabled="cargando">
+                                                  <span v-if="cargando" class="spinner-border spinner-border-sm me-2"></span>
+                                                  <i v-else class="bi bi-save me-2"></i> Guardar Todo
+                                              </button>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
                       </div>
                   </div>
 
@@ -4255,135 +4321,87 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <form @submit.prevent="guardarSuscripcionAdmin">
                         
-                        <!-- Sección: Datos del Cliente -->
-                        <div class="card mb-3">
-                            <div class="card-header bg-light">
-                                <strong>Datos del Cliente</strong>
-                            </div>
-                            <div class="card mb-3">
-                                <div class="card-header bg-light">
-                                    <strong>Vincular Usuario ERP</strong>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row g-3">
-                                        <div class="col-12">
-                                            <label class="form-label fw-bold">Seleccionar Usuario del Sistema *</label>
-                                            <select class="form-select" v-model="formSuscripcion.id_usuario" @change="alSeleccionarUsuarioSub" required>
-                                                <option value="">-- Seleccione un usuario --</option>
-                                                <option v-for="u in listaUsuariosERP" :value="u.id_usuario">
-                                                    {{ u.nombre }} ({{ u.email }})
-                                                </option>
-                                            </select>
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Nombre Cliente</label>
-                                            <input type="text" class="form-control" v-model="formSuscripcion.nombre_cliente">
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Email Principal (Usuario)</label>
-                                            <input type="email" class="form-control bg-light" 
-                                                  v-model="formSuscripcion.email_principal" 
-                                                  readonly 
-                                                  required>
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">RUC / CI</label>
-                                            <input type="text" class="form-control" v-model="formSuscripcion.ruc_ci">
-                                        </div>
-                                        
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Teléfono</label>
-                                            <input type="text" class="form-control" v-model="formSuscripcion.telefono">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="card mb-3">
-                                <div class="card-header bg-light">
-                                    <strong>Datos del Plan</strong>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Monto Mensual (Gs)</label>
-                                            <input type="number" class="form-control fw-bold text-success" 
-                                                  v-model.number="formSuscripcion.monto_mensual">
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Fecha Vencimiento</label>
-                                            <input type="date" class="form-control" 
-                                                  v-model="formSuscripcion.fecha_vencimiento" required>
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Método Preferido</label>
-                                            <select class="form-select" v-model="formSuscripcion.metodo_pago_preferido">
-                                                <option value="TRANSFERENCIA">Transferencia</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-bold">Tipo Cliente</label>
-                                            <select class="form-select" v-model="formSuscripcion.tipo_cliente">
-                                                <option value="INDIVIDUAL">Individual</option>
-                                                <option value="EMPRESA">Empresa</option>
-                                            </select>
-                                        </div>
-                                        
-                                        <div class="col-12">
-                                            <label class="form-label fw-bold">Notas Internas</label>
-                                            <textarea class="form-control" rows="2" v-model="formSuscripcion.notas_internas"></textarea>
-                                        </div>
-                                    </div>
+                        <div class="bg-light p-3 rounded border mb-3">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold text-secondary mb-1">Usuario ERP (Vinculación)</label>
+                                    <select class="form-select form-select-sm" v-model="formSuscripcion.id_usuario" @change="alSeleccionarUsuarioSub" required>
+                                        <option value="">-- Seleccionar Usuario --</option>
+                                        <option v-for="u in listaUsuariosERP" :value="u.id_usuario">
+                                            {{ u.nombre }} | {{ u.email }}
+                                        </option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Sección: Datos de la Suscripción -->
-                        <div class="card mb-3">
-                            <div class="card-header bg-light">
-                                <strong>Configuración de Suscripción</strong>
+
+                        <h6 class="text-secondary small fw-bold border-bottom pb-1 mb-2">👤 Datos de Contacto</h6>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted mb-0">Email Principal (Bloqueado)</label>
+                                <input type="email" class="form-control form-control-sm bg-white text-muted" 
+                                      v-model="formSuscripcion.email_principal" readonly required>
                             </div>
-                            <div class="card-body">
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold">Fecha Vencimiento *</label>
-                                        <input type="date" class="form-control" 
-                                              v-model="formSuscripcion.fecha_vencimiento" required>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold">Monto Mensual (₲)</label>
-                                        <input type="number" class="form-control" 
-                                              v-model.number="formSuscripcion.monto_mensual">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold">Tipo Cliente</label>
-                                        <select class="form-select" v-model="formSuscripcion.tipo_cliente">
-                                            <option value="INDIVIDUAL">Individual</option>
-                                            <option value="EMPRESA">Empresa</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-12">
-                                        <label class="form-label fw-bold">Notas Internas</label>
-                                        <textarea class="form-control" rows="2" 
-                                                  v-model="formSuscripcion.notas_internas"></textarea>
-                                    </div>
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted mb-0">Nombre Cliente</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formSuscripcion.nombre_cliente">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted mb-0">RUC / CI</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formSuscripcion.ruc_ci">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted mb-0">Teléfono</label>
+                                <input type="text" class="form-control form-control-sm" v-model="formSuscripcion.telefono">
                             </div>
                         </div>
-                        
-                        <!-- Botones -->
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-success btn-lg fw-bold">
-                                <i class="bi bi-save"></i> GUARDAR SUSCRIPCIÓN
+
+                        <h6 class="text-secondary small fw-bold border-bottom pb-1 mb-2">💳 Configuración del Plan</h6>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small text-muted mb-0">Monto (Gs)</label>
+                                <input type="number" class="form-control form-control-sm fw-bold text-success" 
+                                      v-model.number="formSuscripcion.monto_mensual">
+                            </div>
+                            
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small text-muted mb-0">Vencimiento</label>
+                                <input type="date" class="form-control form-control-sm border-warning" 
+                                      v-model="formSuscripcion.fecha_vencimiento" required>
+                            </div>
+
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small text-muted mb-0">Método Pref.</label>
+                                <select class="form-select form-select-sm" v-model="formSuscripcion.metodo_pago_preferido">
+                                    <option value="QR">QR</option>
+                                    <option value="TRANSFERENCIA">Transferencia</option>
+                                </select>
+                            </div>
+
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small text-muted mb-0">Tipo</label>
+                                <select class="form-select form-select-sm" v-model="formSuscripcion.tipo_cliente">
+                                    <option value="INDIVIDUAL">Individual</option>
+                                    <option value="EMPRESA">Empresa</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small text-muted mb-0">Notas Internas</label>
+                            <textarea class="form-control form-control-sm" rows="2" 
+                                      placeholder="Observaciones sobre el cliente..." 
+                                      v-model="formSuscripcion.notas_internas"></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                            <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-sm btn-success fw-bold px-4" :disabled="cargando">
+                                <i class="bi bi-save me-1"></i> Guardar Cambios
                             </button>
                         </div>
                     </form>
@@ -4412,9 +4430,7 @@
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Método de Pago</label>
                             <select class="form-select" v-model="formPagoSub.metodo" required>
-                                <option value="QR">QR</option>
                                 <option value="TRANSFERENCIA">Transferencia Bancaria</option>
-                                <option value="EFECTIVO">Efectivo</option>
                             </select>
                         </div>
 
@@ -4502,12 +4518,22 @@
             },
             suscripcionesAdmin: [],
             pagosPendientesAdmin: [],
-            configSuscripciones: {},
+            configSuscripciones: {
+                DIAS_ALERTA_PREVIA: 5,
+                DIAS_GRACIA: 3,
+                DIAS_BLOQUEO_TOTAL: 5,
+                PERMITIR_MODO_CONSULTA: true,
+                MONTO_SUSCRIPCION_BASE: 330000,
+                METODOS_PAGO_ACTIVOS: ['TRANSFERENCIA'], // Array
+                EMAIL_NOTIFICACIONES: '',
+                GENERAR_QR_AUTOMATICO: true,
+                PERMITIR_RENOVACION_ANTICIPADA: true
+            },
 
             facturasAdmin: [],
 
             formPagoSub: {
-                metodo: 'QR',
+                metodo: 'TRANSFERENCIA',
                 referencia: '',
                 archivo: null
             },
@@ -7299,39 +7325,66 @@
             },
             
             async confirmarPagoAdmin(pago) {
-                const confirmacion = await Swal.fire({
-                    title: '¿Confirmar Pago?',
-                    html: `
+            const confirmacion = await Swal.fire({
+                title: '¿Confirmar Pago?',
+                html: `
+                    <div class="text-start">
                         <p><strong>Cliente:</strong> ${pago.creado_por}</p>
                         <p><strong>Monto:</strong> ₲ ${this.formatearNumero(pago.monto)}</p>
-                    `,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Sí, confirmar',
-                    cancelButtonText: 'Cancelar'
-                });
-                
-                if (confirmacion.isConfirmed) {
-                    try {
-                        await this.ejecutarFuncionBackend('confirmarPago', pago.id_pago);
-                        
-                        Swal.fire({
+                        <small class="text-muted">Esto activará la suscripción y generará factura.</small>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, confirmar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#198754' // Verde
+            });
+            
+            if (confirmacion.isConfirmed) {
+                this.cargando = true; // Mostrar spinner
+                try {
+                    // Recibimos la respuesta completa del backend
+                    const res = await this.ejecutarFuncionBackend('confirmarPago', pago.id_pago);
+                    
+                    this.cargando = false;
+
+                    if (res.success) {
+                        // Lógica para mostrar alerta con el Link al PDF
+                        let configAlerta = {
                             icon: 'success',
-                            title: '¡Confirmado!',
-                            text: 'Pago confirmado y suscripción renovada',
-                            timer: 2000
+                            title: '¡Pago Confirmado!',
+                            text: `Suscripción activada y Factura ${res.numero_factura} generada.`,
+                        };
+
+                        // Si hay URL de PDF, agregamos botón para abrirlo
+                        if (res.pdf_url) {
+                            configAlerta.showCancelButton = true;
+                            configAlerta.confirmButtonText = '<i class="bi bi-file-earmark-pdf"></i> Abrir Factura PDF';
+                            configAlerta.cancelButtonText = 'Cerrar';
+                            configAlerta.confirmButtonColor = '#E06920'; // Naranja Cesta
+                        }
+
+                        // Mostrar la alerta final
+                        Swal.fire(configAlerta).then((result) => {
+                            // Si le da click al botón de "Abrir Factura"
+                            if (result.isConfirmed && res.pdf_url) {
+                                window.open(res.pdf_url, '_blank');
+                            }
                         });
                         
-                        // Recargar datos
+                        // Recargar datos de la tabla
                         await this.cargarResumenSuscripciones();
                         await this.cargarPagosPendientesAdmin();
                         await this.cargarSuscripcionesAdmin();
-                        
-                    } catch (error) {
-                        Swal.fire('Error', 'No se pudo confirmar el pago: ' + error, 'error');
                     }
+
+                } catch (error) {
+                    this.cargando = false;
+                    Swal.fire('Error', 'No se pudo confirmar el pago: ' + error, 'error');
                 }
-            },
+            }
+        },
             
             async rechazarPagoAdmin(pago) {
                 const { value: motivo } = await Swal.fire({
@@ -7357,38 +7410,145 @@
             },
             
             async guardarConfiguracionSub() {
+                this.cargando = true; // Bloqueamos el botón y mostramos spinner
                 try {
-                    // Guardar cada parámetro
-                    for (let param in this.configSuscripciones) {
-                        await this.ejecutarFuncionBackend('actualizarConfiguracion', param, this.configSuscripciones[param]);
-                    }
+                    // En lugar del bucle 'for', enviamos TODO el objeto de una vez
+                    await this.ejecutarFuncionBackend('guardarConfiguracionCompleta', this.configSuscripciones);
                     
                     Swal.fire({
                         icon: 'success',
                         title: '¡Guardado!',
-                        text: 'Configuración actualizada',
-                        timer: 2000
+                        text: 'Configuración actualizada correctamente',
+                        timer: 2000,
+                        showConfirmButton: false
                     });
                     
                 } catch (error) {
+                    console.error(error);
                     Swal.fire('Error', 'No se pudo guardar: ' + error, 'error');
+                } finally {
+                    this.cargando = false; // Desbloqueamos
                 }
             },
             
             verDetalleSuscripcion(sub) {
-                Swal.fire({
-                    title: sub.nombre_cliente,
-                    html: `
-                        <div class="text-start">
-                            <p><strong>Email:</strong> ${sub.email_principal}</p>
-                            <p><strong>Estado:</strong> ${sub.estado_suscripcion}</p>
-                            <p><strong>Inicio:</strong> ${this.formatearFechaCorta(sub.fecha_inicio)}</p>
-                            <p><strong>Vencimiento:</strong> ${this.formatearFechaCorta(sub.fecha_vencimiento)}</p>
-                            <p><strong>Monto:</strong> ₲ ${this.formatearNumero(sub.monto_mensual)}</p>
-                            <p><strong>Ciclo:</strong> ${sub.ciclo_facturacion}</p>
+                // Función auxiliar local para mostrar guión si está vacío
+                const val = (v) => (v && v !== '') ? v : '-';
+
+                // Construimos el HTML completo con toda la data de la hoja
+                const htmlContent = `
+                    <div class="text-start small" style="font-family: sans-serif; font-size: 0.9rem;">
+                        
+                        <h6 class="text-secondary fw-bold border-bottom pb-1 mb-2 bg-light px-2 rounded">
+                            👤 Cliente y Contacto
+                        </h6>
+                        <div class="row g-2 mb-3 px-2">
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">RUC / CI:</span>
+                                <span class="fw-bold text-dark">${val(sub.ruc_ci)}</span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Tipo:</span>
+                                <span class="badge bg-light text-dark border">${val(sub.tipo_cliente)}</span>
+                            </div>
+                            <div class="col-12">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Email Principal:</span>
+                                <span class="fw-bold text-primary">${val(sub.email_principal)}</span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Teléfono:</span>
+                                <span>${val(sub.telefono)}</span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">ID Usuario ERP:</span>
+                                <span class="font-monospace bg-light px-1 rounded">${val(sub.id_usuario)}</span>
+                            </div>
                         </div>
-                    `,
-                    confirmButtonText: 'Cerrar'
+
+                        <h6 class="text-secondary fw-bold border-bottom pb-1 mb-2 bg-light px-2 rounded">
+                            💰 Estado del Plan
+                        </h6>
+                        <div class="row g-2 mb-3 px-2">
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Estado Actual:</span>
+                                <span class="badge ${this.getBadgeEstadoSub(sub.estado_suscripcion)}">
+                                    ${sub.estado_suscripcion}
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Monto Mensual:</span>
+                                <span class="text-success fw-bold">₲ ${this.formatearNumero(sub.monto_mensual)}</span>
+                            </div>
+                            
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Ciclo:</span>
+                                <span>${val(sub.ciclo_facturacion)}</span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Método Preferido:</span>
+                                <span>${val(sub.metodo_pago_preferido)}</span>
+                            </div>
+                        </div>
+
+                        <h6 class="text-secondary fw-bold border-bottom pb-1 mb-2 bg-light px-2 rounded">
+                            📅 Fechas Clave
+                        </h6>
+                        <div class="row g-2 mb-3 px-2">
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Fecha Inicio:</span>
+                                <span>${this.formatearFechaCorta(sub.fecha_inicio)}</span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Próximo Vencimiento:</span>
+                                <span class="text-danger fw-bold fs-6">
+                                    ${this.formatearFechaCorta(sub.fecha_vencimiento)}
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Días Restantes:</span>
+                                <span>${val(sub.dias_hasta_vencimiento)} días</span>
+                            </div>
+                            <div class="col-6">
+                                <span class="text-muted d-block" style="font-size:0.75rem">Alertas Enviadas:</span>
+                                <span>${val(sub.alertas_enviadas)}</span>
+                            </div>
+                        </div>
+
+                        <h6 class="text-secondary fw-bold border-bottom pb-1 mb-2 bg-light px-2 rounded">
+                            📝 Notas
+                        </h6>
+                        <div class="px-2 mb-3">
+                            <div class="p-2 bg-warning bg-opacity-10 border border-warning rounded text-dark fst-italic">
+                                ${sub.notas_internas ? sub.notas_internas : 'Sin notas registradas.'}
+                            </div>
+                        </div>
+
+                        <div class="text-muted border-top pt-2 mt-2 px-2" style="font-size: 0.7rem;">
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong>Creado:</strong><br>
+                                    ${this.formatearFechaCorta(sub.fecha_creacion)}<br>
+                                    ${val(sub.creado_por)}
+                                </div>
+                                <div class="col-6 text-end">
+                                    <strong>ID Sistema (UUID):</strong><br>
+                                    <span class="font-monospace">${sub.id_suscripcion}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+
+                Swal.fire({
+                    title: `<span class="fw-bold">${sub.nombre_cliente}</span>`,
+                    html: htmlContent,
+                    width: '650px', // Hacemos el modal un poco más ancho
+                    showCloseButton: true,
+                    showConfirmButton: true,
+                    confirmButtonText: 'Cerrar',
+                    confirmButtonColor: '#6c757d',
+                    focusConfirm: false
                 });
             },
             
@@ -7437,19 +7597,74 @@
             },
             
             async verFacturaDetalle(factura) {
+                // 1. Preparamos el botón del PDF
+                let htmlBotonPdf = '';
+                
+                if (factura.url_pdf && factura.url_pdf.length > 5) {
+                    htmlBotonPdf = `
+                        <div class="mt-4 pt-3 border-top text-center">
+                            <a href="${factura.url_pdf}" target="_blank" class="btn btn-danger w-100 fw-bold shadow-sm">
+                                <i class="bi bi-file-earmark-pdf-fill me-2"></i> Descargar Factura PDF
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    htmlBotonPdf = `
+                        <div class="mt-4 pt-3 border-top text-center">
+                            <small class="text-muted"><i class="bi bi-exclamation-circle"></i> PDF no generado o no disponible</small>
+                        </div>
+                    `;
+                }
+
+                // 2. Mostramos la alerta con el detalle y el botón
                 Swal.fire({
-                    title: factura.numero_factura,
+                    title: `<span class="fs-5">Factura: ${factura.numero_factura}</span>`,
                     html: `
-                        <div class="text-start">
-                            <p><strong>Cliente:</strong> ${factura.nombre_cliente}</p>
-                            <p><strong>Email:</strong> ${factura.email_cliente}</p>
-                            <p><strong>Fecha:</strong> ${this.formatearFechaCorta(factura.fecha_emision)}</p>
-                            <p><strong>Monto:</strong> ₲ ${this.formatearNumero(factura.monto)}</p>
-                            <p><strong>Método:</strong> ${factura.metodo_pago}</p>
-                            <p><strong>Concepto:</strong> ${factura.concepto}</p>
+                        <div class="text-start" style="font-size: 0.95rem;">
+                            <div class="bg-light p-3 rounded border mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">Cliente:</span>
+                                    <span class="fw-bold text-dark">${factura.nombre_cliente}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted">RUC/CI:</span>
+                                    <span>${factura.ruc_ci || '---'}</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Email:</span>
+                                    <span>${factura.email_cliente}</span>
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Fecha Emisión</small>
+                                    <strong>${this.formatearFechaCorta(factura.fecha_emision)}</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Periodo</small>
+                                    <strong>${this.formatearFechaCorta(factura.periodo_inicio)} - ${this.formatearFechaCorta(factura.periodo_fin)}</strong>
+                                </div>
+                            </div>
+
+                            <div class="row g-2 align-items-end">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Método Pago</small>
+                                    <span class="badge bg-secondary text-white">${factura.metodo_pago}</span>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <small class="text-muted d-block">Monto Total</small>
+                                    <span class="fs-4 fw-bold text-success">₲ ${this.formatearNumero(factura.monto)}</span>
+                                </div>
+                            </div>
+
+                            ${htmlBotonPdf}
                         </div>
                     `,
-                    width: 600
+                    width: 500,
+                    showCloseButton: true,
+                    showConfirmButton: false, // Ocultamos el botón "OK" estándar para dejar solo el de cerrar y el PDF
+                    focusConfirm: false
                 });
             },
             
@@ -7535,7 +7750,7 @@
                     telefono: '',
                     tipo_cliente: 'INDIVIDUAL',
                     fecha_vencimiento: '', 
-                    metodo_pago_preferido: 'QR', // Valor por defecto
+                    metodo_pago_preferido: 'TRANSFERENCIA', // Valor por defecto
                     // Usa la config o tu valor base (330.000)
                     monto_mensual: this.configSuscripciones.MONTO_SUSCRIPCION_BASE || 330000, 
                     notas_internas: ''
@@ -7557,27 +7772,50 @@
                 }
             },
 
-            editarSuscripcion(sub) {
-                // Cargar datos de la suscripción
+            async editarSuscripcion(sub) {
+                // 1. Asegurar que la lista de usuarios del selector esté cargada
+                // Si entras directo a editar sin haber dado click a "Nuevo" antes, esta lista podría estar vacía.
+                if (this.listaUsuariosERP.length === 0) {
+                    try {
+                        this.listaUsuariosERP = await this.ejecutarFuncionBackend('obtenerUsuariosParaSelector');
+                    } catch (e) {
+                        console.error("Error cargando usuarios en edición:", e);
+                    }
+                }
+
+                // 2. Mapeo Manual Completo de datos
                 this.formSuscripcion = {
                     id_suscripcion: sub.id_suscripcion,
-                    id_usuario: sub.id_usuario,
+                    
+                    // Datos vinculados (Importante: debe coincidir con el value del option)
+                    id_usuario: sub.id_usuario || '', 
                     nombre_cliente: sub.nombre_cliente,
-                    ruc_ci: sub.ruc_ci,
                     email_principal: sub.email_principal,
-                    telefono: sub.telefono,
-                    tipo_cliente: sub.tipo_cliente,
-                    fecha_vencimiento: sub.fecha_vencimiento.split('T')[0], // Formato YYYY-MM-DD
+                    
+                    // Datos complementarios
+                    ruc_ci: sub.ruc_ci || '',
+                    telefono: sub.telefono || '',
+                    tipo_cliente: sub.tipo_cliente || 'INDIVIDUAL',
+                    
+                    // Configuración
                     monto_mensual: sub.monto_mensual,
+                    metodo_pago_preferido: sub.metodo_pago_preferido || 'QR',
                     notas_internas: sub.notas_internas || ''
                 };
-                
-                // Mostrar modal
+
+                // 3. TRUCO CLAVE PARA LA FECHA:
+                // El input date necesita formato "YYYY-MM-DD". 
+                // El backend manda ISO "2026-02-13T07:14:46...". Debemos cortar la hora.
+                if (sub.fecha_vencimiento) {
+                    // Tomamos solo la parte de la fecha (primeros 10 caracteres)
+                    this.formSuscripcion.fecha_vencimiento = sub.fecha_vencimiento.substring(0, 10);
+                }
+
+                // 4. Mostrar el modal
                 if (!this.modalGestionSuscripcion) {
                     const el = document.getElementById('modalGestionSuscripcion');
                     this.modalGestionSuscripcion = new bootstrap.Modal(el);
                 }
-                
                 this.modalGestionSuscripcion.show();
             },
 
@@ -7628,7 +7866,7 @@
             },
 
             abrirModalPagoSuscripcion() {
-                this.formPagoSub = { metodo: 'QR', referencia: '', archivo: null };
+                this.formPagoSub = { metodo: 'TRANSFERENCIA', referencia: '', archivo: null };
                 // Limpiamos el input file manualmente
                 const fileInput = document.getElementById('fileComprobanteSub');
                 if(fileInput) fileInput.value = '';
