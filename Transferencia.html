@@ -10,6 +10,12 @@
     .col-6 { width: 48%; }
     .col-12 { width: 100%; }
     
+    /* ---------------------------------------------------
+       ESTILOS PARA EL LOGO (Flexbox)
+    ------------------------------------------------------ */
+    .header-content { display: flex; align-items: center; gap: 15px; }
+    .company-logo { max-width: 110px; max-height: 70px; object-fit: contain; }
+    
     .company-title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
     .doc-title { font-size: 16px; font-weight: bold; text-align: center; background: #eee; padding: 5px; border: 1px solid #000; margin-bottom: 10px; }
     
@@ -22,23 +28,43 @@
     
     .text-right { text-align: right; }
     .text-center { text-align: center; }
+    .text-left { text-align: left; }
     .fw-bold { font-weight: bold; }
     
-    /* Totales */
-    .total-section { margin-top: 5px; }
-    .grand-total { background-color: #ddd; font-weight: bold; padding: 5px; border: 1px solid #000; }
-    
-    /* Liquidación IVA */
-    .liq-iva { margin-top: 10px; font-size: 10px; }
+    /* Observación */
+    .obs-box { margin-top: 15px; padding: 10px; border: 1px dashed #999; background-color: #f9f9f9; font-size: 10px; }
+
+    /* ---------------------------------------------------
+       MEJORA EN FIRMAS (Lado a Lado)
+    ------------------------------------------------------ */
+    .signatures { display: flex; justify-content: space-between; margin-top: 50px; }
+    .sig-box { 
+        width: 40%; 
+        text-align: center; 
+        border-top: 1px solid #000; /* Línea de firma hecha con CSS */
+        padding-top: 5px;
+        font-size: 10px;
+    }
+
+    .footer { margin-top: 30px; font-size: 9px; color: #777; text-align: center; border-top: 1px solid #eee; padding-top: 5px; }
+
+    .rubro { margin-top: 10px; text-align: center; font-size: 10px;}
   </style>
 </head>
 <body>
 
   <div class="row">
     <div class="col-6 header-box">
-      <div class="company-title">Multiservice Luján</div>
-      <div style="font-size: 12px; margin-bottom: 2px;">Movimiento Interno de Stock</div>
-      <div style="font-size: 10px; color: #777;">Control Logístico</div>
+      <div class="header-content">
+        <img src="<?!= logoEmpresa ?>" alt="Logo" class="company-logo">
+        
+        <div>
+            <div class="company-title">Multiservice Luján</div>
+            <div class="rubro">Fabricacíón y venta de indumentarias quirúrgicas</div>            
+            <div style="font-size: 12px; margin-top: 2px;">Movimiento Interno de Stock</div>
+            <div style="font-size: 10px; color: #777;">Control Logístico</div>
+        </div>
+      </div>
     </div>
     
     <div class="col-6 col-right header-box">
@@ -55,21 +81,21 @@
   <div class="header-box" style="height: auto; min-height: 60px; margin-bottom: 20px;">
     <div class="row" style="margin-bottom: 0;">
       
-      <div style="width: 45%; float: left;">
+      <div style="width: 45%;">
         <div class="label">ORIGEN (SALIDA)</div>
-        <div style="font-size: 12px; font-weight: bold; margin-top: 2px;"><?= datos.origen ?></div>
+        <div style="font-size: 12px; font-weight: bold; margin-top: 2px; color: #d32f2f;"><?= datos.origen ?></div>
         <div style="margin-top: 5px; font-size: 10px;">
             <span class="label">Responsable:</span> <?= datos.responsable ?>
         </div>
       </div>
 
-      <div style="width: 10%; float: left; text-align: center;">
+      <div style="width: 10%; text-align: center; padding-top: 10px;">
          <span style="font-size: 24px; color: #aaa;">&#10132;</span>
       </div>
       
-      <div style="width: 45%; float: right; text-align: right;">
+      <div style="width: 45%; text-align: right;">
         <div class="label">DESTINO (ENTRADA)</div>
-        <div style="font-size: 12px; font-weight: bold; margin-top: 2px;"><?= datos.destino ?></div>
+        <div style="font-size: 12px; font-weight: bold; margin-top: 2px; color: #2e7d32;"><?= datos.destino ?></div>
       </div>
 
     </div>
@@ -104,21 +130,19 @@
     <strong>OBSERVACIÓN:</strong> <?= datos.observacion ?>
   </div>
   <? } ?>
-  <br><br>
+  
   <div class="signatures">
-    ______________________________________________________
     <div class="sig-box">
       Firma Responsable Salida<br>
-      <span style="color:#ddd;">(Origen)</span>
+      <span style="color:#999;">(Origen)</span>
     </div>
-    <br><br>
-    ______________________________________________________
-    <div class="sig-box sig-box-right">
+
+    <div class="sig-box">
       Firma Responsable Entrada<br>
-      <span style="color:#ddd;">(Destino)</span>
+      <span style="color:#999;">(Destino)</span>
     </div>
   </div>
-  <br><br>
+  
   <div class="footer">
     Documento interno generado por Sistema CESTA ERP - Control de Inventario
   </div>

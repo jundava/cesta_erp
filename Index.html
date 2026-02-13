@@ -232,7 +232,7 @@
                         :class="getClaseBoton()"
                         @click="abrirPagoSuscripcion">
                     <i class="bi bi-credit-card me-1"></i>
-                    Pagar Ahora
+                    Ver saldo actual
                 </button>
                 
             </div>
@@ -3386,16 +3386,21 @@
                                           <option value="BLOQUEADA">Bloqueadas</option>
                                       </select>
                                   </div>
-                                  <div class="col-md-6">
+                                  <div class="col-md-4">
                                       <input type="text" class="form-control" 
                                             v-model="busquedaClienteSub"
                                             placeholder="Buscar por nombre o email">
                                   </div>
                                   <div class="col-md-2">
                                       <button class="btn btn-primary w-100" @click="cargarSuscripcionesAdmin">
-                                          <i class="bi bi-arrow-clockwise"></i>
+                                          <i class="bi bi-arrow-clockwise"></i>Actualizar
                                       </button>
                                   </div>
+                                  <div class="col-md-2">
+                                    <button class="btn btn-success w-100" @click="abrirModalNuevaSuscripcion">
+                                        <i class="bi bi-person-plus"></i> Nueva
+                                    </button>
+                                </div>
                               </div>
                               
                               <!-- Tabla -->
@@ -3423,9 +3428,13 @@
                                               <td>{{ formatearFechaCorta(sub.fecha_vencimiento) }}</td>
                                               <td>₲ {{ formatearNumero(sub.monto_mensual) }}</td>
                                               <td>
-                                                  <button class="btn btn-sm btn-outline-primary" 
+                                                  <button class="btn btn-sm btn-outline-primary me-1" 
                                                           @click="verDetalleSuscripcion(sub)">
                                                       <i class="bi bi-eye"></i>
+                                                  </button>
+                                                  <button class="btn btn-sm btn-outline-warning" 
+                                                          @click="editarSuscripcion(sub)">
+                                                      <i class="bi bi-pencil"></i>
                                                   </button>
                                               </td>
                                           </tr>
@@ -3445,6 +3454,14 @@
                   <div v-show="tabSuscripciones === 'pagos'">
                       <div class="card">
                           <div class="card-body">
+
+                            <div class="alert alert-info d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-info-circle me-2"></i>Los comprobantes se guardan automáticamente en Drive</span>
+                                <button class="btn btn-sm btn-primary" @click="abrirCarpetaComprobantes">
+                                    <i class="bi bi-folder2-open"></i> Ver Carpeta Drive
+                                </button>
+                            </div>
+
                               <div class="table-responsive">
                                   <table class="table table-hover">
                                       <thead>
@@ -4205,6 +4222,97 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL: GESTIÓN DE SUSCRIPCIONES -->
+    <div class="modal fade" id="modalGestionSuscripcion" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-building"></i> 
+                        {{ formSuscripcion.id_suscripcion ? 'Editar' : 'Nueva' }} Suscripción
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="guardarSuscripcionAdmin">
+                        
+                        <!-- Sección: Datos del Cliente -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <strong>Datos del Cliente</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Nombre Completo *</label>
+                                        <input type="text" class="form-control" 
+                                              v-model="formSuscripcion.nombre_cliente" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">RUC / CI</label>
+                                        <input type="text" class="form-control" 
+                                              v-model="formSuscripcion.ruc_ci">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Email Principal *</label>
+                                        <input type="email" class="form-control" 
+                                              v-model="formSuscripcion.email_principal" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Teléfono</label>
+                                        <input type="text" class="form-control" 
+                                              v-model="formSuscripcion.telefono">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sección: Datos de la Suscripción -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <strong>Configuración de Suscripción</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">Fecha Vencimiento *</label>
+                                        <input type="date" class="form-control" 
+                                              v-model="formSuscripcion.fecha_vencimiento" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">Monto Mensual (₲)</label>
+                                        <input type="number" class="form-control" 
+                                              v-model.number="formSuscripcion.monto_mensual">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">Tipo Cliente</label>
+                                        <select class="form-select" v-model="formSuscripcion.tipo_cliente">
+                                            <option value="INDIVIDUAL">Individual</option>
+                                            <option value="EMPRESA">Empresa</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold">Notas Internas</label>
+                                        <textarea class="form-control" rows="2" 
+                                                  v-model="formSuscripcion.notas_internas"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Botones -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg fw-bold">
+                                <i class="bi bi-save"></i> GUARDAR SUSCRIPCIÓN
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -4266,6 +4374,20 @@
             configSuscripciones: {},
 
             facturasAdmin: [],
+
+            formSuscripcion: {
+                id_suscripcion: null,
+                id_usuario: '',
+                nombre_cliente: '',
+                ruc_ci: '',
+                email_principal: '',
+                telefono: '',
+                tipo_cliente: 'INDIVIDUAL',
+                fecha_vencimiento: '',
+                monto_mensual: 0,
+                notas_internas: ''
+            },
+            modalGestionSuscripcion: null,
 
             html5QrcodeScanner: null, 
 
@@ -7248,6 +7370,100 @@
                     'CANCELADA': 'bg-secondary'
                 };
                 return badges[estado] || 'bg-secondary';
+            },
+
+            abrirModalNuevaSuscripcion() {
+                // Resetear formulario
+                this.formSuscripcion = {
+                    id_suscripcion: null,
+                    id_usuario: '',
+                    nombre_cliente: '',
+                    ruc_ci: '',
+                    email_principal: '',
+                    telefono: '',
+                    tipo_cliente: 'INDIVIDUAL',
+                    fecha_vencimiento: '',
+                    monto_mensual: this.configSuscripciones.MONTO_SUSCRIPCION_BASE || 150000,
+                    notas_internas: ''
+                };
+                
+                // Inicializar modal si no existe
+                if (!this.modalGestionSuscripcion) {
+                    const el = document.getElementById('modalGestionSuscripcion');
+                    this.modalGestionSuscripcion = new bootstrap.Modal(el);
+                }
+                
+                this.modalGestionSuscripcion.show();
+            },
+
+            editarSuscripcion(sub) {
+                // Cargar datos de la suscripción
+                this.formSuscripcion = {
+                    id_suscripcion: sub.id_suscripcion,
+                    id_usuario: sub.id_usuario,
+                    nombre_cliente: sub.nombre_cliente,
+                    ruc_ci: sub.ruc_ci,
+                    email_principal: sub.email_principal,
+                    telefono: sub.telefono,
+                    tipo_cliente: sub.tipo_cliente,
+                    fecha_vencimiento: sub.fecha_vencimiento.split('T')[0], // Formato YYYY-MM-DD
+                    monto_mensual: sub.monto_mensual,
+                    notas_internas: sub.notas_internas || ''
+                };
+                
+                // Mostrar modal
+                if (!this.modalGestionSuscripcion) {
+                    const el = document.getElementById('modalGestionSuscripcion');
+                    this.modalGestionSuscripcion = new bootstrap.Modal(el);
+                }
+                
+                this.modalGestionSuscripcion.show();
+            },
+
+            async guardarSuscripcionAdmin() {
+                try {
+                    this.cargando = true;
+                    
+                    // Determinar si es crear o actualizar
+                    const funcion = this.formSuscripcion.id_suscripcion 
+                        ? 'actualizarSuscripcion' 
+                        : 'crearSuscripcion';
+                    
+                    const resultado = await this.ejecutarFuncionBackend(funcion, this.formSuscripcion);
+                    
+                    this.cargando = false;
+                    
+                    if (resultado.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Guardado!',
+                            text: this.formSuscripcion.id_suscripcion 
+                                ? 'Suscripción actualizada correctamente' 
+                                : 'Suscripción creada correctamente',
+                            timer: 2000
+                        });
+                        
+                        // Cerrar modal
+                        this.modalGestionSuscripcion.hide();
+                        
+                        // Recargar datos
+                        await this.cargarSuscripcionesAdmin();
+                        await this.cargarResumenSuscripciones();
+                    }
+                    
+                } catch (error) {
+                    this.cargando = false;
+                    Swal.fire('Error', 'No se pudo guardar: ' + error, 'error');
+                }
+            },
+
+            async abrirCarpetaComprobantes() {
+                try {
+                    const url = await this.ejecutarFuncionBackend('obtenerUrlCarpetaComprobantes');
+                    window.open(url, '_blank');
+                } catch (error) {
+                    Swal.fire('Error', 'No se pudo abrir la carpeta: ' + error, 'error');
+                }
             }
 
         }

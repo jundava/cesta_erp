@@ -10,9 +10,7 @@
       .col-6 { width: 48%; }
       .col-12 { width: 100%; }
       
-      /* ---------------------------------------------------
-         NUEVOS ESTILOS PARA EL LOGO Y LA CABECERA IZQUIERDA
-      ------------------------------------------------------ */
+      /* Estilos Logo y Cabecera */
       .header-content { display: flex; align-items: center; gap: 15px; }
       .company-logo { max-width: 110px; max-height: 70px; object-fit: contain; }
       
@@ -20,6 +18,7 @@
       .doc-title { font-size: 16px; font-weight: bold; text-align: center; background: #eee; padding: 5px; border: 1px solid #000; margin-bottom: 10px; }
       
       .label { font-weight: bold; margin-right: 5px; }
+      .rubro { margin-top: 5px; font-size: 10px; color: #555; }
       
       /* Tabla */
       table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -30,13 +29,15 @@
       .text-center { text-align: center; }
       .fw-bold { font-weight: bold; }
       
-      /* Totales */
+      /* Totales y Footer */
       .total-section { margin-top: 5px; }
       .grand-total { background-color: #ddd; font-weight: bold; padding: 5px; border: 1px solid #000; }
+      .liq-iva { margin-top: 10px; font-size: 10px; color: #555; }
       
-      /* Liquidación IVA */
-      .liq-iva { margin-top: 10px; font-size: 12px; }
-      .rubro { margin-top: 10px; text-align: center; font-size: 10px;}
+      /* Advertencia legal y Firma */
+      .footer-warning { margin-top: 25px; font-size: 10px; font-style: italic; border-top: 1px solid #ccc; padding-top: 5px; }
+      .signature-area { margin-top: 40px; display: flex; justify-content: flex-end; }
+      .client-sign { border-top: 1px solid #000; width: 200px; text-align: center; font-size: 10px; padding-top: 5px; }
     </style>
 </head>
 <body>
@@ -44,19 +45,20 @@
   <div class="row">
     <div class="col-6 header-box">
       <div class="header-content">
-
         <img src="<?!= logoEmpresa ?>" alt="Logo Multiservice Luján" class="company-logo">
         
         <div>
           <div class="company-title">Multiservice Luján</div>
-          <div class="rubro">Fabricacíón y venta de indumentarias quirúrgicas</div>
+          <div class="rubro">Fabricación y venta de indumentarias quirúrgicas</div>
         </div>
       </div>
     </div>
     <div class="col-6 header-box">
-      <div class="label">RUC: 8000000-1</div> <div class="doc-title">FACTURA DE VENTA</div>
-      <div class="text-center">Nro: <?= datos.nro_factura ?></div>
-      <div class="text-center">Ref: <?= datos.condicion ?></div>
+      <div class="label">RUC: 8000000-1</div> 
+      <div class="doc-title">PRESUPUESTO</div>
+      
+      <div class="text-center">Nro: <?= datos.numero || datos.nro_presupuesto ?></div>
+      <div class="text-center">Validez: <?= datos.validez || '15 días' ?></div>
     </div>
   </div>
 
@@ -64,7 +66,7 @@
     <div class="row">
       <div style="width: 60%;">
         <span class="label">Fecha de Emisión:</span> <?= datos.fecha ?><br>
-        <span class="label">Cliente / Razón Social:</span> <?= datos.cliente_nombre ?><br>
+        <span class="label">Cliente:</span> <?= datos.cliente_nombre ?><br>
         <span class="label">RUC / CI:</span> <?= datos.cliente_doc ?><br>
         <span class="label">Dirección:</span> <?= datos.cliente_dir || '---' ?>
       </div>
@@ -75,8 +77,9 @@
     <thead>
       <tr>
         <th style="width: 8%;">CANT.</th>
-        <th style="width: 42%;">DESCRIPCIÓN / PRODUCTO</th>
-        <th style="width: 15%;">PRECIO UNIT.</th> <th style="width: 11%;">EXENTA</th>
+        <th style="width: 42%;">DESCRIPCIÓN</th>
+        <th style="width: 15%;">PRECIO UNIT.</th> 
+        <th style="width: 11%;">EXENTA</th>
         <th style="width: 11%;">5%</th>
         <th style="width: 11%;">10%</th>
       </tr>
@@ -89,14 +92,12 @@
          
          for(var i = 0; i < items.length; i++) { 
            var it = items[i];
-           // Convertir a número seguro
            var cant = Number(it.cantidad);
-           var precio = Number(it.precio); // Usamos PRECIO
+           var precio = Number(it.precio);
            var tasa = Number(it.tasa_iva || 10);
            
            var subtotalLinea = cant * precio;
            
-           // Asignar a columna correspondiente
            var colExenta = 0, col5 = 0, col10 = 0;
            if(tasa === 0) { colExenta = subtotalLinea; totalExenta += subtotalLinea; }
            else if(tasa === 5) { col5 = subtotalLinea; total5 += subtotalLinea; }
@@ -128,15 +129,12 @@
         <td class="text-right"><?= total10.toLocaleString('es-PY') ?></td>
       </tr>
       <tr>
-        <td colspan="5" class="text-right fw-bold" style="padding: 10px;">TOTAL A PAGAR Gs.:</td>
+        <td colspan="5" class="text-right fw-bold" style="padding: 10px;">TOTAL ESTIMADO Gs.:</td>
         <td class="text-right fw-bold" style="background: #ddd; font-size: 12px;"><?= totalGeneral.toLocaleString('es-PY') ?></td>
       </tr>
     </tbody>
   </table>
 
   <div class="liq-iva">
-    Liquidación del IVA: &nbsp; (5%) <?= Math.round(liq5).toLocaleString('es-PY') ?> &nbsp;&nbsp;&nbsp; (10%) <?= Math.round(liq10).toLocaleString('es-PY') ?> &nbsp;&nbsp;&nbsp; Total IVA: <?= Math.round(totalLiq).toLocaleString('es-PY') ?>
+    (Informativo) Liquidación del IVA Incluido: (5%) <?= Math.round(liq5).toLocaleString('es-PY') ?> &nbsp; (10%) <?= Math.round(liq10).toLocaleString('es-PY') ?> &nbsp; Total: <?= Math.round(totalLiq).toLocaleString('es-PY') ?>
   </div>
-
-</body>
-</html>

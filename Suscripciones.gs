@@ -2,8 +2,6 @@
 // 📌 MÓDULO SUSCRIPCIONES - SISTEMA DE CONTROL DE ACCESO
 // ============================================================
 
-const SS_ID_SUSCRIPCIONES = '1Qp7Jd_OxOZtGHBMSdecWfD5scuCzf2M0ErftTMk3WV0';
-
 // ============================================================
 // 🔧 MÓDULO 1: CONFIGURACIÓN
 // ============================================================
@@ -1710,3 +1708,50 @@ function obtenerFacturaPorId(idFactura) {
   
   return null;
 }
+
+/**
+ * Obtiene o crea la carpeta de comprobantes en Drive
+ */
+function obtenerCarpetaComprobantes() {
+  const nombreCarpeta = 'Comprobantes_Suscripciones';
+  
+  // Buscar si ya existe
+  const carpetas = DriveApp.getFoldersByName(nombreCarpeta);
+  
+  if (carpetas.hasNext()) {
+    return carpetas.next();
+  } else {
+    // Si no existe, crear
+    return DriveApp.createFolder(nombreCarpeta);
+  }
+}
+
+/**
+ * Lista todos los comprobantes subidos
+ */
+function listarComprobantesSubidos() {
+  const carpeta = obtenerCarpetaComprobantes();
+  const archivos = carpeta.getFiles();
+  const lista = [];
+  
+  while (archivos.hasNext()) {
+    const archivo = archivos.next();
+    lista.push({
+      nombre: archivo.getName(),
+      url: archivo.getUrl(),
+      fecha: archivo.getDateCreated(),
+      tamano: archivo.getSize()
+    });
+  }
+  
+  return lista;
+}
+
+/**
+ * Devuelve la URL de la carpeta de comprobantes
+ */
+function obtenerUrlCarpetaComprobantes() {
+  const carpeta = obtenerCarpetaComprobantes();
+  return carpeta.getUrl();
+}
+

@@ -1,15 +1,105 @@
 const SS_ID = '1xZmaQf0zLWBqLw4ZKSgHnxnmEHBy12cmTIicY6te9gE';
+const SS_ID_SUSCRIPCIONES = '1Qp7Jd_OxOZtGHBMSdecWfD5scuCzf2M0ErftTMk3WV0';
 
 function doGet(e) {
   
-  const userEmail = Session.getActiveUser().getEmail();
+  // 1. Obtener email desde Google Session
+  const emailGoogle = Session.getActiveUser().getEmail();
   
-  // 1. Verificar estado de suscripción
+  // 2. Buscar usuario en la hoja USUARIOS (columna C) - OBLIGATORIO
+  const usuarioEncontrado = buscarUsuarioPorEmail(emailGoogle);
+  
+  // ⚠️ VALIDACIÓN CRÍTICA: Si NO está registrado en USUARIOS, DENEGAR ACCESO
+  if (!usuarioEncontrado) {
+    return HtmlService.createHtmlOutput(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acceso Denegado - Cesta</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+        <style>
+          body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .denied-card {
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            animation: slideDown 0.5s ease-out;
+          }
+          @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+          .denied-icon {
+            font-size: 5rem;
+            color: #dc3545;
+            animation: shake 0.5s ease-in-out;
+          }
+          @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="card denied-card">
+            <div class="card-body text-center p-5">
+              <i class="bi bi-shield-lock denied-icon"></i>
+              <h1 class="mt-4 mb-3">Acceso Denegado</h1>
+              <p class="lead mb-4">Tu cuenta <strong>${emailGoogle}</strong> no está autorizada para acceder a este sistema.</p>
+              
+              <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Usuario no registrado</strong>
+              </div>
+              
+              <hr class="my-4">
+              
+              <h5 class="mb-3">¿Necesitas acceso?</h5>
+              <p class="text-muted">Contacta al administrador del sistema para solicitar registro.</p>
+              
+              <div class="d-grid gap-2 mt-4">
+                <a href="mailto:admin@tuempresa.com?subject=Solicitud de Acceso - Cesta ERP&body=Hola, mi correo ${emailGoogle} necesita acceso al sistema." class="btn btn-primary">
+                  <i class="bi bi-envelope me-2"></i>Contactar Administrador
+                </a>
+                <button onclick="window.close()" class="btn btn-outline-secondary">
+                  <i class="bi bi-x-circle me-2"></i>Cerrar
+                </button>
+              </div>
+              
+              <p class="text-muted mt-4 mb-0" style="font-size: 0.85rem;">
+                <i class="bi bi-info-circle me-1"></i>
+                Código de error: USER_NOT_REGISTERED
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `)
+    .setTitle('Acceso Denegado - Cesta')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  
+  // 3. Usuario válido - usar su email registrado
+  const userEmail = usuarioEncontrado.email;
+  
+  // 4. Verificar estado de suscripción
   const estadoSuscripcion = verificarEstadoSuscripcion(userEmail);
   
-  // 2. Si está bloqueado, mostrar pantalla de pago (PRIORIDAD 1)
+  // 5. Si está bloqueado, mostrar pantalla de pago (PRIORIDAD 1)
   if (estadoSuscripcion.bloqueado) {
     const template = HtmlService.createTemplateFromFile('PagoBloqueado');
+    template.userEmail = userEmail;
     template.estadoSuscripcion = estadoSuscripcion;
     
     return template.evaluate()
@@ -19,7 +109,7 @@ function doGet(e) {
   }
 
   // ==========================================================================
-  // 3. NUEVO: Si piden imprimir un ticket, devolvemos SOLO el HTML del ticket
+  // 6. NUEVO: Si piden imprimir un ticket, devolvemos SOLO el HTML del ticket
   // ==========================================================================
   if (e.parameter && e.parameter.imprimirTicket) {
     const idVenta = e.parameter.imprimirTicket;
@@ -40,10 +130,9 @@ function doGet(e) {
   }
   // ==========================================================================
   
-  // 4. Si no está bloqueado y NO piden un ticket, cargar app normal
+  // 7. Si no está bloqueado y NO piden un ticket, cargar app normal
   const template = HtmlService.createTemplateFromFile('Index');
   template.estadoSuscripcion = JSON.stringify(estadoSuscripcion);
-
   template.urlApp = ScriptApp.getService().getUrl();
   
   return template.evaluate()
@@ -2351,6 +2440,7 @@ function crearPDFTransferencia(datos, items) {
   const template = HtmlService.createTemplateFromFile('Transferencia');
   template.datos = datos;
   template.items = items;
+  templateTicket.logoEmpresa = getLogoBase64();
   
   const blob = Utilities.newBlob(template.evaluate().getContent(), "text/html", "TRF_" + datos.id_corto + ".html");
   const pdf = blob.getAs("application/pdf").setName("Transferencia_" + datos.fecha.replace(/\//g,'-') + "_" + datos.id_corto + ".pdf");
@@ -3942,3 +4032,45 @@ function obtenerHistorialCajas() {
   }
 }
 
+/**
+ * Busca un usuario por email en la hoja USUARIOS
+ * @param {String} email - Email del usuario
+ * @return {Object|null} Datos del usuario o null si no existe
+ */
+function buscarUsuarioPorEmail(email) {
+  try {
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const sheet = ss.getSheetByName('USUARIOS');
+    
+    if (!sheet) {
+      Logger.log('❌ Hoja USUARIOS no encontrada');
+      return null;
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    
+    // Buscar en la columna C (índice 2)
+    for (let i = 1; i < data.length; i++) { // Empezar en 1 para saltar encabezados
+      const emailRegistrado = String(data[i][2]).trim().toLowerCase();
+      const emailBuscado = String(email).trim().toLowerCase();
+      
+      if (emailRegistrado === emailBuscado) { // Columna C = email
+        Logger.log('✅ Usuario encontrado: ' + email);
+        return {
+          id_usuario: data[i][0],     // Columna A
+          nombre: data[i][1],          // Columna B
+          email: data[i][2],           // Columna C
+          rol: data[i][3] || 'USER'    // Columna D (si existe)
+        };
+      }
+    }
+    
+    // Si no se encuentra el usuario en USUARIOS
+    Logger.log('❌ Usuario NO registrado en USUARIOS: ' + email);
+    return null;
+    
+  } catch (error) {
+    Logger.log('❌ Error buscando usuario: ' + error.toString());
+    return null;
+  }
+}
