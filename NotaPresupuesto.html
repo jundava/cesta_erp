@@ -46,7 +46,9 @@
   <div class="row">
     <div class="col-6 header-box">
       <div class="header-content">
-        <img src="<?!= logoEmpresa ?>" alt="Logo Multiservice Luján" class="company-logo">
+        <? if(logoEmpresa) { ?>
+          <img src="<?!= logoEmpresa ?>" alt="Logo Empresa" class="company-logo">
+        <? } ?>
         
         <div>
           <div class="company-title">Multiservice Luján</div>
@@ -82,65 +84,65 @@
   <table>
     <thead>
       <tr>
-        <th style="width: 8%;">CANT.</th>
-        <th style="width: 42%;">DESCRIPCIÓN</th>
-        <th style="width: 15%;">PRECIO UNIT.</th> 
-        <th style="width: 11%;">EXENTA</th>
-        <th style="width: 11%;">5%</th>
-        <th style="width: 11%;">10%</th>
+        <th style="width: 10%;">CANT.</th>
+        <th style="width: 60%;">DESCRIPCIÓN</th>
+        <th style="width: 15%;">PRECIO</th>
+        <th style="width: 15%;">VALOR TOTAL</th>
       </tr>
     </thead>
     <tbody>
       <? 
-         var totalExenta = 0;
-         var total5 = 0;
-         var total10 = 0;
+         var totalValorizado = 0;
+         var itemsArray = datos.items || []; // ✅ Protección contra undefined
          
-         for(var i = 0; i < items.length; i++) { 
-           var it = items[i];
-           var cant = Number(it.cantidad);
-           var precio = Number(it.precio);
-           var tasa = Number(it.tasa_iva || 10);
-           
-           var subtotalLinea = cant * precio;
-           
-           var colExenta = 0, col5 = 0, col10 = 0;
-           if(tasa === 0) { colExenta = subtotalLinea; totalExenta += subtotalLinea; }
-           else if(tasa === 5) { col5 = subtotalLinea; total5 += subtotalLinea; }
-           else { col10 = subtotalLinea; total10 += subtotalLinea; }
+         // Recorrer items
+         for(var i = 0; i < itemsArray.length; i++) { 
+           var it = itemsArray[i];
+           var cant = Number(it.cantidad || 0);
+           var precio = Number(it.precio || 0);
+           var subtotal = cant * precio;
+           totalValorizado += subtotal;
       ?>
       <tr>
-        <td class="text-center"><?= cant ?></td>
-        <td><?= it.nombre_prod || it.nombre || 'Producto' ?></td>
+        <td class="text-center fw-bold"><?= cant ?></td>
+        <td style="padding-left: 8px;"><?= it.nombre_prod || 'Producto' ?></td>
         <td class="text-right"><?= precio.toLocaleString('es-PY') ?></td>
-        <td class="text-right"><?= colExenta > 0 ? colExenta.toLocaleString('es-PY') : '' ?></td>
-        <td class="text-right"><?= col5 > 0 ? col5.toLocaleString('es-PY') : '' ?></td>
-        <td class="text-right"><?= col10 > 0 ? col10.toLocaleString('es-PY') : '' ?></td>
+        <td class="text-right"><?= subtotal.toLocaleString('es-PY') ?></td>
       </tr>
-      <? } 
-         var totalGeneral = totalExenta + total5 + total10;
-         var liq5 = total5 / 21;
-         var liq10 = total10 / 11;
-         var totalLiq = liq5 + liq10;
-      ?>
+      <? } ?>
       
-      <? for(var k=0; k < (8 - items.length); k++) { ?>
-        <tr><td style="color:#fff">.</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <? 
+         // Rellenar filas vacías (máximo 12 filas)
+         var filasVacias = Math.max(0, 12 - itemsArray.length);
+         for(var k = 0; k < filasVacias; k++) { 
+      ?>
+        <tr><td style="color:white">.</td><td></td><td></td><td></td></tr>
       <? } ?>
 
       <tr>
-        <td colspan="3" class="text-right fw-bold">SUBTOTALES:</td>
-        <td class="text-right"><?= totalExenta.toLocaleString('es-PY') ?></td>
-        <td class="text-right"><?= total5.toLocaleString('es-PY') ?></td>
-        <td class="text-right"><?= total10.toLocaleString('es-PY') ?></td>
-      </tr>
-      <tr>
-        <td colspan="5" class="text-right fw-bold" style="padding: 10px;">TOTAL ESTIMADO Gs.:</td>
-        <td class="text-right fw-bold" style="background: #ddd; font-size: 12px;"><?= totalGeneral.toLocaleString('es-PY') ?></td>
+        <td colspan="3" class="text-right fw-bold" style="padding: 8px; background-color: #eee;">TOTAL VALORIZADO Gs.:</td>
+        <td class="text-right fw-bold" style="background-color: #ddd; font-size: 12px;"><?= totalValorizado.toLocaleString('es-PY') ?></td>
       </tr>
     </tbody>
   </table>
-
+  
   <div class="liq-iva">
-    (Informativo) Liquidación del IVA Incluido: (5%) <?= Math.round(liq5).toLocaleString('es-PY') ?> &nbsp; (10%) <?= Math.round(liq10).toLocaleString('es-PY') ?> &nbsp; Total: <?= Math.round(totalLiq).toLocaleString('es-PY') ?>
+    (Informativo) Liquidación del IVA Incluido: 
+    (5%) <?= Math.round(liq5).toLocaleString('es-PY') ?> Gs. &nbsp; 
+    (10%) <?= Math.round(liq10).toLocaleString('es-PY') ?> Gs. &nbsp; 
+    Total IVA: <?= Math.round(totalLiq).toLocaleString('es-PY') ?> Gs.
   </div>
+
+  <div class="footer-warning">
+    Este presupuesto tiene una validez de <?= datos.validez || '30 días' ?> desde la fecha de emisión.
+    Los precios están sujetos a cambios sin previo aviso.
+  </div>
+
+  <div class="signature-area">
+    <div class="client-sign">
+      Firma y Aclaración del Cliente
+    </div>
+  </div>
+
+</body>
+</html>

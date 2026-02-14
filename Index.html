@@ -364,6 +364,11 @@
                             Operaciones
                         </small>
 
+                        <a v-if="tengoPermiso('presupuestos')" class="nav-link-desktop"
+                            :class="{active: vistaActual === 'presupuestos'}" @click="cambiarVista('presupuestos')">
+                            <i class="bi bi-receipt me-2"></i> Presupuestos
+                        </a>
+
                         <a v-if="tengoPermiso('remisiones')" class="nav-link-desktop"
                             :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones')">
                             <i class="bi bi-truck-flatbed me-2"></i> Remisiones
@@ -555,7 +560,7 @@
                                       <div class="col-md-2">
                                           <label class="form-label fw-bold">Nº Factura</label>
                                           <input type="text" class="form-control" v-model="formVenta.nro_factura"
-                                              placeholder="Automático">
+                                              placeholder="Automático" readonly>
                                       </div>
                                       <div class="col-md-2">
                                           <label class="form-label fw-bold">Condición</label>
@@ -1595,6 +1600,206 @@
                         </div>
                     </div>
 
+                    <div v-if="vistaActual === 'presupuestos'">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h3 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text text-brand"></i> Presupuestos</h3>
+                            <div class="btn-group shadow-sm">
+                                <button class="btn"
+                                    :class="subVistaPresupuesto === 'nuevo' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                    @click="abrirNuevoPresupuesto"><i class="bi bi-plus-lg"></i> Nuevo Presupuesto</button>
+                                <button class="btn"
+                                    :class="subVistaPresupuesto === 'historial' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                    @click="cargarHistorialPresupuestos"><i class="bi bi-clock-history"></i> Historial</button>
+                            </div>
+                        </div>
+
+                        <div v-if="subVistaPresupuesto === 'nuevo'">
+                            
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-body">
+                                    <h6 class="text-secondary small fw-bold mb-3 text-uppercase">Datos del Presupuesto</h6>
+                                      <div class="row g-3">
+                                        <div class="col-md-2">
+                                          <label class="form-label fw-bold small ">Nro. Comprobante</label>
+                                          <input type="text" class="form-control" placeholder="Automático" readonly>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold small">Cliente</label>
+                                            <div class="input-group">
+                                                <select class="form-select" v-model="formPresupuesto.id_cliente">
+                                                    <option value="" disabled>Seleccionar...</option>
+                                                    <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}</option>
+                                                </select>
+                                                <button class="btn btn-outline-primary" type="button" @click="abrirModalCliente(null)" title="Nuevo Cliente">
+                                                    <i class="bi bi-person-plus-fill"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-2">
+                                            <label class="form-label fw-bold small">Fecha</label>
+                                            <input type="date" class="form-control" v-model="formPresupuesto.fecha" @change="recalcularVencimientoPresupuesto">
+                                        </div>
+                                        
+                                        <div class="col-md-2">
+                                            <label class="form-label fw-bold small">Vencimiento</label>
+                                            <input type="date" class="form-control" v-model="formPresupuesto.fecha_vencimiento">
+                                        </div>
+                                        
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold small">Observaciones</label>
+                                            <input type="text" class="form-control" v-model="formPresupuesto.observacion"
+                                                placeholder="Notas, condiciones...">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card border-0 shadow-sm mb-3 border-top border-brand border-3">
+                                <div class="card-body bg-light">
+                                    <form @submit.prevent="agregarAlCarritoPresupuesto">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold">Producto</label>
+                                                <select class="form-select" v-model="lineaPresupuesto.id_producto" @change="alSeleccionarProductoPresupuesto" required>
+                                                    <option value="" disabled>Buscar producto...</option>
+                                                    <option v-for="p in productos" :value="p.id_producto">{{ p.nombre }}
+                                                        (Ref: {{ formatoMoneda(p.precio_venta_base) }})</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small fw-bold">Cant.</label>
+                                                <input type="number" class="form-control" v-model.number="lineaPresupuesto.cantidad" min="1" required>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small fw-bold text-success">Precio (Editable)</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">₲</span>
+                                                    <input type="number" class="form-control fw-bold text-success" v-model.number="lineaPresupuesto.precio" min="0" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-1 d-grid">
+                                                <button type="submit" class="btn btn-brand fw-bold"><i class="bi bi-plus-lg"></i></button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="card border-0 shadow-sm" v-if="carritoPresupuesto.length > 0">
+                                <table class="table align-middle mb-0 table-striped">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Producto</th>
+                                            <th class="text-center">Cant.</th>
+                                            <th class="text-end">Precio Unit.</th>
+                                            <th class="text-end">Subtotal</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(item, i) in carritoPresupuesto" :key="i">
+                                            <td class="ps-3">{{ item.nombre_prod }}</td>
+                                            <td class="text-center fw-bold">{{ item.cantidad }}</td>
+                                            <td class="text-end">{{ formatoMoneda(item.precio) }}</td>
+                                            <td class="text-end fw-bold">{{ formatoMoneda(item.subtotal) }}</td>
+                                            <td class="text-end pe-3">
+                                                <button class="btn btn-sm text-danger" @click="carritoPresupuesto.splice(i,1)"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div class="card-footer bg-white d-flex justify-content-between align-items-center p-3">
+                                    <h4 class="mb-0 fw-bold">TOTAL: <span class="text-success">{{ formatoMoneda(totalCarritoPresupuesto) }}</span></h4>
+                                    <button class="btn btn-brand fw-bold px-4" @click="guardarPresupuestoFinal">
+                                        <i class="bi bi-file-earmark-check me-2"></i> GENERAR PRESUPUESTO
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="subVistaPresupuesto === 'historial'">
+                            
+                            <div class="card border-0 shadow-sm mb-3">
+                                <div class="card-body p-3 bg-light rounded">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-md-3">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                                <input type="text" class="form-control border-start-0 ps-0" v-model="busquedaPresupuesto" placeholder="Buscar Nro o Cliente...">
+                                                <button v-if="busquedaPresupuesto" class="btn btn-outline-secondary border-start-0" @click="busquedaPresupuesto = ''"><i class="bi bi-x"></i></button>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select class="form-select form-select-sm" v-model="filtroPresupuestoCliente">
+                                                <option value="">Todos los Clientes</option>
+                                                <option v-for="c in clientes" :value="c.id_cliente">{{ c.razon_social }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select class="form-select form-select-sm" v-model="filtroPresupuestoEstado">
+                                                <option value="">Todos los Estados</option>
+                                                <option value="PENDIENTE_FACTURAR">PENDIENTE FACTURAR</option>
+                                                <option value="FACTURADO">FACTURADO</option>
+                                                <option value="ANULADO">ANULADO</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3 text-end border-start ps-3">
+                                            <small class="text-muted d-block lh-1" style="font-size: 0.7rem;">TOTAL FILTRADO</small>
+                                            <span class="fw-bold text-dark fs-5">{{ formatoMoneda(totalPresupuestosFiltrados) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card border-0 shadow-sm">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="ps-3">Fecha</th>
+                                                <th>Nro</th>
+                                                <th>Cliente</th>
+                                                <th class="text-end">Total</th>
+                                                <th class="text-center">Estado</th>
+                                                <th class="text-end pe-3">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="h in presupuestosFiltrados" :key="h.id_presupuesto">
+                                                <td class="ps-3 text-muted small">{{ new Date(h.fecha).toLocaleDateString() }}</td>
+                                                <td><span class="badge bg-light text-dark border">{{ h.numero }}</span></td>
+                                                <td class="fw-bold text-truncate" style="max-width: 200px;">{{ h.cliente_nombre }}</td>
+                                                <td class="text-end fw-bold text-secondary">{{ formatoMoneda(h.total) }}</td>
+                                                <td class="text-center">
+                                                    <span v-if="h.estado === 'ANULADO'" class="badge bg-danger">ANULADO</span>
+                                                    <span v-else-if="h.estado === 'FACTURADO'" class="badge bg-success">FACTURADO</span>
+                                                    <span v-else class="badge bg-warning text-dark border">PENDIENTE FACTURAR</span>
+                                                </td>
+                                                <td class="text-end pe-3">
+                                                    <a v-if="h.url_pdf" :href="h.url_pdf" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Ver PDF">
+                                                        <i class="bi bi-file-earmark-pdf"></i>
+                                                    </a>
+                                                    <button v-if="h.estado === 'PENDIENTE_FACTURAR'" class="btn btn-sm btn-success text-white fw-bold me-1" @click="facturarDesdePresupuesto(h)" title="Facturar este presupuesto">
+                                                        <i class="bi bi-receipt"></i>
+                                                    </button>
+                                                    <button v-if="h.estado === 'PENDIENTE_FACTURAR'" class="btn btn-sm btn-outline-danger" @click="anularPresupuesto(h)" title="Anular presupuesto">
+                                                        <i class="bi bi-slash-circle"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="presupuestosFiltrados.length === 0">
+                                                <td colspan="6" class="text-center py-4 text-muted">
+                                                    <i class="bi bi-filter-circle me-2"></i> No se encontraron resultados con estos filtros.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div v-if="vistaActual === 'remisiones'">
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             <h3 class="fw-bold text-dark mb-0"><i class="bi bi-truck-flatbed text-brand"></i> Remisiones
@@ -1637,7 +1842,7 @@
                                         <div class="col-md-3">
                                             <label class="form-label fw-bold small">Nro. Comprobante</label>
                                             <input type="text" class="form-control" v-model="formRemision.numero"
-                                                placeholder="Automático">
+                                                placeholder="Automático" readonly>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small">Entregado por</label>
@@ -1944,9 +2149,13 @@
                                                     <div class="row">
                                                         <div class="col-6">
                                                             <div class="form-check mb-1"><input class="form-check-input"
-                                                                    type="checkbox" value="remisiones"
-                                                                    v-model="usuarioForm.permisos"><label
-                                                                    class="form-check-label small">Remisiones</label></div>
+                                                                type="checkbox" value="presupuestos"
+                                                                v-model="usuarioForm.permisos"><label
+                                                                class="form-check-label small">Presupuestos</label></div>
+                                                            <div class="form-check mb-1"><input class="form-check-input"
+                                                                type="checkbox" value="remisiones"
+                                                                v-model="usuarioForm.permisos"><label
+                                                                class="form-check-label small">Remisiones</label></div>
                                                             <div class="form-check mb-1"><input class="form-check-input"
                                                                     type="checkbox" value="ventas"
                                                                     v-model="usuarioForm.permisos"><label
@@ -1966,14 +2175,13 @@
                                                             <div class="form-check mb-1"><input class="form-check-input"
                                                                     type="checkbox" value="transferencias"
                                                                     v-model="usuarioForm.permisos"><label
-                                                                    class="form-check-label small">Transferencias</label>
-                                                            </div>
+                                                                    class="form-check-label small">Transferencias</label></div>
+                                                        </div>
+                                                        <div class="col-6">
                                                             <div class="form-check mb-1"><input class="form-check-input"
                                                                     type="checkbox" value="cobranzas"
                                                                     v-model="usuarioForm.permisos"><label
                                                                     class="form-check-label small">Cobranzas</label></div>
-                                                        </div>
-                                                        <div class="col-6">
                                                             <div class="form-check mb-1"><input class="form-check-input"
                                                                     type="checkbox" value="productos"
                                                                     v-model="usuarioForm.permisos"><label
@@ -3847,6 +4055,11 @@
                     Operaciones
                 </small>
 
+                <button v-if="tengoPermiso('presupuestos')" class="nav-mobile-btn"
+                    :class="{active: vistaActual === 'presupuestos'}" @click="cambiarVista('presupuestos'); cerrarMenuMovil()">
+                    <i class="bi bi-truck-flatbed"></i> Presupuestos
+                </button>
+
                 <button v-if="tengoPermiso('remisiones')" class="nav-mobile-btn"
                     :class="{active: vistaActual === 'remisiones'}" @click="cambiarVista('remisiones'); cerrarMenuMovil()">
                     <i class="bi bi-truck-flatbed"></i> Remisiones
@@ -4551,6 +4764,7 @@
                 monto_mensual: 0,
                 notas_internas: ''
             },
+
             modalGestionSuscripcion: null,
 
             html5QrcodeScanner: null, 
@@ -4609,6 +4823,30 @@
                 clase: 'text-muted', 
                 icono: 'bi-circle' 
             },
+
+            subVistaPresupuesto: 'nuevo',
+            cargandoPresupuesto: false,
+            
+            formPresupuesto: {
+                id_cliente: '',
+                fecha: '',
+                fecha_vencimiento: '',
+                observacion: ''
+            },
+            
+            lineaPresupuesto: {
+                id_producto: '',
+                cantidad: 1,
+                precio: 0
+            },
+            
+            carritoPresupuesto: [],
+            historialPresupuestos: [],
+            
+            // Filtros del historial
+            busquedaPresupuesto: '',
+            filtroPresupuestoCliente: '',
+            filtroPresupuestoEstado: '',
 
             modalCierre: null, // Referencia al modal de Bootstrap
 
@@ -4826,6 +5064,39 @@
                     
                     return acc + montoIVA;
                 }, 0);
+            },
+
+            totalCarritoPresupuesto() {
+                return this.carritoPresupuesto.reduce((total, item) => total + item.subtotal, 0);
+            },
+            
+            presupuestosFiltrados() {
+                if (!this.historialPresupuestos) return [];
+                
+                return this.historialPresupuestos.filter(p => {
+                    // Filtro por texto (Nro o Cliente)
+                    const texto = this.busquedaPresupuesto.toLowerCase();
+                    const coincideTexto = p.numero.toLowerCase().includes(texto) || 
+                                          p.cliente_nombre.toLowerCase().includes(texto);
+                    
+                    // Filtro por Cliente (Mapear el ID seleccionado con el nombre en el historial)
+                    let coincideCliente = true;
+                    if (this.filtroPresupuestoCliente !== '') {
+                        const clienteSeleccionado = this.clientes.find(c => c.id_cliente === this.filtroPresupuestoCliente);
+                        if (clienteSeleccionado) {
+                            coincideCliente = p.cliente_nombre === clienteSeleccionado.razon_social;
+                        }
+                    }
+                    
+                    // Filtro por Estado
+                    const coincideEstado = this.filtroPresupuestoEstado === '' || p.estado === this.filtroPresupuestoEstado;
+                    
+                    return coincideTexto && coincideCliente && coincideEstado;
+                });
+            },
+            
+            totalPresupuestosFiltrados() {
+                return this.presupuestosFiltrados.reduce((total, p) => total + p.total, 0);
             },
 
             diferenciaArqueo() {return (Number(this.datosCaja.monto_real) || 0) - (Number(this.datosCaja.resumen_teorico) || 0);},
@@ -7946,6 +8217,265 @@
                     // Si se deselecciona, limpiar
                     this.formSuscripcion.email_principal = '';
                     this.formSuscripcion.nombre_cliente = '';
+                }
+            },
+
+            // 1. Prepara la vista para un presupuesto nuevo (calcula fecha vencimiento a 15 días)
+            abrirNuevoPresupuesto() {
+                this.subVistaPresupuesto = 'nuevo';
+                this.carritoPresupuesto = [];
+                this.formPresupuesto = { id_cliente: '', fecha: '', fecha_vencimiento: '', observacion: '' };
+                this.lineaPresupuesto = { id_producto: '', cantidad: 1, precio: 0 };
+                
+                // 1. Establecer Fecha Actual
+                const hoy = new Date();
+                this.formPresupuesto.fecha = hoy.toISOString().split('T')[0];
+                
+                // 2. Establecer Vencimiento (+30 días por defecto)
+                const d = new Date(hoy);
+                d.setDate(d.getDate() + 30);
+                this.formPresupuesto.fecha_vencimiento = d.toISOString().split('T')[0];
+            },
+
+        // Si el usuario cambia la fecha de emisión manualmente, ajustamos el vencimiento
+        recalcularVencimientoPresupuesto() {
+            if (this.formPresupuesto.fecha) {
+                // Se agrega 'T12:00:00' para evitar desfases por zona horaria
+                const f = new Date(this.formPresupuesto.fecha + 'T12:00:00'); 
+                f.setDate(f.getDate() + 30);
+                this.formPresupuesto.fecha_vencimiento = f.toISOString().split('T')[0];
+            }
+        },
+
+            // 2. Al seleccionar producto, trae el precio base (pero permite editarlo)
+            alSeleccionarProductoPresupuesto() {
+                const prod = this.productos.find(p => p.id_producto === this.lineaPresupuesto.id_producto);
+                if (prod) {
+                    this.lineaPresupuesto.precio = prod.precio_venta_base || 0;
+                }
+            },
+
+            // 3. Agregar ítem al carrito
+            agregarAlCarritoPresupuesto() {
+                if (!this.lineaPresupuesto.id_producto || this.lineaPresupuesto.cantidad <= 0 || this.lineaPresupuesto.precio < 0) {
+                    return Swal.fire('Atención', 'Datos de producto inválidos', 'warning');
+                }
+                
+                const prod = this.productos.find(p => p.id_producto === this.lineaPresupuesto.id_producto);
+                
+                this.carritoPresupuesto.push({
+                    id_producto: prod.id_producto,
+                    nombre_prod: prod.nombre,
+                    cantidad: this.lineaPresupuesto.cantidad,
+                    precio: this.lineaPresupuesto.precio, // El precio que el usuario dejó/editó
+                    subtotal: this.lineaPresupuesto.cantidad * this.lineaPresupuesto.precio,
+                    impuesto: prod.impuesto_iva // Guardamos el % de IVA para cuando se facture
+                });
+
+                // Limpiar la línea para el siguiente producto
+                this.lineaPresupuesto = { id_producto: '', cantidad: 1, precio: 0 };
+            },
+
+            // 4. Guardar Presupuesto Final en la base de datos
+            async guardarPresupuestoFinal() {
+                if (!this.formPresupuesto.id_cliente) return Swal.fire('Atención', 'Seleccione un cliente', 'warning');
+                if (this.carritoPresupuesto.length === 0) return Swal.fire('Atención', 'Agregue al menos un producto al detalle', 'warning');
+                if (!this.formPresupuesto.fecha) return Swal.fire('Atención', 'Indique la fecha del presupuesto', 'warning');
+                if (!this.formPresupuesto.fecha_vencimiento) return Swal.fire('Atención', 'Indique la fecha de vencimiento', 'warning');
+
+                this.cargando = true;
+                Swal.fire({ title: 'Generando Presupuesto...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+                
+                const datos = {
+                    id_cliente: this.formPresupuesto.id_cliente,
+                    fecha: this.formPresupuesto.fecha,
+                    fecha_vencimiento: this.formPresupuesto.fecha_vencimiento,
+                    observacion: this.formPresupuesto.observacion,
+                    total: this.totalCarritoPresupuesto,
+                    productos: this.carritoPresupuesto.map(item => ({
+                        id_producto: item.id_producto,
+                        nombre: item.nombre_prod, // Pasamos el nombre para el PDF
+                        cantidad: item.cantidad,
+                        precio_venta: item.precio,
+                        impuesto: item.impuesto,
+                        subtotal: item.subtotal
+                    }))
+                };
+
+                try {
+                    const res = await this.ejecutarFuncionBackend('guardarPresupuesto', datos);
+                    if (res.status) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Presupuesto Generado!',
+                            text: res.mensaje,
+                            showCancelButton: true,
+                            confirmButtonText: '<i class="bi bi-file-earmark-pdf"></i> Ver PDF',
+                            cancelButtonText: 'Cerrar',
+                            confirmButtonColor: '#E06920'
+                        }).then((result) => {
+                            if (result.isConfirmed && res.pdf) {
+                                window.open(res.pdf, '_blank');
+                            }
+                        });
+                        
+                        // Limpiar y enviar al historial
+                        this.abrirNuevoPresupuesto(); 
+                    } else {
+                        Swal.fire('Error', res.mensaje, 'error');
+                    }
+                } catch (error) {
+                    Swal.fire('Error', 'No se pudo generar el presupuesto: ' + error, 'error');
+                } finally {
+                    this.cargando = false;
+                }
+            },
+
+            // 5. Cargar Historial
+            async cargarHistorialPresupuestos() {
+                this.subVistaPresupuesto = 'historial';
+                Swal.fire({ title: 'Cargando historial...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+                
+                try {
+                    this.historialPresupuestos = await this.ejecutarFuncionBackend('obtenerHistorialPresupuestos');
+                    Swal.close();
+                } catch (error) {
+                    Swal.fire('Error', 'No se pudo cargar el historial: ' + error, 'error');
+                }
+            },
+
+            // 6. Facturar Presupuesto (Convertir a Venta Real)
+            async facturarDesdePresupuesto(h) {
+                // 1. Modal para elegir condición y depósito
+                const { value: formValues } = await Swal.fire({
+                    title: '¿Facturar Presupuesto?',
+                    html: `
+                        <div class="text-start">
+                            <p>Se convertirá el presupuesto <strong>${h.numero}</strong> en una Venta Definitiva.</p>
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i> 
+                                <strong>Esto descontará stock de tu depósito.</strong>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Condición de Pago</label>
+                                <select id="swal-condicion" class="form-select">
+                                    <option value="CONTADO">Contado</option>
+                                    <option value="CREDITO">Crédito</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Depósito de Salida</label>
+                                <select id="swal-deposito" class="form-select">
+                                    ${this.listaDepositos.map(d => 
+                                        `<option value="${d.id_deposito}">${d.nombre}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, Facturar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#198754',
+                    preConfirm: () => {
+                        return {
+                            condicion: document.getElementById('swal-condicion').value,
+                            deposito: document.getElementById('swal-deposito').value
+                        };
+                    },
+                    didOpen: () => {
+                        if (!this.listaDepositos || this.listaDepositos.length === 0) {
+                             this.cargarDatosIniciales();
+                        }
+                    }
+                });
+
+                if (formValues) {
+                    Swal.fire({ 
+                        title: 'Procesando Venta...', 
+                        allowOutsideClick: false, 
+                        didOpen: () => { Swal.showLoading() } 
+                    });
+                    
+                    try {
+                        const res = await this.ejecutarFuncionBackend(
+                            'facturarPresupuesto', 
+                            h.id_presupuesto,
+                            formValues.condicion,
+                            formValues.deposito
+                        );
+                        
+                        if (res.status) {
+                            
+                            // ✅ MAGIA AQUÍ: Abre la factura automáticamente sin preguntar
+                            if (res.url_pdf_venta) {
+                                window.open(res.url_pdf_venta, '_blank');
+                            }
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Venta Registrada!',
+                                text: 'La factura se generó correctamente.',
+                                showCancelButton: true,
+                                confirmButtonText: '<i class="bi bi-file-earmark-pdf"></i> Ver Factura de nuevo',
+                                cancelButtonText: 'Cerrar',
+                                confirmButtonColor: '#E06920'
+                            }).then((result) => {
+                                // Por si el navegador bloqueó la ventana automática, le damos la opción de abrirla manualmente
+                                if (result.isConfirmed && res.url_pdf_venta) {
+                                    window.open(res.url_pdf_venta, '_blank');
+                                }
+                            });
+                            
+                            this.cargarHistorialPresupuestos();
+                            this.cargarDatosIniciales(); // Para refrescar los contadores visuales de stock
+                        } else {
+                            Swal.fire('Error', res.mensaje, 'error');
+                        }
+                    } catch (error) {
+                        Swal.fire('Error', 'Falló la facturación: ' + error, 'error');
+                    }
+                }
+            },
+
+            async cargarDepositos() {
+                if (this.depositos.length === 0) {
+                    try {
+                        this.depositos = await this.ejecutarFuncionBackend('obtenerDepositos');
+                    } catch (e) {
+                        console.error("Error cargando depósitos:", e);
+                    }
+                }
+            },
+
+            // 7. Anular Presupuesto
+            async anularPresupuesto(h) {
+                const conf = await Swal.fire({
+                    title: '¿Anular Presupuesto?',
+                    text: `Se anulará el presupuesto ${h.numero}. Esta acción no se puede deshacer.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, Anular',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#dc3545'
+                });
+
+                if (conf.isConfirmed) {
+                    Swal.fire({ title: 'Anulando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+                    try {
+                        const res = await this.ejecutarFuncionBackend('anularPresupuesto', h.id_presupuesto);
+                        if (res.status) {
+                            Swal.fire('Anulado', res.mensaje, 'success');
+                            this.cargarHistorialPresupuestos();
+                        } else {
+                            Swal.fire('Error', res.mensaje, 'error');
+                        }
+                    } catch (error) {
+                        Swal.fire('Error', 'Falló la anulación: ' + error, 'error');
+                    }
                 }
             }
 

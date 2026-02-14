@@ -4074,3 +4074,417 @@ function buscarUsuarioPorEmail(email) {
     return null;
   }
 }
+
+// ==========================================
+// MÓDULO PRESUPUESTOS
+// ==========================================
+
+// 1. Guardar Presupuesto
+function guardarPresupuesto(datos) {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  
+  // Generar ID y Numeración
+  const idPresupuesto = Utilities.getUuid();
+  const numeroFormato = incrementarNumeracion("ULTIMO_NRO_PRESUPUESTO");
+  
+
+// 1. Obtener el ID del usuario logueado usando la función existente en Cesta ERP
+  const emailActivo = Session.getActiveUser().getEmail();
+  const usuarioLogueado = buscarUsuarioPorEmail(emailActivo);
+  const idUsuarioFinal = usuarioLogueado ? usuarioLogueado.id_usuario : emailActivo; // Fallback por seguridad
+
+  // Guardar Cabecera
+  const hojaCab = ss.getSheetByName("PRESUPUESTOS_CABECERA");
+  
+  // Procesamos las fechas para que se guarden correctamente en Google Sheets
+  const fechaEmision = datos.fecha ? new Date(datos.fecha + "T12:00:00") : new Date();
+  const fechaVenc = datos.fecha_vencimiento ? new Date(datos.fecha_vencimiento + "T12:00:00") : "";
+
+  hojaCab.appendRow([
+    idPresupuesto,
+    fechaEmision, 
+    numeroFormato,
+    datos.id_cliente,
+    datos.total,
+    "PENDIENTE_FACTURAR", 
+    "", 
+    fechaVenc,    
+    datos.observacion || "",
+    idUsuarioFinal // ✅ CORREGIDO: Ahora se guarda el id_usuario en lugar del correo
+  ]);
+  
+  // Guardar Detalle
+  const hojaDet = ss.getSheetByName("PRESUPUESTOS_DETALLE");
+  datos.productos.forEach(p => {
+    hojaDet.appendRow([
+      Utilities.getUuid(),
+      idPresupuesto,
+      p.id_producto,
+      p.cantidad,
+      p.precio_venta, // Precio editado por usuario
+      p.impuesto || 0,
+      p.subtotal
+    ]);
+  });
+  
+  // Generar PDF
+  const urlPdf = generarPDFPresupuesto(idPresupuesto, numeroFormato, datos);
+  
+  // Actualizar URL en Cabecera (buscando por ID)
+  const dataCab = hojaCab.getDataRange().getValues();
+  for(let i=1; i<dataCab.length; i++){
+    if(dataCab[i][0] == idPresupuesto){
+      hojaCab.getRange(i+1, 7).setValue(urlPdf); // Columna 7 es url_pdf
+      break;
+    }
+  }
+  
+  return { status: true, mensaje: "Presupuesto creado con éxito", pdf: urlPdf };
+}
+
+// 2. Generar PDF (Usando NotaPresupuesto.html y Folder específico)
+function generarPDFPresupuesto(id, numero, datos) {
+  try {
+    const ss = SpreadsheetApp.openById(SS_ID);
+    
+    // Obtener datos del cliente
+    const cliente = obtenerClientePorId(datos.id_cliente); 
+    
+    const templatePresupuesto = HtmlService.createTemplateFromFile("NotaPresupuesto");
+    
+    // Logo
+    templatePresupuesto.logoEmpresa = getLogoBase64(); 
+    
+    // ✅ Preparar items con cálculos de IVA
+    const itemsConIVA = datos.productos.map(function(prod) {
+      return {
+        nombre_prod: prod.nombre,
+        cantidad: prod.cantidad,
+        precio: prod.precio_venta,
+        tasa_iva: prod.impuesto || 10
+      };
+    });
+    
+    // ✅ Calcular liquidación de IVA
+    let liq5 = 0;
+    let liq10 = 0;
+    itemsConIVA.forEach(it => {
+      const subtotal = it.cantidad * it.precio;
+      if (it.tasa_iva === 5) {
+        liq5 += subtotal / 21; // IVA del 5% incluido
+      } else if (it.tasa_iva === 10) {
+        liq10 += subtotal / 11; // IVA del 10% incluido
+      }
+    });
+    const totalLiq = liq5 + liq10;
+    
+    // ✅ Pasar datos correctamente estructurados
+    templatePresupuesto.datos = {
+      numero: numero,
+      nro_presupuesto: numero, // Fallback
+      fecha: datos.fecha ? new Date(datos.fecha + "T12:00:00").toLocaleDateString('es-PY') : new Date().toLocaleDateString('es-PY'),
+      validez: "30 días", 
+      cliente_nombre: cliente ? cliente.razon_social : "Cliente Casual",
+      cliente_doc: cliente ? cliente.doc_identidad : "---",
+      cliente_dir: cliente ? cliente.direccion : "---",
+      items: itemsConIVA // ✅ AQUÍ está la corrección principal
+    };
+    
+    // ✅ Variables para liquidación IVA
+    templatePresupuesto.liq5 = liq5;
+    templatePresupuesto.liq10 = liq10;
+    templatePresupuesto.totalLiq = totalLiq;
+    
+    // Convertir a PDF
+    const html = templatePresupuesto.evaluate().getContent();
+    const nombreArchivo = "Presupuesto_" + numero.replace(/[^a-zA-Z0-9]/g, '_') + ".pdf";
+    const blob = Utilities.newBlob(html, "text/html", nombreArchivo);
+    const pdf = blob.getAs("application/pdf").setName(nombreArchivo);
+    
+    // Guardar en Drive
+    const folderId = "16Rva8qhO9tFJe2AVcrnL6KzBMyrSMrvx";
+    const folder = DriveApp.getFolderById(folderId);
+    const file = folder.createFile(pdf);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return file.getUrl();
+    
+  } catch(e) {
+    Logger.log("❌ Error generando PDF: " + e.toString());
+    Logger.log("Stack: " + e.stack);
+    throw "Error al generar PDF del presupuesto: " + e.message;
+  }
+}
+
+// 3. Obtener Historial
+function obtenerHistorialPresupuestos() {
+  try {
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const shCab = ss.getSheetByName("PRESUPUESTOS_CABECERA");
+    const shCli = ss.getSheetByName("CLIENTES");
+    
+    // ✅ Validación: Si no existe la hoja o está vacía
+    if (!shCab || shCab.getLastRow() <= 1) {
+      Logger.log("⚠️ Hoja PRESUPUESTOS_CABECERA vacía o inexistente");
+      return [];
+    }
+    
+    const rawCab = shCab.getDataRange().getValues();
+    
+    // ✅ Mapear clientes para rápido acceso (con validación)
+    let clientesMap = {};
+    if (shCli && shCli.getLastRow() > 1) {
+      const rawCli = shCli.getDataRange().getValues();
+      for (let i = 1; i < rawCli.length; i++) {
+        if (rawCli[i][0]) { // Solo si tiene ID válido
+          clientesMap[String(rawCli[i][0])] = rawCli[i][1];
+        }
+      }
+    }
+    
+    let lista = [];
+    
+    // Recorrer presupuestos (empezar de 1 para saltar encabezado)
+    for (let i = 1; i < rawCab.length; i++) {
+      let row = rawCab[i];
+      
+      // ✅ Validar que tenga ID (fila no vacía)
+      if (!row[0] || String(row[0]).trim() === "") continue;
+      
+      // ✅ Convertir fecha a formato seguro (ISO string)
+      let fechaSegura = row[1];
+      try {
+        if (row[1] instanceof Date) {
+          fechaSegura = row[1].toISOString();
+        } else {
+          // Si es texto, intentar parsearlo
+          fechaSegura = String(row[1]);
+        }
+      } catch (e) {
+        fechaSegura = new Date().toISOString(); // Fallback
+      }
+      
+      lista.push({
+        id_presupuesto: String(row[0]),
+        fecha: fechaSegura,
+        numero: String(row[2] || "S/N"),
+        cliente_nombre: clientesMap[String(row[3])] || "Cliente Desconocido",
+        id_cliente: String(row[3] || ""), // ✅ Agregado para debugging
+        total: Number(row[4] || 0),
+        estado: String(row[5] || "PENDIENTE_FACTURAR"),
+        url_pdf: String(row[6] || ""),
+        observacion: String(row[8] || "")
+      });
+    }
+    
+    Logger.log("✅ Se encontraron " + lista.length + " presupuestos");
+    
+    // Retornar ordenado por fecha descendente (más nuevo arriba)
+    return lista.reverse(); 
+    
+  } catch (error) {
+    Logger.log("❌ ERROR en obtenerHistorialPresupuestos: " + error.toString());
+    Logger.log("Stack: " + error.stack);
+    // Retornar array vacío en caso de error para no romper el frontend
+    return [];
+  }
+}
+
+// 4. Anular Presupuesto
+function anularPresupuesto(idPresupuesto) {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const sheet = ss.getSheetByName("PRESUPUESTOS_CABECERA");
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] == idPresupuesto) {
+      if (data[i][5] !== "PENDIENTE_FACTURAR") {
+        return { status: false, mensaje: "Solo se pueden anular presupuestos pendientes." };
+      }
+      sheet.getRange(i + 1, 6).setValue("ANULADO"); // Col 6 es Estado
+      return { status: true, mensaje: "Presupuesto anulado." };
+    }
+  }
+  return { status: false, mensaje: "No encontrado." };
+}
+
+// 5. Convertir a Venta (Facturar)
+function facturarPresupuesto(idPresupuesto, condicion, idDeposito) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+  
+  try {
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const cabSheet = ss.getSheetByName("PRESUPUESTOS_CABECERA");
+    const detSheet = ss.getSheetByName("PRESUPUESTOS_DETALLE");
+    
+    if (!cabSheet || !detSheet) throw "Faltan hojas necesarias de Presupuesto";
+    
+    const cabData = cabSheet.getDataRange().getValues();
+    const detData = detSheet.getDataRange().getValues();
+    
+    // A. Buscar presupuesto
+    let presupuesto = null;
+    let filaCab = -1;
+    
+    for(let i=1; i<cabData.length; i++){
+      if(String(cabData[i][0]) === String(idPresupuesto)){
+        presupuesto = {
+          id_cliente: cabData[i][3],
+          total: cabData[i][4],
+          estado_actual: cabData[i][5]
+        };
+        filaCab = i + 1;
+        break;
+      }
+    }
+    
+    if(!presupuesto) throw "Presupuesto no encontrado";
+    if(presupuesto.estado_actual !== "PENDIENTE_FACTURAR") {
+      throw "El presupuesto ya fue facturado o está anulado";
+    }
+    
+    // B. Obtener items del presupuesto
+    let itemsParaVenta = [];
+    
+    for(let j=1; j<detData.length; j++){
+      if(String(detData[j][1]) === String(idPresupuesto)){
+        itemsParaVenta.push({
+          id_producto: detData[j][2],
+          cantidad: Number(detData[j][3]),
+          precio: Number(detData[j][4]),      
+          tasa_iva: Number(detData[j][5]) || 10,
+          subtotal: Number(detData[j][6])
+        });
+      }
+    }
+    
+    if(itemsParaVenta.length === 0) throw "El presupuesto no tiene items para facturar.";
+    
+    // C. Validar depósito
+    if (!idDeposito) {
+      const config = obtenerConfigGeneral();
+      idDeposito = config['DEPOSITO_DEFAULT'] || "DEP-001";
+    }
+    
+    // D. Validar condición
+    if (!condicion) condicion = "CONTADO";
+    
+    // E. Crear objeto EXACTO que espera guardarVenta
+    const ventaData = {
+      id_cliente: presupuesto.id_cliente,
+      id_deposito: idDeposito,
+      total: presupuesto.total,
+      condicion: condicion,
+      items: itemsParaVenta,  // ← guardarVenta itera sobre venta.items
+      fecha: new Date().toISOString().split('T')[0],
+      es_desde_remision: false // ← Crucial: Si es false, SI descuenta stock
+    };
+    
+    // F. Llamar a guardarVenta
+    const resultado = guardarVenta(ventaData);
+    
+    if (resultado.success) {
+      // G. Actualizar estado del presupuesto
+      cabSheet.getRange(filaCab, 6).setValue("FACTURADO");
+      
+      return { 
+        status: true, 
+        mensaje: "Presupuesto facturado correctamente", 
+        url_pdf_venta: resultado.pdf_url
+      };
+    } else {
+      throw "No se pudo generar la venta.";
+    }
+    
+  } catch(e) {
+    Logger.log("❌ Error en facturarPresupuesto: " + e.toString());
+    return { status: false, mensaje: e.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// AUXILIAR: Necesario si no lo tienes global
+function obtenerClientePorId(id){
+   const ss = SpreadsheetApp.openById(SS_ID);
+   const data = ss.getSheetByName("CLIENTES").getDataRange().getValues();
+   for(let i=1; i<data.length; i++){
+     if(data[i][0] == id) return { id: data[i][0], razon_social: data[i][1], doc_identidad: data[i][2], direccion: data[i][5] };
+   }
+   return null;
+}
+
+// ==========================================
+// AUXILIAR: NUMERACIÓN
+// ==========================================
+
+function incrementarNumeracion(clave) {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const sheet = ss.getSheetByName("CONFIG_GENERAL");
+  const data = sheet.getDataRange().getValues();
+  
+  // Prefijo por defecto si la celda está vacía o es la primera vez
+  const prefijoDefecto = "PRT-001-"; 
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === clave) {
+      let valorActual = String(data[i][1]).trim();
+      let prefijo = prefijoDefecto;
+      let numeroActual = 0;
+      
+      // Si el valor ya tiene el formato (ej: PRT-001-00015)
+      if (valorActual.includes("-")) {
+        let partes = valorActual.split("-");
+        // Extrae la última parte (00015), la convierte a número (15)
+        numeroActual = Number(partes.pop()) || 0; 
+        // Reconstruye el prefijo original (PRT-001-)
+        prefijo = partes.join("-") + "-"; 
+      } else {
+        // Si por alguna razón solo había un número simple
+        numeroActual = Number(valorActual) || 0; 
+      }
+      
+      let nuevoNumero = numeroActual + 1;
+      
+      // Arma el string final (ej: PRT-001-00016)
+      let valorFormateado = prefijo + String(nuevoNumero).padStart(5, '0');
+      
+      // Actualiza la celda en la columna B (valor) con el formato completo
+      sheet.getRange(i + 1, 2).setValue(valorFormateado); 
+      
+      return valorFormateado; // Retorna "PRT-001-XXXXX"
+    }
+  }
+  
+  // Si la clave no existe en la hoja, la crea con el primer número
+  let valorInicial = prefijoDefecto + "00001";
+  sheet.appendRow([clave, valorInicial]);
+  return valorInicial;
+}
+
+// AUXILIAR: Obtener producto por ID (necesaria para facturarPresupuesto)
+function obtenerProductoPorId(id) {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const sheet = ss.getSheetByName('PRODUCTOS');
+  const data = sheet.getDataRange().getValues();
+  
+  for(let i = 1; i < data.length; i++) {
+    if(String(data[i][0]) === String(id)) {
+      return {
+        id_producto: data[i][0],
+        sku: data[i][1],
+        nombre: data[i][2],
+        precio_venta_base: data[i][5],
+        costo_promedio: data[i][6],
+        impuesto_iva: data[i][8]
+      };
+    }
+  }
+  return null;
+}
+
+function guardarConfigRemision(nuevoValor, usuario) {
+  return guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoValor, usuario);
+}
