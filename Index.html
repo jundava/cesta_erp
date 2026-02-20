@@ -633,10 +633,9 @@
                                                       v-model="lineaVenta.id_producto" required
                                                       @change="alSeleccionarProductoVenta">
                                                       <option value="" disabled>🔍 Buscar o Escanear...</option>
-                                                      <option v-for="p in productos" :value="p.id_producto"
-                                                          :disabled="(p.stock_actual||0) <= 0">
-                                                          {{ p.nombre }} | Stock: {{ p.stock_actual || 0 }} | {{
-                                                          formatoMoneda(p.precio_venta_base) }}
+                                                      <option v-for="p in catalogoParaVentas" :value="p.id_producto"
+                                                          :disabled="!p.es_servicio && (p.stock_actual || 0) <= 0">
+                                                          {{ p.nombre }} {{ p.es_servicio ? '| (Servicio)' : '| Stock: ' + (p.stock_actual || 0) }} | {{ formatoMoneda(p.precio_venta_base) }}
                                                       </option>
                                                   </select>
                                               </div>
@@ -1662,9 +1661,11 @@
                                             <div class="col-md-6">
                                                 <label class="form-label small fw-bold">Producto</label>
                                                 <select class="form-select" v-model="lineaPresupuesto.id_producto" @change="alSeleccionarProductoPresupuesto" required>
-                                                    <option value="" disabled>Buscar producto...</option>
-                                                    <option v-for="p in productos" :value="p.id_producto">{{ p.nombre }}
-                                                        (Ref: {{ formatoMoneda(p.precio_venta_base) }})</option>
+                                                    <option value="" disabled>Buscar producto o servicio...</option>
+                                                    <option v-for="p in catalogoParaVentas" :value="p.id_producto">
+                                                        {{ p.nombre }} {{ p.es_servicio ? '| (Servicio)' : '' }} 
+                                                        (Ref: {{ formatoMoneda(p.precio_venta_base) }})
+                                                    </option>
                                                 </select>
                                             </div>
                                             <div class="col-md-2">
@@ -5194,6 +5195,27 @@
                 }, 0);
             },
 
+            catalogoParaVentas() {
+                // 1. Obtenemos los productos físicos
+                const prods = this.productos || [];
+                
+                // 2. Homologamos los servicios como si fueran productos
+                const servs = (this.listaServicios || []).map(s => ({
+                    id_producto: s.id_servicio,         // Alias para que el carrito lo reconozca
+                    sku: 'SERVICIO',
+                    nombre: '-'+s.descripcion,      
+                    precio_venta_base: Number(s.precio),
+                    impuesto_iva: Number(s.impuesto_iva),
+                    metodo_iva: s.metodo_iva,
+                    maneja_stock: 'FALSE',              // EVITA que el backend intente restar stock
+                    stock_actual: 99999,                // Stock virtual infinito para el frontend
+                    es_servicio: true                   // Bandera por si la necesitas en la UI
+                }));
+
+                // Retornamos el array combinado
+                return [...prods, ...servs];
+            },
+
             serviciosFiltrados() {
                 // 1. Si la lista no existe, devolvemos un array vacío para que el .length no falle
                 if (!this.listaServicios || !Array.isArray(this.listaServicios)) return [];
@@ -6943,7 +6965,7 @@
 
           tieneDatosValidos(item) { if (!item.datos_adicionales) return false; return Object.values(item.datos_adicionales).some(val => val && val.toString().trim() !== ''); },
 
-          obtenerNombreProducto(id) { const p = this.productos.find(x => x.id_producto == id); return p ? p.nombre : '...'; },
+          obtenerNombreProducto(id) { const p = this.catalogoParaVentas.find(x => x.id_producto == id); return p ? p.nombre : '...'; },
           
           abrirModalDeposito(item) { this.formDeposito = item ? {...item} : { nombre:'', direccion:'', responsable:'', activo:'Si' }; this.modalDep.show(); },
 
@@ -7298,32 +7320,53 @@
 
             // TRANSACCIONES
             alSeleccionarProductoVenta() { 
-                const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); 
+                // CAMBIO CLAVE: Ahora buscamos en el catálogo unificado (Productos + Servicios)
+                const p = this.catalogoParaVentas.find(x => x.id_producto == this.lineaVenta.id_producto); 
+                
                 if(p) {
                     // CÁLCULO DE PRECIO AUTOMÁTICO
                     let precioFinal = Number(p.precio_venta_base);
                     
-                    // Si el producto es "IVA EXCLUIDO", le sumamos el impuesto para cobrarle al cliente
+                    // Si el ítem (ya sea producto o servicio) es "IVA EXCLUIDO", le sumamos el impuesto
                     if (p.metodo_iva === 'EXCLUIDO') {
                         precioFinal = precioFinal * (1 + (Number(p.impuesto_iva) / 100));
                     }
                     
                     this.lineaVenta.precio = precioFinal; // Precio unitario final a cobrar
+                    
+                    // PASO EXTRA RECOMENDADO: Guardamos la bandera de control de stock en la línea
+                    // Esto le avisa al carrito que este ítem no debe ser bloqueado por "Falta de Stock"
+                    this.lineaVenta.maneja_stock = p.maneja_stock;
+                    this.lineaVenta.es_servicio = p.es_servicio || false;
                 } 
             },
 
             agregarAlCarritoVenta() { 
-                const p = this.productos.find(x => x.id_producto == this.lineaVenta.id_producto); 
-                if(!p || this.lineaVenta.cantidad > p.stock_actual) return this.notificar('warning', "Stock insuficiente"); 
+                // 1. Buscamos en el catálogo unificado (Productos + Servicios)
+                const p = this.catalogoParaVentas.find(x => 
+                    String(x.id_producto) === String(this.lineaVenta.id_producto)
+                ); 
                 
+                // Si no encuentra el ítem (protección de error)
+                if (!p) return this.notificar('warning', "Ítem no encontrado"); 
+                
+                // 2. VALIDACIÓN DE STOCK: Solo restringe si NO es un servicio
+                if (!p.es_servicio && this.lineaVenta.cantidad > (p.stock_actual || 0)) {
+                    return this.notificar('warning', "Stock insuficiente"); 
+                }
+                
+                // 3. Agregar al carrito
                 this.carritoVenta.push({
                     ...this.lineaVenta,
                     precio_final: this.lineaVenta.precio, // Precio cobrado
-                    tasa_iva: p.impuesto_iva || 10,       // Guardamos la tasa para calcular totales luego
-                    nombre_prod: p.nombre                 // Útil para ticket
+                    tasa_iva: Number(p.impuesto_iva) || 0, // Guardamos la tasa para calcular totales luego
+                    nombre_prod: p.nombre,                 // Útil para ticket y tabla
+                    es_servicio: p.es_servicio || false,   // Importante para la UI del carrito
+                    maneja_stock: p.maneja_stock           // Importante para que el backend no reste inventario
                 });
                 
-                this.lineaVenta={id_producto:'', cantidad:1, precio:0}; 
+                // 4. Limpiar para el siguiente ítem
+                this.lineaVenta = {id_producto:'', cantidad:1, precio:0}; 
             },
             quitarDelCarritoVenta(i) { this.carritoVenta.splice(i,1); },
             limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
@@ -7333,22 +7376,29 @@
                 if(!this.formVenta.id_cliente) return this.notificar('warning', "Selecciona Cliente");
                 if(this.carritoVenta.length === 0) return this.notificar('warning', "Carrito vacío");
 
-                // Calculamos el total aquí para usarlo en las validaciones
-                const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio), 0);
-
-                // 2. VALIDACIÓN DE PAGO MULTIMÉTODO
-                // Si la venta es al CONTADO, el usuario debe haber cubierto el saldo
-                if (this.formVenta.condicion === 'CONTADO' && this.saldoRestanteVenta > 0) {
-                     return this.notificar('warning', `Falta cubrir ${this.saldoRestanteVenta.toLocaleString('es-PY')} Gs. para completar el pago.`);
+                // 2. DOBLE CHECK DE STOCK (Ignora Servicios)
+                for (let item of this.carritoVenta) {
+                    // Solo verificamos si NO es un servicio
+                    if (!item.es_servicio) {
+                        const p = this.catalogoParaVentas.find(x => String(x.id_producto) === String(item.id_producto));
+                        if (!p || item.cantidad > (p.stock_actual || 0)) {
+                            return this.notificar('warning', `Stock insuficiente para: ${item.nombre_prod}. Disponible: ${p ? p.stock_actual : 0}`);
+                        }
+                    }
                 }
 
-                // 3. Lógica de asignación de pagos
+                // Calculamos el total aquí para usarlo en las validaciones
+                const total = this.carritoVenta.reduce((acc, item) => acc + (item.cantidad * item.precio_final), 0);
+
+                // 3. VALIDACIÓN DE PAGO MULTIMÉTODO
+                if (this.formVenta.condicion === 'CONTADO' && this.saldoRestanteVenta > 0) {
+                    return this.notificar('warning', `Falta cubrir ${this.saldoRestanteVenta.toLocaleString('es-PY')} Gs. para completar el pago.`);
+                }
+
+                // 4. Lógica de asignación de pagos
                 if (this.formVenta.condicion === 'CREDITO') {
-                    // Si es Crédito, no hay pagos inmediatos (se va a Ctas. por Cobrar)
                     this.pagosVenta = []; 
                 } else {
-                    // Si es Contado y el usuario NO usó el botón de "Agregar Pago" (lista vacía),
-                    // asumimos comportamiento clásico: Todo el monto es EFECTIVO.
                     if (this.pagosVenta.length === 0) {
                         this.pagosVenta.push({ metodo: 'EFECTIVO', monto: total });
                     }
@@ -7356,7 +7406,7 @@
                 
                 this.cargando = true;
                 
-                // 4. Armado del Paquete
+                // 5. Armado del Paquete (¡CORREGIDO: Ahora sí viajan los pagos!)
                 const paquete = { 
                     id_cliente: this.formVenta.id_cliente, 
                     id_deposito: this.formVenta.id_deposito, 
@@ -7365,9 +7415,10 @@
                     condicion: this.formVenta.condicion, 
                     total: total, 
                     items: this.carritoVenta,
+                    pagos: this.pagosVenta // <-- Faltaba esto en tu código original
                 };
                 
-                // 5. Envío al Backend
+                // 6. Envío al Backend
                 google.script.run.withSuccessHandler((res) => { 
                     this.cargando = false; 
                     if(res.pdf_url) {
@@ -7387,7 +7438,7 @@
                     
                     // Limpieza
                     this.carritoVenta = [];
-                    this.pagosVenta = []; // Limpiamos también los pagos temporales
+                    this.pagosVenta = []; 
                     this.cargarDatosIniciales(); 
                 })
                 .withFailureHandler(err => { 
@@ -7396,6 +7447,7 @@
                 })
                 .guardarVenta(paquete);
             },
+
             verDetalleVenta(h) {
                 console.log("🔍 Buscando venta:", h.id_venta);
                 this.itemsDetalle = []; // Limpiar lista
@@ -8447,21 +8499,34 @@
                 this.formPresupuesto.fecha_vencimiento = d.toISOString().split('T')[0];
             },
 
-        // Si el usuario cambia la fecha de emisión manualmente, ajustamos el vencimiento
-        recalcularVencimientoPresupuesto() {
-            if (this.formPresupuesto.fecha) {
-                // Se agrega 'T12:00:00' para evitar desfases por zona horaria
-                const f = new Date(this.formPresupuesto.fecha + 'T12:00:00'); 
-                f.setDate(f.getDate() + 30);
-                this.formPresupuesto.fecha_vencimiento = f.toISOString().split('T')[0];
-            }
-        },
+            // Si el usuario cambia la fecha de emisión manualmente, ajustamos el vencimiento
+            recalcularVencimientoPresupuesto() {
+                if (this.formPresupuesto.fecha) {
+                    // Se agrega 'T12:00:00' para evitar desfases por zona horaria
+                    const f = new Date(this.formPresupuesto.fecha + 'T12:00:00'); 
+                    f.setDate(f.getDate() + 7);
+                    this.formPresupuesto.fecha_vencimiento = f.toISOString().split('T')[0];
+                }
+            },
 
             // 2. Al seleccionar producto, trae el precio base (pero permite editarlo)
             alSeleccionarProductoPresupuesto() {
-                const prod = this.productos.find(p => p.id_producto === this.lineaPresupuesto.id_producto);
-                if (prod) {
-                    this.lineaPresupuesto.precio = prod.precio_venta_base || 0;
+                // CAMBIO CLAVE: Buscamos en el catálogo mixto, no solo en productos
+                const p = this.catalogoParaVentas.find(x => x.id_producto === this.lineaPresupuesto.id_producto);
+                
+                if (p) {
+                    let precioRef = Number(p.precio_venta_base);
+                    
+                    // Si el ítem es IVA EXCLUIDO, lo sumamos al precio base para cotizarle al cliente
+                    if (p.metodo_iva === 'EXCLUIDO') {
+                        precioRef = precioRef * (1 + (Number(p.impuesto_iva) / 100));
+                    }
+                    
+                    // Asigna el precio sugerido (asumiendo que tu variable es precio_unitario o similar)
+                    this.lineaPresupuesto.precio = precioRef;
+                    
+                    //Si en presupuestos guardas la tasa de IVA también, puedes añadirla aquí:
+                    this.lineaPresupuesto.impuesto = p.impuesto_iva;
                 }
             },
 
@@ -8471,7 +8536,7 @@
                     return Swal.fire('Atención', 'Datos de producto inválidos', 'warning');
                 }
                 
-                const prod = this.productos.find(p => p.id_producto === this.lineaPresupuesto.id_producto);
+                const prod = this.catalogoParaVentas.find(p => p.id_producto === this.lineaPresupuesto.id_producto);
                 
                 this.carritoPresupuesto.push({
                     id_producto: prod.id_producto,

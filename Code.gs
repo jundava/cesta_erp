@@ -1081,20 +1081,24 @@ function guardarVenta(venta) {
     const estadoVenta = esCredito ? "PENDIENTE" : "PAGADO";
     const saldoInicial = esCredito ? venta.total : 0;
 
-    // Obtener nombres
+    // Obtener nombres (Solo carga los productos físicos)
     const datosProd = sheetProd.getDataRange().getValues();
     const mapaNombres = {};
     for(let i=1; i<datosProd.length; i++) {
         mapaNombres[datosProd[i][0]] = datosProd[i][2]; 
     }
 
-    // ✅ VALIDAR STOCK (Solo si NO es remisión)
+    // ✅ VALIDAR STOCK (Solo si NO es remisión y NO es servicio)
     if (!venta.es_desde_remision) {
         for (let item of venta.items) {
-          const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
-          const nombreProd = mapaNombres[item.id_producto] || "Item";
-          if (stockDisponible < item.cantidad) {
-            throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
+          // LA MAGIA ESTÁ AQUÍ: Ignoramos la validación si es servicio o no maneja stock
+          if (!item.es_servicio && String(item.maneja_stock) !== 'FALSE') {
+              const stockDisponible = obtenerStockLocal(item.id_producto, depositoUsado);
+              // Fallback: Si no está en mapaNombres, usa el nombre que vino del carrito
+              const nombreProd = mapaNombres[item.id_producto] || item.nombre_prod || "Item";
+              if (stockDisponible < item.cantidad) {
+                throw new Error(`Stock insuficiente para "${nombreProd}".\nDisponible: ${stockDisponible}\nSolicitado: ${item.cantidad}`);
+              }
           }
         }
     }
@@ -1143,7 +1147,8 @@ function guardarVenta(venta) {
         const cantidad = Number(it.cantidad);
         const subtotal = cantidad * precioUnitario;
         const tasa = Number(it.tasa_iva || 10); 
-        const nombreProducto = mapaNombres[it.id_producto] || "Producto";
+        // Usamos it.nombre_prod para que los servicios impriman correctamente su nombre en el PDF
+        const nombreProducto = mapaNombres[it.id_producto] || it.nombre_prod || "Producto/Servicio";
 
         if (tasa === 10) {
             totalGrabada10 += subtotal;
@@ -1180,6 +1185,7 @@ function guardarVenta(venta) {
         urlPdf = "ERROR_PDF"; 
     }
 
+    // 4. Guardar Cabecera de Venta
     sheetCab.appendRow([
       idVenta,
       nroFacturaFinal,
@@ -1196,6 +1202,7 @@ function guardarVenta(venta) {
 
     // 5. Guardar Detalle y Movimientos
     venta.items.forEach(item => {
+      // El detalle de la factura SIEMPRE se guarda (sea producto o servicio)
       sheetDet.appendRow([
           Utilities.getUuid(), 
           idVenta, 
@@ -1206,7 +1213,8 @@ function guardarVenta(venta) {
           item.cantidad * item.precio 
       ]);
       
-      if (!venta.es_desde_remision) { 
+      // LA MAGIA: El movimiento y descuento de stock SOLO ocurre para productos físicos
+      if (!venta.es_desde_remision && !item.es_servicio && String(item.maneja_stock) !== 'FALSE') { 
           sheetMov.appendRow([
               Utilities.getUuid(), 
               new Date(), 
@@ -4467,21 +4475,36 @@ function incrementarNumeracion(clave) {
 // AUXILIAR: Obtener producto por ID (necesaria para facturarPresupuesto)
 function obtenerProductoPorId(id) {
   const ss = SpreadsheetApp.openById(SS_ID);
-  const sheet = ss.getSheetByName('PRODUCTOS');
-  const data = sheet.getDataRange().getValues();
   
-  for(let i = 1; i < data.length; i++) {
-    if(String(data[i][0]) === String(id)) {
-      return {
-        id_producto: data[i][0],
-        sku: data[i][1],
-        nombre: data[i][2],
-        precio_venta_base: data[i][5],
-        costo_promedio: data[i][6],
-        impuesto_iva: data[i][8]
-      };
-    }
+  // 1. Búsqueda normal en PRODUCTOS
+  const sheetProd = ss.getSheetByName('PRODUCTOS');
+  const dataProd = sheetProd.getDataRange().getValues();
+  for(let i = 1; i < dataProd.length; i++) {
+    if(String(dataProd[i][0]) === String(id)) return dataProd[i];
   }
+  
+  // 2. Si no lo encuentra, busca en SERVICIOS
+  const sheetServ = ss.getSheetByName('SERVICIOS');
+  if (sheetServ) {
+      const dataServ = sheetServ.getDataRange().getValues();
+      for(let i = 1; i < dataServ.length; i++) {
+        if(String(dataServ[i][0]) === String(id)) {
+          // Construimos un "pseudo-producto" respetando las 14 columnas de Cesta ERP
+          let pseudoProd = new Array(14).fill("");
+          pseudoProd[0] = dataServ[i][0];  // id_producto
+          pseudoProd[1] = "SERVICIO";      // sku
+          pseudoProd[2] = dataServ[i][1];  // nombre
+          pseudoProd[5] = dataServ[i][4];  // precio_venta_base
+          pseudoProd[8] = dataServ[i][2];  // impuesto_iva
+          pseudoProd[9] = "FALSE";         // maneja_stock (clave para evitar el descuento de inventario)
+          pseudoProd[12] = 99999;          // stock_actual
+          pseudoProd[13] = dataServ[i][3]; // metodo_iva
+          
+          return pseudoProd;
+        }
+      }
+  }
+  
   return null;
 }
 
