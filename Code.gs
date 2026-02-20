@@ -2282,7 +2282,7 @@ function obtenerProductosConStock() {
   // 1. Obtener Datos Básicos
   // Usamos getData (tu función genérica) para obtener objetos limpios
   // Nota: getData debe estar definida en tu script como la tenías antes
-  const productos = getData('PRODUCTOS'); 
+  const productos = getData('PRODUCTOS');
   
   // Si no hay tabla de existencias (aún no se creó), devolvemos productos tal cual
   if (!sheetStock) return productos;
@@ -4487,4 +4487,102 @@ function obtenerProductoPorId(id) {
 
 function guardarConfigRemision(nuevoValor, usuario) {
   return guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoValor, usuario);
+}
+
+// ==========================================
+// MÓDULO EXCLUSIVO: SERVICIOS
+// ==========================================
+
+/**
+ * Obtiene la lista completa de servicios.
+ */
+function obtenerServicios() {
+  try {
+    return getData('SERVICIOS');
+  } catch (error) {
+    console.error("Error al obtener servicios:", error);
+    return [];
+  }
+}
+
+/**
+ * Crea o actualiza un servicio en la base de datos.
+ */
+/**
+ * Crea o actualiza un servicio en la base de datos (con IVA).
+ */
+function guardarServicio(servicio) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); 
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const sheet = ss.getSheetByName('SERVICIOS');
+    
+    if (!sheet) throw new Error("La hoja SERVICIOS no existe.");
+
+    // Limpieza de precio por si envían "Gs250.000" como vi en tu CSV
+    const precioLimpio = Number(String(servicio.precio).replace(/[^\d]/g, '')) || 0;
+    const ivaLimpio = Number(servicio.impuesto_iva) || 0;
+    const metodoLimpio = servicio.metodo_iva || 'INCLUIDO';
+
+    if (servicio.id_servicio) {
+      // MODO EDICIÓN
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(servicio.id_servicio)) {
+          // Ampliamos el rango a 5 columnas
+          sheet.getRange(i + 1, 1, 1, 5).setValues([[
+            servicio.id_servicio, 
+            servicio.descripcion, 
+            ivaLimpio,
+            metodoLimpio,
+            precioLimpio
+          ]]);
+          return { status: true, mensaje: 'Servicio actualizado correctamente.' };
+        }
+      }
+      return { status: false, mensaje: 'Servicio no encontrado para editar.' };
+    } else {
+      // MODO CREACIÓN
+      const nuevoId = Utilities.getUuid();
+      // appendRow debe respetar el mismo orden de las 5 columnas
+      sheet.appendRow([
+        nuevoId, 
+        servicio.descripcion, 
+        ivaLimpio, 
+        metodoLimpio, 
+        precioLimpio
+      ]);
+      return { status: true, mensaje: 'Servicio registrado correctamente.' };
+    }
+  } catch (error) {
+    return { status: false, mensaje: 'Error al guardar el servicio: ' + error.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Elimina un servicio por su ID.
+ */
+function eliminarServicio(id_servicio) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const sheet = ss.getSheetByName('SERVICIOS');
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(id_servicio)) {
+        sheet.deleteRow(i + 1);
+        return { status: true, mensaje: 'Servicio eliminado correctamente.' };
+      }
+    }
+    return { status: false, mensaje: 'Servicio no encontrado.' };
+  } catch (error) {
+    return { status: false, mensaje: 'Error al eliminar: ' + error.toString() };
+  } finally {
+    lock.releaseLock();
+  }
 }

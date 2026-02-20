@@ -26,6 +26,7 @@ function configurarERP() {
     { nombre: "PROVEEDORES", cols: ["id_proveedor", "razon_social", "doc_identidad", "contacto", "datos_adicionales"] },
     { nombre: "CATEGORIAS", cols: ["id_categoria", "nombre"] },
     { nombre: "UNIDADES", cols: ["id_unidad", "nombre", "abreviatura"] },
+    { nombre: "SERVICIOS", cols: ["id_servicio", "descripcion", "precio"] },
 
     // --- STOCK ---
     { nombre: "STOCK_EXISTENCIAS", cols: ["id_existencia", "id_producto", "id_deposito", "cantidad", "fecha_actualizacion"] },

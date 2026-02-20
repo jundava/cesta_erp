@@ -2764,12 +2764,13 @@
                             </h3>
                             <small class="text-muted" v-if="subVistaProductos === 'lista'">{{ productos.length }} productos
                                 activos</small>
-                            <small class="text-muted" v-else>Corrección manual de existencias</small>
+                            <small class="text-muted" v-else>Definición detallada de servicios o ajustes.</small>
                         </div>
 
                         <button v-if="subVistaProductos === 'lista'" class="btn btn-brand shadow-sm w-100 w-md-auto"
-                            @click="abrirModalProducto(null)"><i class="bi-plus-lg"></i> Nuevo
-                            Producto</button>
+                            @click="abrirModalProducto(null)">
+                            <i class="bi-plus-lg"></i> Nuevo Producto
+                        </button>
 
                         <div class="d-flex gap-2">
                             <div class="btn-group shadow-sm">
@@ -2778,6 +2779,11 @@
                                     @click="subVistaProductos = 'lista'">
                                     <i class="bi bi-grid-fill me-1"></i> Catálogo
                                 </button>
+                                <button class="btn"
+                                    :class="subVistaProductos === 'servicios' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
+                                    @click="subVistaProductos = 'servicios'">
+                                    <i class="bi bi-tools me-1"></i> Servicios
+                                </button>                                
                                 <button class="btn"
                                     :class="subVistaProductos === 'ajustes' ? 'btn-brand' : 'btn-white bg-white text-secondary border'"
                                     @click="subVistaProductos = 'ajustes'">
@@ -2986,6 +2992,68 @@
                                     <strong>Nota:</strong> Los ajustes impactan inmediatamente en el stock del depósito
                                     seleccionado y quedan registrados en el reporte de Movimientos.
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="subVistaProductos === 'servicios'" class="animate__animated animate__fadeIn">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                            <h4 class="mb-0 text-dark fw-bold">
+                                <i class="bi bi-tools text-brand me-2"></i>Gestión de Servicios
+                            </h4>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-secondary shadow-sm" @click="subVistaProductos = 'lista'">
+                                    <i class="bi bi-arrow-left"></i> Volver a Catálogo
+                                </button>
+                                <button class="btn btn-brand shadow-sm" @click="abrirModalServicio()">
+                                    <i class="bi bi-plus-lg"></i> Nuevo Servicio
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm border-0 mb-4">
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" class="form-control border-start-0 bg-light" v-model="busquedaServicio" placeholder="Buscar servicio por descripción...">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm border-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-4">Descripción del Servicio</th>
+                                            <th class="text-end">Precio (Gs.)</th>
+                                            <th class="text-center" style="width: 150px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="s in serviciosFiltrados" :key="s.id_servicio">
+                                            <td class="ps-4 fw-bold text-dark">{{ s.descripcion }}</td>
+                                            <td class="text-end text-success fw-bold">
+                                                {{ Number(s.precio).toLocaleString('es-PY') }}
+                                                <span class="badge bg-secondary ms-1" style="font-size: 0.65rem;">IVA {{ s.impuesto_iva }}%</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <button class="btn btn-sm btn-outline-secondary me-2 shadow-sm" @click="abrirModalServicio(s)" title="Editar">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger shadow-sm" @click="eliminarServicioUi(s.id_servicio)" title="Eliminar">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="serviciosFiltrados.length === 0">
+                                            <td colspan="3" class="text-center text-muted py-5">
+                                                <i class="bi bi-inbox fs-2 d-block mb-2 opacity-50"></i>
+                                                No se encontraron servicios registrados.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -3903,6 +3971,60 @@
                   
               </div>
 
+                <div class="modal fade" id="modalServicio" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content border-0 shadow">
+                            <div class="modal-header bg-light">
+                                <h5 class="modal-title fw-bold">
+                                    <i class="bi bi-tools me-2 text-primary"></i>
+                                    {{ modalServicio.id_servicio ? 'Editar Servicio' : 'Nuevo Servicio' }}
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body p-4">
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold">Descripción / Nombre <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" v-model="modalServicio.descripcion" placeholder="Ej: Flete, Soporte Técnico...">
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Impuesto IVA <span class="text-danger">*</span></label>
+                                        <select class="form-select" v-model.number="modalServicio.impuesto_iva">
+                                            <option value="10">IVA 10%</option>
+                                            <option value="5">IVA 5%</option>
+                                            <option value="0">Exento</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold">Método IVA <span class="text-danger">*</span></label>
+                                        <select class="form-select" v-model="modalServicio.metodo_iva">
+                                            <option value="INCLUIDO">IVA Incluido</option>
+                                            <option value="EXCLUIDO">IVA Excluido (+)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold">Precio Base <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light text-muted">Gs.</span>
+                                            <input type="number" class="form-control text-end fw-bold text-success" v-model="modalServicio.precio" min="0" step="1">
+                                        </div>
+                                        <small class="text-muted d-block mt-1" v-if="modalServicio.metodo_iva === 'EXCLUIDO'">
+                                            <i class="bi bi-info-circle me-1"></i> El IVA será sumado al facturar.
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer bg-light border-top-0">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn text-white" style="background-color: var(--color-primary);" @click="guardarServicioModal()">
+                                    <i class="bi bi-save me-1"></i> Guardar Servicio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 
                 <div class="modal fade" id="modalCategoria" tabindex="-1">
                     <div class="modal-dialog modal-dialog-centered modal-sm">
@@ -4699,6 +4821,12 @@
 
             modoDebug: true,
 
+            listaServicios: [],
+            
+            busquedaServicio: '',
+            
+            modalServicio: { id_servicio: '', descripcion: '', impuesto_iva: 10, metodo_iva: 'INCLUIDO', precio: 0 },
+            
             subVistaVentas:'nueva', subVistaCompras:'nueva', chartInstance: null,
 
             productos: [], proveedores: [], clientes: [], listaDepositos: [], listaConfigCampos: [], listaCategorias: [], listaUnidades: [],
@@ -5066,6 +5194,20 @@
                 }, 0);
             },
 
+            serviciosFiltrados() {
+                // 1. Si la lista no existe, devolvemos un array vacío para que el .length no falle
+                if (!this.listaServicios || !Array.isArray(this.listaServicios)) return [];
+                
+                // 2. Blindamos el texto de búsqueda por si es null
+                const texto = (this.busquedaServicio || '').toLowerCase().trim();
+                if (!texto) return this.listaServicios;
+                
+                // 3. Filtramos
+                return this.listaServicios.filter(s => 
+                    String(s.descripcion || '').toLowerCase().includes(texto)
+                );
+            },
+
             totalCarritoPresupuesto() {
                 return this.carritoPresupuesto.reduce((total, item) => total + item.subtotal, 0);
             },
@@ -5351,6 +5493,72 @@
             // --- HELPER PARA NOTIFICACIONES ---
             notificar(icono, titulo) {
                 Toast.fire({ icon: icono, title: titulo });
+            },
+
+            async cargarServicios() {
+                try {
+                    const servicios = await this.ejecutarFuncionBackend('obtenerServicios');
+                    this.listaServicios = servicios || [];
+                } catch (error) {
+                    console.error("Fallo al cargar servicios:", error);
+                }
+            },
+
+            abrirModalServicio(s) {
+                if (s && s.id_servicio) {
+                    this.modalServicio = { ...s };
+                } else {
+                    // Inicializamos con el IVA 10% por defecto
+                    this.modalServicio = { id_servicio: '', descripcion: '', impuesto_iva: 10, metodo_iva: 'INCLUIDO', precio: 0 };
+                }
+                new bootstrap.Modal(document.getElementById('modalServicio')).show();
+            },
+
+            async guardarServicioModal() {
+                if (!this.modalServicio.descripcion) {
+                    return Swal.fire('Atención', 'La descripción es obligatoria', 'warning');
+                }
+                
+                Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+                
+                try {
+                    const res = await this.ejecutarFuncionBackend('guardarServicio', this.modalServicio);
+                    if (res.status) {
+                        Swal.fire('Éxito', res.mensaje, 'success');
+                        bootstrap.Modal.getInstance(document.getElementById('modalServicio')).hide();
+                        this.cargarDatosIniciales(); // O el método que recarga tus datos
+                    } else {
+                        Swal.fire('Error', res.mensaje, 'error');
+                    }
+                } catch (error) {
+                    Swal.fire('Error', 'Fallo al guardar: ' + error, 'error');
+                }
+            },
+
+            async eliminarServicioUi(id) {
+                const conf = await Swal.fire({
+                    title: '¿Eliminar servicio?',
+                    text: 'Esta acción no se puede deshacer.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    confirmButtonText: 'Sí, Eliminar'
+                });
+
+                if (conf.isConfirmed) {
+                    Swal.fire({ title: 'Eliminando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+                    try {
+                        const res = await this.ejecutarFuncionBackend('eliminarServicio', id);
+                        if (res.status) {
+                            Swal.fire('Eliminado', res.mensaje, 'success');
+                            this.cargarDatosIniciales(); // O el método que recarga tus datos
+                        } else {
+                            Swal.fire('Error', res.mensaje, 'error');
+                        }
+                    } catch (error) {
+                        Swal.fire('Error', 'Fallo la eliminación: ' + error, 'error');
+                    }
+                }
             },
             
             formatoMoneda(val) { if(!val) return 'Gs 0'; return new Intl.NumberFormat('es-PY').format(val); },
@@ -6394,7 +6602,8 @@
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerDepositos()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigFactura()),
                     new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigGeneral()),
-                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigRemision())
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerConfigRemision()),
+                    new Promise(r => google.script.run.withSuccessHandler(r).obtenerServicios())
                 ]).then(res => {
                   console.log("=== DEBUGGING DATOS ===");
                     this.productos = res[0]; 
@@ -6407,6 +6616,7 @@
                     this.configFacturaActual = res[7];
                     this.configGeneral = res[8] || {};
                     this.configRemisionActual = res[9];
+                    this.listaServicios = res[10] || [];
                     
                     this.depositoDefault = this.configGeneral['DEPOSITO_DEFAULT'] || '';
 
