@@ -4185,13 +4185,29 @@ function generarPDFPresupuesto(id, numero, datos) {
       }
     });
     const totalLiq = liq5 + liq10;
+
+    // ✅ Calcular validez en días
+    let validezCalculada = "30 días"; // Valor por defecto
+    
+    if (datos.validez) {
+        // Si el front ya envía los días exactos, los usamos
+        validezCalculada = datos.validez + (String(datos.validez).toLowerCase().includes("día") ? "" : " días");
+    } else if (datos.fecha && datos.fecha_vencimiento) {
+        // Si tenemos fechas, calculamos la diferencia matemática en tiempo real
+        const fEmision = new Date(datos.fecha + "T12:00:00");
+        const fVencimiento = new Date(datos.fecha_vencimiento + "T12:00:00");
+        const diferenciaMs = fVencimiento - fEmision;
+        const dias = Math.round(diferenciaMs / (1000 * 60 * 60 * 24));        
+        // Previene días negativos si el vencimiento fuera anterior
+        validezCalculada = (dias > 0 ? dias : 0) + " días";
+    }
     
     // ✅ Pasar datos correctamente estructurados
     templatePresupuesto.datos = {
       numero: numero,
       nro_presupuesto: numero, // Fallback
       fecha: datos.fecha ? new Date(datos.fecha + "T12:00:00").toLocaleDateString('es-PY') : new Date().toLocaleDateString('es-PY'),
-      validez: "30 días", 
+      validez: validezCalculada, 
       cliente_nombre: cliente ? cliente.razon_social : "Cliente Casual",
       cliente_doc: cliente ? cliente.doc_identidad : "---",
       cliente_dir: cliente ? cliente.direccion : "---",
