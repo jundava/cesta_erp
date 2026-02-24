@@ -492,11 +492,10 @@
                                         <i class="bi bi-circle-fill me-1" style="font-size: 9px;"></i>
                                         {{ getTextoConectado() }}
                                     </small>
-                                    <small :class="getClaseConectado()" style="font-size: 10px; line-height: 1.2; top-margin: 5px;" v-if="estadoSuscripcion && estadoSuscripcion.estado === 'ACTIVA'">
-                                        {{ estadoSuscripcion.estado }} Vence: {{ formatearFecha(estadoSuscripcion.fechaVencimiento) }}
-                                    </small>
-
                                     
+                                    <small class="text-muted mt-1" style="font-size: 10px; line-height: 1.2;" v-if="estadoSuscripcion && estadoSuscripcion.estado === 'ACTIVA'">
+                                        Vence: <strong>{{ formatearFecha(estadoSuscripcion.fechaVencimiento) }}</strong>
+                                    </small>
 
                                 </div>
                             </div>
@@ -7761,10 +7760,32 @@
             
             formatearFecha(fecha) {
                 if (!fecha) return '-';
-                const f = new Date(fecha);
-                return f.toLocaleDateString('es-PY');
+                try {
+                    // Convertimos a string por seguridad
+                    const strFecha = String(fecha);
+                    
+                    // Extraemos solo la parte YYYY-MM-DD (ignora la 'T' y las horas si las hay)
+                    const datePart = strFecha.split('T')[0]; 
+                    
+                    // Si el string coincide con la estructura de fecha, lo armamos manualmente
+                    if (datePart.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const partes = datePart.split('-');
+                        return `${partes[2]}/${partes[1]}/${partes[0]}`; // Retorna DD/MM/YYYY exacto
+                    }
+                    
+                    // Fallback nativo en caso de ser otro tipo de fecha
+                    const f = new Date(fecha);
+                    return f.toLocaleDateString('es-PY');
+                } catch (error) {
+                    return fecha;
+                }
             },
-            
+
+            formatearFechaCorta(fecha) {
+                // Hacemos que utilice la misma lógica a prueba de balas
+                return this.formatearFecha(fecha);
+            },
+
             abrirPagoSuscripcion() {
                 Swal.fire({
                     icon: 'info',
@@ -8101,13 +8122,7 @@
                 if (!total || total === 0) return 0;
                 return Math.round((valor / total) * 100);
             },
-            
-            formatearFechaCorta(fecha) {
-                if (!fecha) return '-';
-                const f = new Date(fecha);
-                return f.toLocaleDateString('es-PY');
-            },
-            
+                       
             // Helper para ejecutar funciones de Apps Script
             ejecutarFuncionBackend(nombreFuncion, ...args) {
                 return new Promise((resolve, reject) => {

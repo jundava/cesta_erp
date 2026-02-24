@@ -77,15 +77,15 @@ function actualizarConfiguracion(parametro, valor) {
 // ============================================================
 
 /**
- * Verifica el estado de suscripción de un usuario.
- * CORREGIDA: Lectura estricta de columnas según CSV para evitar datos erróneos al bloquear.
+ * Verifica el estado de la suscripción global del ERP.
+ * Ya no requiere el 'email' del usuario, la licencia aplica a todo el entorno.
  */
-function verificarEstadoSuscripcion(email) {
+function verificarEstadoSuscripcion() {
   try {
     const ss = SpreadsheetApp.openById(SS_ID_SUSCRIPCIONES);
     const sheetSub = ss.getSheetByName('SUSCRIPCIONES');
     
-    // Si no hay hoja o datos, bloqueamos por seguridad
+    // Si no hay hoja o datos, bloqueamos por seguridad (Nadie entra si no hay licencia)
     if (!sheetSub || sheetSub.getLastRow() <= 1) {
       return {
         existe: false,
@@ -94,97 +94,84 @@ function verificarEstadoSuscripcion(email) {
         soloLectura: false,
         mostrarAlerta: false,
         diasVencimiento: 0,
-        fechaVencimiento: new Date(),
+        fechaVencimiento: new Date().toISOString(),
         monto: 0,
-        mensaje: 'No se encontró registro de suscripciones.'
+        mensaje: 'Licencia del sistema no encontrada.'
       };
     }
     
     const data = sheetSub.getDataRange().getValues();
-    const config = leerConfiguracionSuscripciones(); // Asegúrate de tener esta función
+    const config = leerConfiguracionSuscripciones(); 
     
-    // Normalizar email buscado
-    const emailBuscado = String(email).trim().toLowerCase();
+    // Asumimos que la fila 1 (índice 1) contiene la suscripción MAESTRA de la empresa
+    const filaSuscripcion = data[1];
 
-    // Recorrer desde fila 1 (saltar encabezados)
-    for (let i = 1; i < data.length; i++) {
-      // Columna F (índice 5) es el Email Principal según tu CSV
-      const emailFila = String(data[i][5] || '').trim().toLowerCase();
+    // --- MAPEO DE DATOS CRÍTICOS ---
+    const idSuscripcion = filaSuscripcion[0]; // Col A
+    const rawFecha      = filaSuscripcion[8]; // Col I: fecha_vencimiento
+    const estado        = String(filaSuscripcion[9]); // Col J: estado_suscripcion
+    const monto         = Number(filaSuscripcion[10]); // Col K: monto_mensual
 
-      if (emailFila === emailBuscado) {
-        
-        // --- MAPEO DE DATOS CRÍTICOS ---
-        const idSuscripcion = data[i][0]; // Col A
-        const rawFecha = data[i][8];      // Col I: fecha_vencimiento
-        const estado = String(data[i][9]);// Col J: estado_suscripcion
-        const monto = Number(data[i][10]);// Col K: monto_mensual
-
-        // Manejo seguro de fecha
-        let fechaVencimiento = new Date();
-        if (rawFecha instanceof Date) {
-            fechaVencimiento = rawFecha;
-        } else if (rawFecha) {
-            fechaVencimiento = new Date(rawFecha);
+    // --- CORRECCIÓN CRÍTICA DE FECHAS Y ZONA HORARIA ---
+    let fechaVencimiento = new Date();
+    if (rawFecha instanceof Date) {
+        fechaVencimiento = rawFecha;
+    } else if (rawFecha) {
+        const strVal = String(rawFecha).trim();
+        // Si viene en formato manual DD/MM/YYYY desde Sheets
+        if (strVal.includes('/')) {
+            const partes = strVal.split('/');
+            if (partes.length === 3) {
+                // Forzamos formato ISO a las 12:00 PM para anular desfases de Timezone (Ej: 31/12/203)
+                fechaVencimiento = new Date(`${partes[2]}-${partes[1]}-${partes[0]}T12:00:00Z`);
+            }
+        } else {
+            fechaVencimiento = new Date(strVal);
         }
+    }
 
-        // Calcular días restantes
-        const diasVencimiento = calcularDiasVencimiento(fechaVencimiento);
-        
-        // Lógica de permisos
-        let bloqueado = false;
-        let soloLectura = false;
-        let mostrarAlerta = false;
-        let mensaje = '';
-        
-        // --- REGLAS DE NEGOCIO ---
-        if (estado === 'BLOQUEADA') {
-          bloqueado = true;
-          mensaje = `Suscripción suspendida. Venció hace ${Math.abs(diasVencimiento)} días.`;
-        } 
-        else if (estado === 'GRACIA') {
-          // Si la config dice PERMITIR_MODO_CONSULTA = true, no bloqueamos, solo restringimos escritura
-          soloLectura = config.PERMITIR_MODO_CONSULTA; 
-          bloqueado = !soloLectura; // Si no permite consulta, se bloquea total
-          mostrarAlerta = true;
-          mensaje = `Tu suscripción venció. Tienes ${config.DIAS_GRACIA || 3} días de gracia.`;
-        } 
-        else if (estado === 'VENCIDA') {
-          mostrarAlerta = true;
-          mensaje = 'Tu suscripción vence hoy.';
-        } 
-        else if (estado === 'ALERTA') {
-          mostrarAlerta = true;
-          mensaje = `Tu suscripción vence en ${diasVencimiento} días.`;
-        }
-        
-        // Retornar objeto de estado limpio
-        return {
-          existe: true,
-          id_suscripcion: idSuscripcion,
-          estado: estado,
-          bloqueado: bloqueado,
-          soloLectura: soloLectura,
-          mostrarAlerta: mostrarAlerta,
-          diasVencimiento: diasVencimiento,
-          // Convertimos la fecha a ISO string para que viaje bien a Vue/HTML
-          fechaVencimiento: fechaVencimiento.toISOString(), 
-          monto: monto || 0,
-          mensaje: mensaje
-        };
-      }
+    // Calcular días restantes
+    const diasVencimiento = calcularDiasVencimiento(fechaVencimiento);
+    
+    // Lógica de permisos
+    let bloqueado = false;
+    let soloLectura = false;
+    let mostrarAlerta = false;
+    let mensaje = '';
+    
+    // --- REGLAS DE NEGOCIO ---
+    if (estado === 'BLOQUEADA') {
+      bloqueado = true;
+      mensaje = `La licencia del sistema está suspendida. Venció hace ${Math.abs(diasVencimiento)} días.`;
+    } 
+    else if (estado === 'GRACIA') {
+      soloLectura = config.PERMITIR_MODO_CONSULTA; 
+      bloqueado = !soloLectura; 
+      mostrarAlerta = true;
+      mensaje = `La licencia del sistema venció. Quedan ${config.DIAS_GRACIA || 3} días de gracia.`;
+    } 
+    else if (estado === 'VENCIDA') {
+      mostrarAlerta = true;
+      mensaje = 'La licencia del sistema vence hoy.';
+    } 
+    else if (estado === 'ALERTA') {
+      mostrarAlerta = true;
+      mensaje = `La licencia del sistema vence en ${diasVencimiento} días.`;
     }
     
-    // Si terminamos el loop y no encontramos el email
+    // Retornar objeto de estado limpio
     return {
-      existe: false,
-      estado: 'SIN_SUSCRIPCION',
-      bloqueado: true,
-      soloLectura: false,
-      mostrarAlerta: false,
-      diasVencimiento: 0,
-      fechaVencimiento: new Date().toISOString(),
-      monto: 0,
-      mensaje: 'Usuario no registrado en suscripciones.'
+      existe: true,
+      id_suscripcion: idSuscripcion,
+      estado: estado,
+      bloqueado: bloqueado,
+      soloLectura: soloLectura,
+      mostrarAlerta: mostrarAlerta,
+      diasVencimiento: diasVencimiento,
+      // Convertimos la fecha a ISO string (solo fecha, cortando horas) para Vue/HTML
+      fechaVencimiento: fechaVencimiento.toISOString().split('T')[0], 
+      monto: monto || 0,
+      mensaje: mensaje
     };
     
   } catch (error) {
@@ -192,8 +179,13 @@ function verificarEstadoSuscripcion(email) {
     return {
       existe: false,
       estado: 'ERROR',
-      bloqueado: true, // Ante error, bloquear por seguridad
-      mensaje: 'Error verificando suscripción. Contacte soporte.'
+      bloqueado: true,
+      soloLectura: false,
+      mostrarAlerta: false,
+      diasVencimiento: 0,
+      fechaVencimiento: new Date().toISOString().split('T')[0],
+      monto: 0,
+      mensaje: 'Error verificando la licencia del sistema. Contacte a soporte.'
     };
   }
 }

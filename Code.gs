@@ -94,7 +94,7 @@ function doGet(e) {
   const userEmail = usuarioEncontrado.email;
   
   // 4. Verificar estado de suscripción
-  const estadoSuscripcion = verificarEstadoSuscripcion(userEmail);
+  const estadoSuscripcion = verificarEstadoSuscripcion();
   
   // 5. Si está bloqueado, mostrar pantalla de pago (PRIORIDAD 1)
   if (estadoSuscripcion.bloqueado) {
