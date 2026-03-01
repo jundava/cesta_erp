@@ -249,7 +249,7 @@
 
                     <div class="text-center mb-4">
                         <h4 class="fw-bold text-dark mb-1"><img
-                                src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w900"
+                                src="https://i.postimg.cc/QtSF30jg/iso-logo-cesta.png"
                                 alt="CESTA Logo" class="logo-img"> Bienvenido</h4>
                         <p class="text-muted small">Ingresa tus credenciales para acceder</p>
                     </div>
@@ -341,7 +341,7 @@
                 <div class="d-flex align-items-center" style="cursor: pointer;"
                     @click="vistaActual = 'dashboard'; cargarDashboard()">
 
-                    <img src="https://drive.google.com/thumbnail?id=15DzlDGz-7Wr1Z0kLAHqBuKSX6QIyvuBf&sz=w900"
+                    <img src="https://i.postimg.cc/QtSF30jg/iso-logo-cesta.png"
                         alt="CESTA Logo" class="logo-img me-2"> <span class="fw-bold text-white fs-5">Cesta ERP</span>
                 </div>
 
@@ -620,24 +620,28 @@
                                 <h6 class="text-brand text-uppercase fw-bold small mb-3">Agregar Productos</h6>
                                   <form @submit.prevent="agregarAlCarritoVenta">
                                       <div class="row g-2 align-items-end">
-                                          <div class="col-md-6">
-                                              <label class="form-label small">Producto</label>
+                                          <div class="col-md-6 position-relative">
+                                              <label class="form-label small fw-bold">Buscar Producto</label>
                                               <div class="input-group">
-                                                  <button class="btn btn-dark" type="button" @click="abrirEscaner"
-                                                      title="Escanear Código de Barras">
+                                                  <button class="btn btn-dark btn-lg" type="button" @click="abrirEscaner" title="Escanear Código">
                                                       <i class="bi bi-qr-code-scan"></i>
                                                   </button>
-
-                                                  <select class="form-select form-select-lg"
-                                                      v-model="lineaVenta.id_producto" required
-                                                      @change="alSeleccionarProductoVenta">
-                                                      <option value="" disabled>🔍 Buscar o Escanear...</option>
-                                                      <option v-for="p in catalogoParaVentas" :value="p.id_producto"
-                                                          :disabled="!p.es_servicio && (p.stock_actual || 0) <= 0">
-                                                          {{ p.nombre }} {{ p.es_servicio ? '| (Servicio)' : '| Stock: ' + (p.stock_actual || 0) }} | {{ formatoMoneda(p.precio_venta_base) }}
-                                                      </option>
-                                                  </select>
+                                                  <input type="text" class="form-control form-control-lg" v-model="busquedaProductoTexto" 
+                                                        @focus="mostrarDropdownProductos = 'ventas'" @blur="mostrarDropdownProductos = null"
+                                                        placeholder="🔍 Escribe para buscar producto..." autocomplete="off">
                                               </div>
+                                              
+                                              <ul class="list-group position-absolute w-100 shadow" style="z-index: 1050; max-height: 250px; overflow-y: auto; top: 100%;" v-show="mostrarDropdownProductos === 'ventas'">
+                                                  <li class="list-group-item list-group-item-action py-2" v-for="p in catalogoFiltradoVentas" :key="p.id_producto"
+                                                      @mousedown.prevent="seleccionarProductoLista(p, 'ventas')" style="cursor: pointer; font-size: 0.85rem;">
+                                                      <div class="fw-bold text-dark">{{ p.nombre }}</div>
+                                                      <div class="d-flex justify-content-between text-muted">
+                                                          <span>{{ p.es_servicio ? 'Servicio' : 'Stock: ' + (p.stock_actual || 0) }}</span>
+                                                          <span class="text-brand fw-bold">{{ formatoMoneda(p.precio_venta_base) }}</span>
+                                                      </div>
+                                                  </li>
+                                                  <li v-if="catalogoFiltradoVentas.length === 0" class="list-group-item text-center text-muted small">Sin stock disponible o no encontrado</li>
+                                              </ul>
                                           </div>
 
                                           <div class="col-md-2 col-4">
@@ -1659,13 +1663,22 @@
                                         <div class="row g-2 align-items-end">
                                             <div class="col-md-6">
                                                 <label class="form-label small fw-bold">Producto</label>
-                                                <select class="form-select" v-model="lineaPresupuesto.id_producto" @change="alSeleccionarProductoPresupuesto" required>
-                                                    <option value="" disabled>Buscar producto o servicio...</option>
-                                                    <option v-for="p in catalogoParaVentas" :value="p.id_producto">
-                                                        {{ p.nombre }} {{ p.es_servicio ? '| (Servicio)' : '' }} 
-                                                        (Ref: {{ formatoMoneda(p.precio_venta_base) }})
-                                                    </option>
-                                                </select>
+                                                <div class="position-relative w-100">
+                                                    <input type="text" class="form-control" v-model="busquedaProductoTexto" 
+                                                           @focus="mostrarDropdownProductos = 'presupuestos'" @blur="mostrarDropdownProductos = null"
+                                                           placeholder="🔍 Escribe para buscar producto..." autocomplete="off">
+                                                           
+                                                    <ul class="list-group position-absolute w-100 shadow" style="z-index: 1050; max-height: 250px; overflow-y: auto; top: 100%;" v-show="mostrarDropdownProductos === 'presupuestos'">
+                                                        <li class="list-group-item list-group-item-action py-2" v-for="p in catalogoFiltradoParaBuscador" :key="p.id_producto"
+                                                            @mousedown.prevent="seleccionarProductoLista(p, 'presupuestos')" style="cursor: pointer; font-size: 0.85rem;">
+                                                            <div class="fw-bold">{{ p.nombre }}</div>
+                                                            <div class="d-flex justify-content-between text-muted">
+                                                                <span>{{ p.es_servicio ? 'Servicio' : 'Stock: ' + (p.stock_actual || 0) }}</span>
+                                                                <span class="text-success fw-bold">{{ formatoMoneda(p.precio_venta_base) }}</span>
+                                                            </div>
+                                                        </li>
+                                                    </ul>
+                                                </div>
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small fw-bold">Cant.</label>
@@ -1862,13 +1875,25 @@
                                 <div class="card-body bg-light">
                                     <form @submit.prevent="agregarAlCarritoRemision">
                                         <div class="row g-2 align-items-end">
-                                            <div class="col-md-8">
+                                            <div class="col-md-8 position-relative">
                                                 <label class="form-label small fw-bold">Producto a Trasladar</label>
-                                                <select class="form-select" v-model="lineaRemision.id_producto" required>
-                                                    <option value="" disabled>Buscar producto...</option>
-                                                    <option v-for="p in productos" :value="p.id_producto">{{ p.nombre }}
-                                                        (Stock Global: {{ p.stock_actual }})</option>
-                                                </select>
+                                                <div class="input-group">
+                                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                                    <input type="text" class="form-control border-start-0 ps-0" v-model="busquedaProductoTexto" 
+                                                          @focus="mostrarDropdownProductos = 'remisiones'" @blur="mostrarDropdownProductos = null"
+                                                          placeholder="🔍 Escribe para buscar producto..." autocomplete="off">
+                                                </div>
+                                                
+                                                <ul class="list-group position-absolute w-100 shadow" style="z-index: 1050; max-height: 250px; overflow-y: auto; top: 100%;" v-show="mostrarDropdownProductos === 'remisiones'">
+                                                    <li class="list-group-item list-group-item-action py-2" v-for="p in catalogoFiltradoVentas" :key="p.id_producto"
+                                                        @mousedown.prevent="seleccionarProductoLista(p, 'remisiones')" style="cursor: pointer; font-size: 0.85rem;">
+                                                        <div class="fw-bold text-dark">{{ p.nombre }}</div>
+                                                        <div class="d-flex justify-content-between text-muted small">
+                                                            <span>{{ p.es_servicio ? 'Servicio' : 'Stock Global: ' + (p.stock_actual || 0) }}</span>
+                                                        </div>
+                                                    </li>
+                                                    <li v-if="catalogoFiltradoVentas.length === 0" class="list-group-item text-center text-muted small">Sin stock disponible o no encontrado</li>
+                                                </ul>
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small fw-bold">Cantidad</label>
@@ -5108,6 +5133,10 @@
 
             busquedaVenta: '',
 
+            busquedaProductoTexto: '', 
+            
+            mostrarDropdownProductos: null,
+
             historialVentas: [], 
 
             itemsDetalle: [],
@@ -5192,6 +5221,30 @@
                     
                     return acc + montoIVA;
                 }, 0);
+            },
+
+            catalogoFiltradoParaBuscador() {
+                // 1. Obtenemos el catálogo y lo ordenamos de la A a la Z
+                let catalogo = this.catalogoParaVentas.slice().sort((a, b) => 
+                    String(a.nombre).localeCompare(String(b.nombre))
+                );
+
+                // 2. Filtramos incrementalmente según lo que se escriba
+                if (this.busquedaProductoTexto) {
+                    const query = this.busquedaProductoTexto.toLowerCase().trim();
+                    catalogo = catalogo.filter(p => 
+                        String(p.nombre).toLowerCase().includes(query) || 
+                        String(p.sku).toLowerCase().includes(query)
+                    );
+                }
+                return catalogo;
+            },
+
+            catalogoFiltradoVentas() {
+                // Usa el buscador base, pero ELIMINA los productos físicos que tengan stock 0
+                return this.catalogoFiltradoParaBuscador.filter(p => 
+                    p.es_servicio || String(p.maneja_stock) === 'FALSE' || p.stock_actual > 0
+                );
             },
 
             catalogoParaVentas() {
@@ -5514,6 +5567,22 @@
             // --- HELPER PARA NOTIFICACIONES ---
             notificar(icono, titulo) {
                 Toast.fire({ icon: icono, title: titulo });
+            },
+
+            seleccionarProductoLista(p, modulo) {
+                this.busquedaProductoTexto = p.nombre; // Muestra el nombre en el input
+                this.mostrarDropdownProductos = null; // Oculta la lista desplegable
+                
+                // Dispara la lógica interna según el módulo
+                if (modulo === 'ventas') {
+                    this.lineaVenta.id_producto = p.id_producto;
+                    this.alSeleccionarProductoVenta();
+                } else if (modulo === 'presupuestos') {
+                    this.lineaPresupuesto.id_producto = p.id_producto;
+                    this.alSeleccionarProductoPresupuesto();
+                } else if (modulo === 'remisiones') {
+                    this.lineaRemision.id_producto = p.id_producto;
+                }
             },
 
             async cargarServicios() {
@@ -6672,85 +6741,100 @@
             },
 
             guardarConfigRemision() {
-                this.cargando = true;
-                const usuario = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
+              this.cargando = true;
+              const usuario = this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador';
 
-                google.script.run.withSuccessHandler(() => {
-                    this.cargando = false;
-                    this.notificar('success', "Secuencia de remisión actualizada");
-                })
-                .guardarConfigRemision(this.configRemisionActual, usuario);
-            },
+              google.script.run.withSuccessHandler(() => {
+                  this.cargando = false;
+                  this.notificar('success', "Secuencia de remisión actualizada");
+              })
+              .guardarConfigRemision(this.configRemisionActual, usuario);
+          },
 
-            // LÓGICA DE REMISIÓN MEJORADA (CON PRECIOS Y AUTO-NUM)
-            agregarAlCarritoRemision() {
-                if(!this.lineaRemision.id_producto || this.lineaRemision.cantidad < 1) return;
+          // LÓGICA DE REMISIÓN MEJORADA (CON SERVICIOS)
+          agregarAlCarritoRemision() {
+              if(!this.lineaRemision.id_producto || this.lineaRemision.cantidad < 1) return;
 
-                // Buscamos el producto para obtener su precio y nombre
-                const p = this.productos.find(x => x.id_producto == this.lineaRemision.id_producto);
+              // Buscamos en el catálogo unificado (Productos + Servicios)
+              const p = this.catalogoParaVentas.find(x => x.id_producto == this.lineaRemision.id_producto);
 
-                if (p) {
-                    this.carritoRemision.push({ 
-                        ...this.lineaRemision, 
-                        nombre_prod: p.nombre,
-                        // Usamos el precio base como referencia para valorizar
-                        precio: p.precio_venta_base 
-                    });
-                    this.lineaRemision = { id_producto: '', cantidad: 1 };
-                }
-            },
+              if (p) {
+                  // Validar stock al vuelo SOLO para productos físicos
+                  if (!p.es_servicio && String(p.maneja_stock) !== 'FALSE') {
+                      if (this.lineaRemision.cantidad > (p.stock_actual || 0)) {
+                          return this.notificar('warning', `Stock insuficiente. Disponible: ${p.stock_actual}`);
+                      }
+                  }
+
+                  this.carritoRemision.push({ 
+                      ...this.lineaRemision, 
+                      nombre_prod: p.nombre,
+                      precio: p.precio_venta_base,
+                      es_servicio: p.es_servicio || false,
+                      maneja_stock: p.maneja_stock || 'TRUE'
+                  });
+                  this.lineaRemision = { id_producto: '', cantidad: 1 };
+                  this.busquedaProductoTexto = '';
+              }
+          },
 
           guardarRemisionFinal() {
-                if(!this.formRemision.id_cliente || !this.formRemision.id_deposito || this.carritoRemision.length === 0) {
-                    return this.notificar('warning', "Faltan datos en la remisión.");
-                }
-                
-                this.cargando = true;
-                const cli = this.clientes.find(c => c.id_cliente == this.formRemision.id_cliente);
-                
-                const paquete = { 
-                    ...this.formRemision, 
-                    items: this.carritoRemision, 
-                    nombre_cliente: cli ? cli.razon_social : 'Cliente',
-                    usuario_editor: this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador'
-                };
+              if(!this.formRemision.id_cliente || !this.formRemision.id_deposito || this.carritoRemision.length === 0) {
+                  return this.notificar('warning', "Faltan datos en la remisión.");
+              }
+              
+              // DOBLE CHECK DE STOCK (Ignora Servicios)
+              for (let item of this.carritoRemision) {
+                  if (!item.es_servicio && String(item.maneja_stock) !== 'FALSE') {
+                      const p = this.catalogoParaVentas.find(x => String(x.id_producto) === String(item.id_producto));
+                      if (!p || item.cantidad > (p.stock_actual || 0)) {
+                          return this.notificar('warning', `Stock insuficiente para: ${item.nombre_prod}`);
+                      }
+                  }
+              }
+              
+              this.cargando = true;
+              const cli = this.clientes.find(c => c.id_cliente == this.formRemision.id_cliente);
+              
+              const paquete = { 
+                  ...this.formRemision, 
+                  items: this.carritoRemision, 
+                  nombre_cliente: cli ? cli.razon_social : 'Cliente',
+                  usuario_editor: this.usuarioLogueado ? this.usuarioLogueado.nombre : 'Operador'
+              };
 
-                google.script.run
-                    .withSuccessHandler(res => {
-                        this.cargando = false;
-                        
-                        // Limpieza
-                        this.carritoRemision = [];
-                        this.cargarDatosIniciales();
+              google.script.run
+                  .withSuccessHandler(res => {
+                      this.cargando = false;
+                      
+                      // Limpieza
+                      this.carritoRemision = [];
+                      this.cargarDatosIniciales();
 
-                        // --- ESTILO VENTAS ---
-                        // Usamos los botones NATIVOS de SweetAlert.
-                        // El botón "Confirmar" actuará como el botón de "Abrir PDF".
-                        if (res && res.pdf_url) {
-                            Swal.fire({
-                                title: 'Remisión Generada',
-                                text: `Nro: ${res.numero}. ¿Deseas ver el PDF?`,
-                                icon: 'success',
-                                showCancelButton: true,       // Muestra botón "Cerrar"
-                                confirmButtonColor: '#E06920', // Tu color Naranja
-                                confirmButtonText: 'Ver PDF',  // Texto del botón principal
-                                cancelButtonText: 'Cerrar'
-                            }).then((result) => {
-                                // Si el usuario hace clic en el botón Naranja (Confirmar)
-                                if (result.isConfirmed) {
-                                    window.open(res.pdf_url, '_blank');
-                                }
-                            });
-                        } else {
-                            this.notificar('success', `Remisión ${res.numero} guardada.`);
-                        }
-                    })
-                    .withFailureHandler(e => {
-                        this.cargando = false;
-                        this.notificar('error', "Error: " + e);
-                    })
-                    .guardarRemision(paquete);
-            },
+                      if (res && res.pdf_url) {
+                          Swal.fire({
+                              title: 'Remisión Generada',
+                              text: `Nro: ${res.numero}. ¿Deseas ver el PDF?`,
+                              icon: 'success',
+                              showCancelButton: true,
+                              confirmButtonColor: '#E06920',
+                              confirmButtonText: 'Ver PDF',
+                              cancelButtonText: 'Cerrar'
+                          }).then((result) => {
+                              if (result.isConfirmed) {
+                                  window.open(res.pdf_url, '_blank');
+                              }
+                          });
+                      } else {
+                          this.notificar('success', `Remisión ${res.numero} guardada.`);
+                      }
+                  })
+                  .withFailureHandler(e => {
+                      this.cargando = false;
+                      this.notificar('error', "Error: " + e);
+                  })
+                  .guardarRemision(paquete);
+          }, 
 
           facturarDesdeRemision(h) {
                 Swal.fire({
@@ -7366,6 +7450,7 @@
                 
                 // 4. Limpiar para el siguiente ítem
                 this.lineaVenta = {id_producto:'', cantidad:1, precio:0}; 
+                this.busquedaProductoTexto = '';
             },
             quitarDelCarritoVenta(i) { this.carritoVenta.splice(i,1); },
             limpiarCarritoVenta() { this.carritoVenta=[]; this.formVenta={id_cliente:'', fecha: new Date().toISOString().slice(0,10), nro_factura: ''}; },
@@ -8564,6 +8649,7 @@
 
                 // Limpiar la línea para el siguiente producto
                 this.lineaPresupuesto = { id_producto: '', cantidad: 1, precio: 0 };
+                this.busquedaProductoTexto = '';
             },
 
             // 4. Guardar Presupuesto Final en la base de datos

@@ -2461,7 +2461,6 @@ function crearPDFTransferencia(datos, items) {
 
 //REMISION
 
-
 function guardarRemision(datos) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
@@ -2473,66 +2472,109 @@ function guardarRemision(datos) {
   const shDet = ss.getSheetByName('REMISIONES_DETALLE');
   const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
   const shProd = ss.getSheetByName('PRODUCTOS');
-  const shCli = ss.getSheetByName('CLIENTES');
 
   // A. Generar Número Automático
   const nuevoNumero = generarSiguienteRemision();
 
-  // B. Validar Stock
+  // B. Validar Stock (SOLO PARA FÍSICOS)
   for (let item of datos.items) {
-    const stockDisp = obtenerStockLocal(item.id_producto, datos.id_deposito);
-    if (stockDisp < item.cantidad) {
-      throw new Error(`Stock insuficiente para: ${item.nombre_prod || 'un producto'}`);
+    if (!item.es_servicio && String(item.maneja_stock) !== 'FALSE') {
+      const stockDisp = obtenerStockLocal(item.id_producto, datos.id_deposito);
+      if (stockDisp < item.cantidad) {
+        lock.releaseLock();
+        throw new Error(`Stock insuficiente para: ${item.nombre_prod || 'un producto'}`);
+      }
     }
   }
 
   const idRemision = Utilities.getUuid();
-  
-  // C. Preparar datos para PDF
-  // (Aquí buscamos nombres de cliente si no vienen completos)
-  // ... lógica de nombres ...
-
-  // D. Guardar Cabecera
-  // Estructura: id, fecha, numero, id_cliente, id_deposito, conductor, chapa, estado, url_pdf, total_valorizado
   const totalValorizado = datos.items.reduce((sum, it) => sum + (it.cantidad * it.precio), 0);
   
-  // Generar PDF (con precios)
   const urlPdf = crearPDFRemision({
     ...datos, 
     numero: nuevoNumero, 
     total: totalValorizado
   });
 
+  // D. Guardar Cabecera
   shCab.appendRow([
-    idRemision, 
-    datos.fecha, 
-    nuevoNumero, 
-    datos.id_cliente, 
-    datos.id_deposito,
-    datos.entregado_por,
-    datos.recibido_por,
-    'PENDIENTE_FACTURAR', // Estado inicial
-    urlPdf,
-    totalValorizado
+    idRemision, datos.fecha, nuevoNumero, datos.id_cliente, datos.id_deposito,
+    datos.entregado_por, datos.recibido_por, 'PENDIENTE_FACTURAR', urlPdf, totalValorizado
   ]);
 
   // E. Guardar Detalle y Mover Stock
   datos.items.forEach(item => {
-    // Guardamos PRECIO UNITARIO en la col 5
     shDet.appendRow([Utilities.getUuid(), idRemision, item.id_producto, item.cantidad, item.precio]);
     
-    // Descontar Stock
-    shMov.appendRow([
-      Utilities.getUuid(), new Date(), "SALIDA_REMISION", item.id_producto, datos.id_deposito, item.cantidad * -1, idRemision
-    ]);
-    actualizarStockDeposito(item.id_producto, datos.id_deposito, item.cantidad * -1);
+    // LA MAGIA: Solo descontar stock si NO es servicio y maneja stock
+    if (!item.es_servicio && String(item.maneja_stock) !== 'FALSE') {
+      shMov.appendRow([
+        Utilities.getUuid(), new Date(), "SALIDA_REMISION", item.id_producto, datos.id_deposito, item.cantidad * -1, idRemision
+      ]);
+      actualizarStockDeposito(item.id_producto, datos.id_deposito, item.cantidad * -1);
+    }
   });
 
-  // F. Actualizar Configuración con el nuevo número
   guardarConfigGeneral('ULTIMO_NRO_REMISION', nuevoNumero, usuarioActivo);
 
   lock.releaseLock();
   return { success: true, pdf_url: urlPdf, numero: nuevoNumero };
+}
+
+function anularRemision(idRemision) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { throw "Sistema ocupado."; }
+
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const shCab = ss.getSheetByName('REMISIONES_CABECERA');
+  const shMov = ss.getSheetByName('MOVIMIENTOS_STOCK');
+
+  // 1. Buscar la Remisión y Verificar Estado
+  const dataCab = shCab.getDataRange().getValues();
+  let filaCab = -1;
+  
+  for (let i = 1; i < dataCab.length; i++) {
+    if (String(dataCab[i][0]) === String(idRemision)) {
+      const estadoActual = dataCab[i][7]; // Col H: estado
+      
+      if (estadoActual === 'ANULADO') { lock.releaseLock(); throw "Esta remisión ya está anulada."; }
+      if (estadoActual === 'FACTURADO') { lock.releaseLock(); throw "⛔ No se puede anular: Esta remisión ya fue facturada. Anula la factura primero."; }
+      
+      filaCab = i + 1;
+      break;
+    }
+  }
+
+  if (filaCab === -1) { lock.releaseLock(); throw "Remisión no encontrada."; }
+
+  // 2. Revertir Movimientos de Stock (MÁS SEGURO: Basado en Historial de Movimientos reales)
+  const dataMov = shMov.getDataRange().getValues();
+  const movimientosRevertir = [];
+
+  for(let i=1; i < dataMov.length; i++){
+     // Si coinciden el ID y fue una salida por esta remisión
+     if(String(dataMov[i][6]) == String(idRemision) && dataMov[i][2] == 'SALIDA_REMISION'){
+        const idProd = dataMov[i][3];
+        const idDep = dataMov[i][4];
+        const cantSalida = Number(dataMov[i][5]); // Es negativo
+
+        movimientosRevertir.push([
+           Utilities.getUuid(), new Date(), "ENTRADA_ANULACION_REM", idProd, idDep, Math.abs(cantSalida), idRemision
+        ]);
+
+        actualizarStockDeposito(idProd, idDep, Math.abs(cantSalida));
+     }
+  }
+
+  if(movimientosRevertir.length > 0){
+    shMov.getRange(shMov.getLastRow()+1, 1, movimientosRevertir.length, 7).setValues(movimientosRevertir);
+  }
+
+  // 4. Actualizar Estado en Cabecera
+  shCab.getRange(filaCab, 8).setValue("ANULADO");
+
+  lock.releaseLock();
+  return { success: true };
 }
 
 function crearPDFRemision(datos) {
@@ -4368,17 +4410,37 @@ function facturarPresupuesto(idPresupuesto, condicion, idDeposito) {
       throw "El presupuesto ya fue facturado o está anulado";
     }
     
-    // B. Obtener items del presupuesto
+    // B. Obtener items del presupuesto e inyectar identificadores de Servicio
     let itemsParaVenta = [];
     
     for(let j=1; j<detData.length; j++){
       if(String(detData[j][1]) === String(idPresupuesto)){
+        const idProd = detData[j][2];
+        
+        // Consultamos la información del producto/servicio desde la BD
+        const infoProd = obtenerProductoPorId(idProd);
+        
+        let esServicio = false;
+        let manejaStock = 'TRUE';
+        let nombreProd = 'Producto / Servicio';
+
+        if (infoProd) {
+            nombreProd = infoProd[2]; // Columna C: Nombre
+            manejaStock = String(infoProd[9]).toUpperCase(); // Columna J: maneja_stock
+            // Si el SKU es 'SERVICIO', activamos la bandera
+            esServicio = (infoProd[1] === "SERVICIO"); 
+        }
+
         itemsParaVenta.push({
-          id_producto: detData[j][2],
+          id_producto: idProd,
+          nombre_prod: nombreProd, 
           cantidad: Number(detData[j][3]),
           precio: Number(detData[j][4]),      
           tasa_iva: Number(detData[j][5]) || 10,
-          subtotal: Number(detData[j][6])
+          subtotal: Number(detData[j][6]),
+          // ✅ AQUÍ ESTÁ LA SOLUCIÓN: Agregamos las banderas para evadir el control de stock
+          es_servicio: esServicio, 
+          maneja_stock: manejaStock 
         });
       }
     }
@@ -4400,9 +4462,9 @@ function facturarPresupuesto(idPresupuesto, condicion, idDeposito) {
       id_deposito: idDeposito,
       total: presupuesto.total,
       condicion: condicion,
-      items: itemsParaVenta,  // ← guardarVenta itera sobre venta.items
+      items: itemsParaVenta,  // ← Ahora contiene es_servicio y maneja_stock
       fecha: new Date().toISOString().split('T')[0],
-      es_desde_remision: false // ← Crucial: Si es false, SI descuenta stock
+      es_desde_remision: false
     };
     
     // F. Llamar a guardarVenta
